@@ -8,10 +8,10 @@ test("recorrido anfitrión → visitante → guardia → reporte", async ({ page
   await page.getByRole("button", { name: /Entrar como Administración/ }).click();
   await expect(page).toHaveURL(/app\/dashboard/);
   await page.goto("/app/visits/new");
-  await page.getByLabel("Nombre completo *").filter({ visible: true }).fill(visitorName);
-  await page.getByLabel("Correo *").filter({ visible: true }).fill("e2e@example.test");
-  await page.getByLabel("Empresa *").filter({ visible: true }).fill("QA Labs");
-  await page.getByRole("button", { name: /Crear y enviar/ }).click();
+  await page.getByLabel("Nombre completo", { exact: true }).filter({ visible: true }).fill(visitorName);
+  await page.getByLabel("Correo", { exact: true }).filter({ visible: true }).fill("e2e@example.test");
+  await page.getByLabel("Empresa", { exact: true }).filter({ visible: true }).fill("QA Labs");
+  await page.getByRole("button", { name: /Crear invitación/ }).click();
   await expect(page.getByRole("heading", { name: "Invitación creada" })).toBeVisible();
   const link = await page.getByLabel("Enlace de invitación").inputValue();
   await page.goto(link);
@@ -48,7 +48,7 @@ test("recorrido anfitrión → visitante → guardia → reporte", async ({ page
   }, visitorName);
 
   await page.goto("/guard/scan");
-  await page.getByLabel("Token del pase").fill(qrToken);
+  await page.getByLabel("Token del pase").filter({ visible: true }).fill(qrToken);
   await page.getByRole("button", { name: "Validar", exact: true }).click();
   await expect(page.getByRole("heading", { name: visitorName })).toBeVisible();
   const outsideWindow = page.getByLabel(/Autorizo explícitamente/);
@@ -57,7 +57,7 @@ test("recorrido anfitrión → visitante → guardia → reporte", async ({ page
   await expect(page.getByRole("heading", { name: "Entrada autorizada" })).toBeVisible();
 
   await page.getByRole("button", { name: /Continuar/ }).click();
-  await page.getByLabel("Token del pase").fill(qrToken);
+  await page.getByLabel("Token del pase").filter({ visible: true }).fill(qrToken);
   await page.getByRole("button", { name: "Validar", exact: true }).click();
   await expect(page.getByRole("heading", { name: visitorName })).toBeVisible();
   await page.getByRole("button", { name: /Registrar salida/ }).click();

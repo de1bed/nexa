@@ -106,10 +106,10 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     const endpoint =
       input.origin === "guard_manual" ? "/api/visits/manual" : "/api/visits";
     const payload = {
-        visitorName: input.visitorName,
-        email: input.email,
-        phone: input.phone,
-        company: input.company,
+        visitorName: input.inviteeName ?? input.visitorName,
+        email: input.inviteeEmail ?? input.email,
+        phone: input.inviteePhone ?? input.phone,
+        company: input.inviteeCompany ?? input.company,
         hostName: input.hostName,
         location: input.location,
         startsAt: input.startsAt,

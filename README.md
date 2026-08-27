@@ -7,7 +7,7 @@ MVP empresarial multiempresa para preregistro, identificación, pases QR, entrad
 ## Incluye
 
 - Dashboard administrativo y portal del anfitrión con sus propias visitas, alertas de llegada y actividad.
-- Invitaciones con enlace aleatorio, Resend y adaptador de desarrollo.
+- Invitaciones personalizadas con enlace aleatorio: el anfitrión puede adelantar todos, algunos o ninguno de los datos del visitante; Resend y el adaptador de desarrollo entregan el enlace.
 - Mini app pública: captura comprimida, OCR intercambiable, revisión, consentimiento y QR.
 - QR con token aleatorio, sin información personal en texto plano.
 - Portal mobile-first para cámara, token manual, aprobación, rechazo y check-out.

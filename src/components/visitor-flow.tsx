@@ -48,6 +48,7 @@ export function VisitorFlow({ token }: { token: string }) {
   const [remoteVisit, setRemoteVisit] = useState<Visit | null>(null);
   const [publicLoading, setPublicLoading] = useState(production);
   const [publicState, setPublicState] = useState<string>();
+  const [organizationName, setOrganizationName] = useState("Nova Logistics");
   const visit = localVisit ?? remoteVisit;
   const [step, setStep] = useState<Step>(
     visit?.status === "invited"
@@ -57,10 +58,10 @@ export function VisitorFlow({ token }: { token: string }) {
         : "welcome",
   );
   const [data, setData] = useState({
-    fullName: visit?.visitorName ?? "",
-    email: visit?.email ?? "",
-    phone: visit?.phone ?? "",
-    company: visit?.company ?? "",
+    fullName: visit?.inviteeName ?? visit?.visitorName ?? "",
+    email: visit?.inviteeEmail ?? visit?.email ?? "",
+    phone: visit?.inviteePhone ?? visit?.phone ?? "",
+    company: visit?.inviteeCompany ?? visit?.company ?? "",
     documentType: "INE",
     documentNumber: "",
     vehiclePlate: "",
@@ -85,6 +86,9 @@ export function VisitorFlow({ token }: { token: string }) {
           host_name: string;
           visitor_name: string;
           visitor_email: string;
+          visitor_phone: string;
+          visitor_company: string;
+          organization_name: string;
           starts_at: string;
           ends_at: string;
           purpose: string;
@@ -93,11 +97,13 @@ export function VisitorFlow({ token }: { token: string }) {
       })
       .then((result) => {
         setPublicState(result.state);
+        setOrganizationName(result.organization_name);
         setRemoteVisit({
           id: result.visit_id,
           visitorName: result.visitor_name,
           email: result.visitor_email,
-          company: "",
+          phone: result.visitor_phone,
+          company: result.visitor_company,
           hostName: result.host_name,
           hostId: "",
           location: result.location_name,
@@ -115,11 +121,17 @@ export function VisitorFlow({ token }: { token: string }) {
           origin: "host_invitation",
           invitationToken: token,
           documentCaptured: result.state === "completed",
+          inviteeName: result.visitor_name,
+          inviteeEmail: result.visitor_email,
+          inviteePhone: result.visitor_phone,
+          inviteeCompany: result.visitor_company,
         });
         setData((current) => ({
           ...current,
           fullName: result.visitor_name || current.fullName,
           email: result.visitor_email || current.email,
+          phone: result.visitor_phone || current.phone,
+          company: result.visitor_company || current.company,
         }));
       })
       .catch(() => setPublicState("invalid"))
@@ -150,6 +162,11 @@ export function VisitorFlow({ token }: { token: string }) {
         : "",
     [visit],
   );
+  const providedCount = [data.fullName, data.email, data.phone, data.company].filter(Boolean).length;
+  const purposeLabel = visit?.purpose ?? "visita";
+  const invitationPurpose = /^(reunión|entrega|entrevista|auditoría)/i.test(purposeLabel)
+    ? `a una ${purposeLabel.toLowerCase()}`
+    : `para ${purposeLabel.toLowerCase()}`;
   if (publicLoading)
     return (
       <PublicFrame>
@@ -314,17 +331,16 @@ export function VisitorFlow({ token }: { token: string }) {
             <ShieldCheck size={30} />
           </span>
           <p className="mt-6 text-sm font-semibold text-[#0eaaa5]">
-            NOVA LOGISTICS
+            {organizationName.toUpperCase()}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-.03em]">
-            Prepara tu visita
+            {visit.hostName} te está invitando {invitationPurpose}
           </h1>
           <p className="mx-auto mt-3 max-w-md text-slate-500">
-            Completa tus datos y recibe un pase QR. Toma aproximadamente 3
-            minutos.
+            {data.fullName ? `Hola, ${data.fullName.split(" ")[0]}. ` : ""}Por favor completa o confirma tus datos para recibir tu pase QR.
           </p>
           <div className="my-7 rounded-2xl bg-slate-50 p-5 text-left">
-            <p className="font-semibold">Visita con {visit.hostName}</p>
+            <p className="font-semibold">Invitación de {visit.hostName}</p>
             <p className="mt-2 text-sm text-slate-500">{date}</p>
             <p className="mt-1 text-sm text-slate-500">
               {visit.location} · {visit.purpose}
@@ -345,8 +361,9 @@ export function VisitorFlow({ token }: { token: string }) {
       {step === "personal" && (
         <StepBlock
           title="Tus datos"
-          subtitle="Confirma la información de contacto para tu visita."
+          subtitle={providedCount ? "Tu anfitrión adelantó algunos datos. Confírmalos o corrígelos libremente." : "Tu anfitrión dejó estos campos para que tú los completes."}
         >
+          {providedCount > 0 && <div className="mb-5 rounded-xl bg-cyan-50 p-4 text-sm text-cyan-900">Recibimos {providedCount} {providedCount === 1 ? "dato sugerido" : "datos sugeridos"} del anfitrión. Tú tienes la última palabra.</div>}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nombre completo">
               <input

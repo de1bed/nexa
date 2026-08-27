@@ -8,6 +8,7 @@ export type Visit = {
   location: string; startsAt: string; endsAt: string; checkedInAt?: string; checkedOutAt?: string;
   purpose: string; status: VisitStatus; origin: VisitOrigin; notes?: string; vehiclePlate?: string;
   invitationToken?: string; qrToken?: string; documentCaptured: boolean; consentedAt?: string; denialReason?: string;
+  inviteeName?: string; inviteeEmail?: string; inviteePhone?: string; inviteeCompany?: string;
 };
 export type AccessEvent = { id: string; visitId: string; type: "qr_scanned"|"check_in"|"check_out"|"denied"|"invitation_created"|"pre_registered"; at: string; actor: string; detail?: string };
 export type DemoState = { visits: Visit[]; events: AccessEvent[] };

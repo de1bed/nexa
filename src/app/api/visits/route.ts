@@ -7,10 +7,10 @@ import { writeAudit } from "@/lib/server/audit";
 
 const createSchema = z
   .object({
-    visitorName: z.string().min(2).max(120),
-    email: z.email(),
-    phone: z.string().max(30).optional(),
-    company: z.string().min(2).max(120),
+    visitorName: z.string().max(120).default(""),
+    email: z.union([z.literal(""), z.email()]).default(""),
+    phone: z.string().max(30).default(""),
+    company: z.string().max(120).default(""),
     location: z.string().min(1).max(160),
     startsAt: z.iso.datetime(),
     endsAt: z.iso.datetime(),
@@ -22,6 +22,10 @@ const createSchema = z
   .refine((value) => value.endsAt > value.startsAt, {
     path: ["endsAt"],
     message: "Horario inválido",
+  })
+  .refine((value) => !value.sendEmail || Boolean(value.email), {
+    path: ["email"],
+    message: "El correo es necesario para enviar la invitación",
   });
 
 function mapVisit(row: Record<string, unknown>) {
@@ -33,6 +37,12 @@ function mapVisit(row: Record<string, unknown>) {
   };
   const host = row.host as null | { full_name?: string };
   const location = row.location as null | { name?: string };
+  const invitation = row.invitation as null | {
+    invitee_name?: string;
+    invitee_email?: string;
+    invitee_phone?: string;
+    invitee_company?: string;
+  };
   return {
     id: row.id,
     visitorName: visitor?.full_name ?? "Visitante",
@@ -54,6 +64,10 @@ function mapVisit(row: Record<string, unknown>) {
     documentCaptured: Array.isArray(row.documents) && row.documents.length > 0,
     consentedAt: row.consented_at ?? undefined,
     denialReason: row.denial_reason ?? undefined,
+    inviteeName: invitation?.invitee_name ?? undefined,
+    inviteeEmail: invitation?.invitee_email ?? undefined,
+    inviteePhone: invitation?.invitee_phone ?? undefined,
+    inviteeCompany: invitation?.invitee_company ?? undefined,
   };
 }
 
@@ -71,7 +85,7 @@ export async function GET() {
     const { data, error } = await db
       .from("visits")
       .select(
-        "*,visitor:visitors(full_name,email,phone,company),host:profiles!visits_host_id_fkey(full_name),location:locations(name),documents:visitor_documents(id)",
+        "*,visitor:visitors(full_name,email,phone,company),host:profiles!visits_host_id_fkey(full_name),location:locations(name),documents:visitor_documents(id),invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company)",
       )
       .eq("organization_id", selected.organizationId)
       .order("starts_at", { ascending: false })
@@ -143,29 +157,16 @@ export async function POST(request: Request) {
       .select("full_name")
       .eq("id", user.id)
       .single();
-    const { data: visitor, error: visitorError } = await db
-      .from("visitors")
-      .insert({
-        organization_id: selected.organizationId,
-        full_name: input.visitorName,
-        email: input.email,
-        phone: input.phone || null,
-        company: input.company,
-      })
-      .select("id")
-      .single();
-    if (visitorError || !visitor) throw visitorError;
     const { data: visit, error: visitError } = await db
       .from("visits")
       .insert({
         organization_id: selected.organizationId,
         location_id: location.id,
-        visitor_id: visitor.id,
         host_id: user.id,
         status: "invited",
         origin: "host_invitation",
         purpose: input.purpose,
-        visitor_company: input.company,
+        visitor_company: input.company || null,
         starts_at: input.startsAt,
         ends_at: input.endsAt,
         internal_notes: input.notes || null,
@@ -188,6 +189,10 @@ export async function POST(request: Request) {
         new Date(input.endsAt).getTime() + 86400000,
       ).toISOString(),
       sent_at: input.sendEmail ? new Date().toISOString() : null,
+      invitee_name: input.visitorName || null,
+      invitee_email: input.email || null,
+      invitee_phone: input.phone || null,
+      invitee_company: input.company || null,
     });
     await writeAudit({
       organizationId: selected.organizationId,
@@ -212,7 +217,7 @@ export async function POST(request: Request) {
         visit: mapVisit({
           id: visit.id,
           visitor: {
-            full_name: input.visitorName,
+            full_name: input.visitorName || "Invitado por confirmar",
             email: input.email,
             phone: input.phone,
             company: input.company,
@@ -228,6 +233,12 @@ export async function POST(request: Request) {
           origin: "host_invitation",
           internal_notes: input.notes,
           documents: [],
+          invitation: {
+            invitee_name: input.visitorName || null,
+            invitee_email: input.email || null,
+            invitee_phone: input.phone || null,
+            invitee_company: input.company || null,
+          },
         }),
         invitationToken,
       },

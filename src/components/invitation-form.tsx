@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { invitationSchema } from "@/lib/schemas";
 import { z } from "zod";
@@ -29,27 +29,35 @@ export function InvitationForm() {
     .slice(0, 10);
   const {
     register,
+    setValue,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<Form>({
     resolver: zodResolver(invitationSchema),
     defaultValues: {
+      visitorName: "",
+      email: "",
+      phone: "",
+      company: "",
       location: "Centro de Distribución Tijuana",
       date: defaultDate,
       startTime: "10:00",
       endTime: "11:00",
       purpose: "Reunión comercial",
-      sendEmail: true,
+      sendEmail: false,
     },
   });
+  const email = useWatch({ control, name: "email" });
+  const sendEmail = useWatch({ control, name: "sendEmail" });
   const onSubmit = async (d: Form) => {
     await new Promise((r) => setTimeout(r, 350));
     const v: Visit = {
       id: crypto.randomUUID(),
-      visitorName: d.visitorName,
-      email: d.email,
+      visitorName: d.visitorName || "Invitado por confirmar",
+      email: d.email || "",
       phone: d.phone,
-      company: d.company,
+      company: d.company || "Por confirmar",
       hostName: "Mateo García",
       hostId: "host-mateo",
       location: d.location,
@@ -61,6 +69,10 @@ export function InvitationForm() {
       notes: d.notes,
       invitationToken: randomToken(24),
       documentCaptured: false,
+      inviteeName: d.visitorName,
+      inviteeEmail: d.email,
+      inviteePhone: d.phone,
+      inviteeCompany: d.company,
     };
     const createdVisit = await createVisit({
       ...v,
@@ -82,8 +94,7 @@ export function InvitationForm() {
           </span>
           <h1 className="mt-5 text-2xl font-semibold">Invitación creada</h1>
           <p className="mt-2 text-slate-500">
-            {created.visitorName} puede preparar su visita con este enlace
-            seguro.
+            {created.inviteeName ? `${created.inviteeName} puede` : "Tu invitado puede"} preparar su visita con este enlace seguro.
           </p>
           <div className="mt-6 flex rounded-xl border border-slate-200 bg-slate-50 p-2 pl-4">
             <input
@@ -149,13 +160,13 @@ export function InvitationForm() {
       </header>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 flex items-center gap-2 font-semibold">
+          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h2 className="flex items-center gap-2 font-semibold">
             <UserRound size={18} />
-            Visitante
-          </h2>
+            Datos que ya conoces
+          </h2><p className="mt-1 text-sm text-slate-500">Todos son opcionales. El visitante podrá completarlos o corregirlos.</p></div><button type="button" onClick={()=>{setValue("visitorName","");setValue("email","");setValue("phone","");setValue("company","");setValue("sendEmail",false)}} className="text-left text-sm font-medium text-blue-600">Dejar que el visitante llene todo</button></div>
           <div className="grid gap-5 sm:grid-cols-2">
             <label>
-              <span className={label}>Nombre completo *</span>
+              <span className={label}>Nombre completo</span>
               <input {...register("visitorName")} className={field} />
               {errors.visitorName && (
                 <small className="text-red-600">
@@ -164,7 +175,7 @@ export function InvitationForm() {
               )}
             </label>
             <label>
-              <span className={label}>Correo *</span>
+              <span className={label}>Correo</span>
               <input type="email" {...register("email")} className={field} />
               {errors.email && (
                 <small className="text-red-600">{errors.email.message}</small>
@@ -175,7 +186,7 @@ export function InvitationForm() {
               <input {...register("phone")} className={field} />
             </label>
             <label>
-              <span className={label}>Empresa *</span>
+              <span className={label}>Empresa</span>
               <input {...register("company")} className={field} />
             </label>
           </div>
@@ -245,13 +256,13 @@ export function InvitationForm() {
               {...register("sendEmail")}
               className="size-4 accent-[#10aaa5]"
             />
-            Enviar invitación automáticamente
+            Enviar invitación automáticamente {email ? "" : "(requiere correo)"}
           </label>
           <button
             disabled={isSubmitting}
             className="h-12 rounded-xl bg-[#071426] px-7 font-semibold text-white disabled:opacity-60"
           >
-            {isSubmitting ? "Creando…" : "Crear y enviar invitación"}
+            {isSubmitting ? "Creando…" : sendEmail ? "Crear y enviar invitación" : "Crear invitación y mostrar enlace"}
           </button>
         </div>
       </form>

@@ -11,3 +11,4 @@
 9. **Next.js 16.** Se usan params asíncronos y tipos generados de rutas según la documentación incluida.
 10. **Métricas derivadas.** Dashboard y reportes calculan desde visitas visibles; no presentan números inventados como producción.
 11. **Experiencias por rol.** El anfitrión tiene una superficie propia y solo recibe sus visitas; el visitante permanece sin cuenta y accede mediante token, con una entrada demo separada para descubrimiento local.
+12. **Datos parciales de invitación.** Nombre, correo, teléfono y empresa proporcionados por el anfitrión son sugerencias editables en `visit_invitations`; no se convierten en identidad definitiva hasta que el visitante confirma el preregistro.

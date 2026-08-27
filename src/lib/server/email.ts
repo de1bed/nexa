@@ -7,6 +7,8 @@ type InvitationEmail = {
   dateLabel: string;
   invitationUrl: string;
 };
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]!);
 export async function sendInvitationEmail(input: InvitationEmail) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -20,8 +22,8 @@ export async function sendInvitationEmail(input: InvitationEmail) {
   const { data, error } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? "NEXA VISIT <visitas@example.com>",
     to: input.to,
-    subject: `Tu visita con ${input.hostName}`,
-    html: `<div style="font-family:Inter,Arial;max-width:560px"><h1>Perfecto, te veo ${input.dateLabel}.</h1><p>Hola ${input.visitorName}, prepara tu visita y muestra el código QR generado al personal de seguridad.</p><p><a style="background:#071426;color:white;padding:12px 18px;border-radius:10px;text-decoration:none" href="${input.invitationUrl}">Preparar mi visita</a></p><p style="color:#64748b;font-size:12px">El enlace es personal y tiene vencimiento.</p></div>`,
+    subject: `${input.hostName} te invita a una visita`,
+    html: `<div style="font-family:Inter,Arial;max-width:560px"><h1>${escapeHtml(input.hostName)} te está invitando.</h1><p>${input.visitorName ? `Hola ${escapeHtml(input.visitorName)}, ` : ""}por favor completa o confirma tus datos para la visita del ${escapeHtml(input.dateLabel)} y presenta el QR generado al personal de seguridad.</p><p><a style="background:#071426;color:white;padding:12px 18px;border-radius:10px;text-decoration:none" href="${escapeHtml(input.invitationUrl)}">Completar mis datos</a></p><p style="color:#64748b;font-size:12px">El enlace es personal y tiene vencimiento.</p></div>`,
   });
   if (error) throw error;
   return { status: "sent" as const, id: data?.id };
