@@ -1,0 +1,6 @@
+import { PeopleAdmin } from "@/components/people-admin";
+import { requirePortalRole } from "@/lib/server/session";
+export default async function Page() {
+  await requirePortalRole(["superadmin", "admin"]);
+  return <PeopleAdmin />;
+}

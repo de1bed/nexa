@@ -1,0 +1,2 @@
+import Link from "next/link"; import { ShieldCheck } from "lucide-react";
+export function Brand({dark=false}:{dark?:boolean}){return <Link href="/" className={`flex items-center gap-3 ${dark?"text-white":"text-[#071426]"}`}><span className="grid size-9 place-items-center rounded-xl bg-[#10cfc9] text-[#071426]"><ShieldCheck size={19}/></span><span className="text-sm font-semibold tracking-[.16em]">NEXA VISIT</span></Link>}

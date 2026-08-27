@@ -1,0 +1,1 @@
+import { VisitorFlow } from "@/components/visitor-flow"; export default async function Page(props:PageProps<"/visit/[publicToken]">){const {publicToken}=await props.params;return <VisitorFlow token={publicToken}/>}
