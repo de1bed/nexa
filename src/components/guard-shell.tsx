@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { History, PenLine, QrCode, Users } from "lucide-react";
 import { Brand } from "./brand";
+import { SessionExit } from "./session-exit";
 const nav = [
   { href: "/guard/scan", label: "Escanear", icon: QrCode },
   { href: "/guard/manual", label: "Manual", icon: PenLine },
@@ -16,10 +17,10 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#071426]/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
           <Brand dark />
-          <span className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs">
+          <div className="flex items-center gap-2"><span className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs sm:flex">
             <span className="size-2 rounded-full bg-emerald-400" />
             Recepción Norte
-          </span>
+          </span><SessionExit dark compact/></div>
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-5 py-7">{children}</main>

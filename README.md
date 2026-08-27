@@ -6,7 +6,7 @@ MVP empresarial multiempresa para preregistro, identificación, pases QR, entrad
 
 ## Incluye
 
-- Dashboard con métricas derivadas del estado, gráfica semanal y actividad.
+- Dashboard administrativo y portal del anfitrión con sus propias visitas, alertas de llegada y actividad.
 - Invitaciones con enlace aleatorio, Resend y adaptador de desarrollo.
 - Mini app pública: captura comprimida, OCR intercambiable, revisión, consentimiento y QR.
 - QR con token aleatorio, sin información personal en texto plano.
@@ -15,6 +15,7 @@ MVP empresarial multiempresa para preregistro, identificación, pases QR, entrad
 - Reportes por rango, impresión, motivos, anfitriones y duración.
 - PostgreSQL multiempresa, RLS, Storage privado, auditoría y retención.
 - Seed con 25 visitas y cinco usuarios demostrativos.
+- Selector demo de perfil con navegación y protección diferenciada para administración, anfitrión y guardia.
 - Vitest y Playwright en escritorio y móvil.
 - Modo demo persistente en `localStorage` para ejecutar sin credenciales.
 
@@ -37,7 +38,9 @@ Abre [http://localhost:3000](http://localhost:3000). `.env.example` activa el mo
 Rutas útiles:
 
 - Administración: [http://localhost:3000/app/dashboard](http://localhost:3000/app/dashboard)
+- Anfitrión: [http://localhost:3000/app/host](http://localhost:3000/app/host)
 - Guardia: [http://localhost:3000/guard/scan](http://localhost:3000/guard/scan)
+- Entrada demostrativa del visitante: [http://localhost:3000/demo/visitor](http://localhost:3000/demo/visitor)
 - Visitante: [http://localhost:3000/visit/nexa-demo-invitation-2026](http://localhost:3000/visit/nexa-demo-invitation-2026)
 - Token QR: `nexa-demo-pass-2026`
 
@@ -108,7 +111,7 @@ npm run test:e2e
 npm run build
 ```
 
-`npm run check` ejecuta lint, TypeScript, unitarias y build. Las unitarias cubren aislamiento, roles, invitaciones, expiración, OCR, hashing, QR revocado, check-in, duplicados, check-out, manual, CSV y retención. El E2E recorre anfitrión → visitante → QR → guardia → reportes en escritorio y móvil.
+`npm run check` ejecuta lint, TypeScript, unitarias y build. Las unitarias cubren aislamiento, roles, invitaciones, expiración, OCR, hashing, QR revocado, check-in, duplicados, check-out, manual, CSV y retención. Los E2E recorren anfitrión → visitante → QR → guardia → reportes y verifican por separado el portal restringido del anfitrión y la entrada pública del visitante, en escritorio y móvil.
 
 ## Vercel
 

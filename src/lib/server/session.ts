@@ -40,7 +40,33 @@ export async function getSessionContext() {
 }
 
 export async function requirePortalRole(roles: MemberRole[]) {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE !== "false") return null;
+  if (process.env.NEXT_PUBLIC_DEMO_MODE !== "false") {
+    const cookieStore = await cookies();
+    const storedRole = cookieStore.get("nexa-demo-role")?.value;
+    const role: MemberRole = ["admin", "host", "guard"].includes(
+      storedRole ?? "",
+    )
+      ? (storedRole as MemberRole)
+      : "admin";
+    if (!roles.includes(role))
+      redirect((role === "guard" ? "/guard/scan" : role === "host" ? "/app/host" : "/app/dashboard") as never);
+    return {
+      db: null,
+      user: { id: role === "host" ? "host-mateo" : `demo-${role}` },
+      memberships: [
+        {
+          organizationId: "org-nova",
+          organizationName: "Nova Logistics",
+          role,
+        },
+      ],
+      selected: {
+        organizationId: "org-nova",
+        organizationName: "Nova Logistics",
+        role,
+      },
+    };
+  }
   const context = await getSessionContext();
   if (!context.user) redirect("/login");
   if (!context.selected) redirect("/select-organization");

@@ -1,4 +1,6 @@
 import { Dashboard } from "@/components/dashboard";
-export default function Page() {
+import { requirePortalRole } from "@/lib/server/session";
+export default async function Page() {
+  await requirePortalRole(["superadmin", "admin"]);
   return <Dashboard />;
 }

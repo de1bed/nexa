@@ -5,7 +5,7 @@ test("recorrido anfitrión → visitante → guardia → reporte", async ({ page
 
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Accede a tu espacio" })).toBeVisible();
-  await page.getByRole("button", { name: /Iniciar sesión/ }).click();
+  await page.getByRole("button", { name: /Entrar como Administración/ }).click();
   await expect(page).toHaveURL(/app\/dashboard/);
   await page.goto("/app/visits/new");
   await page.getByLabel("Nombre completo *").filter({ visible: true }).fill(visitorName);

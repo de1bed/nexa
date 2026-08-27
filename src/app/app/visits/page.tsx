@@ -1,4 +1,6 @@
 import { VisitsTable } from "@/components/visits-table";
-export default function Page() {
-  return <VisitsTable />;
+import { requirePortalRole } from "@/lib/server/session";
+export default async function Page() {
+  const context = await requirePortalRole(["superadmin", "admin", "host"]);
+  return <VisitsTable hostOnly={context.selected?.role === "host"} />;
 }

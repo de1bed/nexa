@@ -10,3 +10,4 @@
 8. **Tailwind v4 y componentes propios.** Se evita una plantilla genérica y se mantienen patrones compatibles con shadcn/ui.
 9. **Next.js 16.** Se usan params asíncronos y tipos generados de rutas según la documentación incluida.
 10. **Métricas derivadas.** Dashboard y reportes calculan desde visitas visibles; no presentan números inventados como producción.
+11. **Experiencias por rol.** El anfitrión tiene una superficie propia y solo recibe sus visitas; el visitante permanece sin cuenta y accede mediante token, con una entrada demo separada para descubrimiento local.

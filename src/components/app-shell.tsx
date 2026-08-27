@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 import { Brand } from "./brand";
 import type { MemberRole } from "@/lib/domain";
+import { SessionExit } from "./session-exit";
 const nav = [
   { href: "/app/dashboard", label: "Resumen", icon: LayoutDashboard },
   { href: "/app/visits", label: "Visitas", icon: CalendarDays },
@@ -33,7 +34,12 @@ const nav = [
 export function AppShell({ children, role }: { children: React.ReactNode; role: MemberRole }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const visibleNav = role === "host" ? nav.filter((item) => ["/app/dashboard", "/app/visits"].includes(item.href)) : nav;
+  const visibleNav = role === "host"
+    ? [
+        { href: "/app/host", label: "Mi resumen", icon: LayoutDashboard },
+        { href: "/app/visits", label: "Mis visitas", icon: CalendarDays },
+      ]
+    : nav;
   return (
     <div className="min-h-screen bg-[#f7f9fc] text-[#071426]">
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur lg:hidden">
@@ -78,9 +84,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
             );
           })}
         </nav>
-        <div className="absolute bottom-5 left-5 right-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-          MVP demostrativo. Revisión legal requerida antes de producción.
-        </div>
+        <div className="absolute bottom-5 left-5 right-5 space-y-3"><SessionExit/><div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">MVP demostrativo. Revisión legal requerida antes de producción.</div></div>
       </aside>
       <main className="lg:pl-64">
         <div className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">

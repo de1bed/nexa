@@ -12,10 +12,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
-export function VisitDetail({ id }: { id: string }) {
+export function VisitDetail({ id, hostOnly = false }: { id: string; hostOnly?: boolean }) {
   const { state, updateVisit, production } = useDemo();
   const [copied, setCopied] = useState(false);
-  const v = state.visits.find((x) => x.id === id);
+  const v = state.visits.find((x) => x.id === id && (!hostOnly || production || x.hostName === "Mateo García"));
   if (!v)
     return (
       <div className="rounded-2xl bg-white p-10 text-center">

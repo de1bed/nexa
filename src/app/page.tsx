@@ -16,8 +16,8 @@ export default function Home() {
           <h1 className="max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-.045em] sm:text-6xl lg:text-7xl">Cada visita, bajo control. <span className="text-[#10cfc9]">Sin fricción.</span></h1>
           <p className="mt-7 max-w-xl text-lg leading-8 text-slate-300">Preregistro, identificación, pases QR y control de acceso en una experiencia moderna para visitantes, anfitriones y seguridad.</p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Link className="inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-[#10cfc9] px-6 font-semibold text-[#071426] shadow-[0_14px_45px_-15px_#10cfc9] transition hover:-translate-y-0.5" href="/app/dashboard">Explorar demostración <ArrowRight size={18} /></Link>
-            <Link className="inline-flex h-13 items-center justify-center rounded-xl border border-white/15 px-6 font-medium transition hover:bg-white/10" href="/guard/scan">Abrir portal de guardia</Link>
+            <Link className="inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-[#10cfc9] px-6 font-semibold text-[#071426] shadow-[0_14px_45px_-15px_#10cfc9] transition hover:-translate-y-0.5" href="/login">Elegir portal demo <ArrowRight size={18} /></Link>
+            <Link className="inline-flex h-13 items-center justify-center rounded-xl border border-white/15 px-6 font-medium transition hover:bg-white/10" href={"/demo/visitor" as never}>Soy visitante</Link>
           </div>
           <div className="mt-12 grid max-w-xl grid-cols-3 gap-5 border-t border-white/10 pt-7">{stats.map(([value, label]) => <div key={label}><p className="text-2xl font-semibold">{value}</p><p className="mt-1 text-xs leading-5 text-slate-400">{label}</p></div>)}</div>
         </div>
