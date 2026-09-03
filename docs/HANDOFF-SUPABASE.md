@@ -371,6 +371,7 @@ desaparecer **del bucket** antes de que la fila se marque.
 | `token_hash('abc')` no coincide | Función distinta a la esperada | Reaplicar la migración 6 |
 | Invitaciones y pases «no existen» al abrirlos | Hash desalineado entre Node y PostgreSQL | Sección 5.1 |
 | Nadie confirma su registro | Falta SMTP propio | Sección 4.1 |
+| `Database error querying schema` al iniciar sesión | Usuario insertado a mano con `confirmation_token`, `recovery_token` y las demás columnas de token en `NULL`; Auth las lee como texto | Ponerlas en cadena vacía. El `seed.sql` ya lo hace |
 | `/onboarding` da 500 | `create_organization` no existe, o falta la política `organizations_insert` | Reaplicar migración 6 |
 | El anfitrión ve visitantes ajenos | Quedó la política `visitors_staff_write` vieja | Reaplicar migración 6 |
 | El guardia no ve la identificación | Es el comportamiento por defecto | Activarlo en Configuración (`allow_document_preview_for_guards`) |

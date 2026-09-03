@@ -33,6 +33,14 @@ se aplicaron en orden y sin error, y se comprobó con SQL:
 - Un token de invitación real se resolvió como visitante anónimo.
 - Con credenciales puestas, la aplicación exige autenticación: el panel y el
   portal del guardia redirigen a `/login` y la API responde 401.
+- El registro está habilitado en Auth y la confirmación por correo es
+  obligatoria (`mailer_autoconfirm: false`), así que el SMTP propio es el primer
+  bloqueo real.
+- Inicio de sesión con contraseña: devuelve una sesión válida, y el perfil se
+  crea solo con el nombre que viene en el registro.
+- Alta de empresa desde una sesión real: `create_organization` dejó la
+  organización, la membresía de administradora, la sede, la configuración con su
+  aviso de privacidad y la entrada en la bitácora.
 
 Los datos de prueba se borraron: el proyecto quedó vacío.
 
@@ -40,10 +48,12 @@ Los datos de prueba se borraron: el proyecto quedó vacío.
 
 Nada de esto está roto que se sepa; simplemente no se ha podido ejercer.
 
-- **Nadie ha recorrido la aplicación de extremo a extremo contra la base real.**
-  El esquema está desplegado y verificado por SQL, pero el recorrido de
-  invitación, registro, pase y escaneo no se ha hecho por la interfaz. El primer
-  bloqueo es el SMTP propio: sin él nadie puede confirmar su cuenta.
+- **Nadie ha recorrido la aplicación de extremo a extremo por la interfaz.**
+  Sesión, alta de empresa y resolución de tokens se ejercieron contra el proyecto
+  real, pero por la API de Supabase, no pulsando botones. El recorrido de
+  invitación, captura de identificación, pase y escaneo sigue sin hacerse en
+  pantalla, y el primer bloqueo es el SMTP propio: sin él nadie confirma su
+  cuenta y por tanto nadie llega al panel.
 - **Las políticas de Storage no se han ejercido con un archivo real.** El bucket
   existe y es privado, y las políticas están escritas y revisadas, pero no se ha
   subido ninguna identificación.
