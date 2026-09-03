@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Motor de OCR copiado por `npm run setup:ocr`: código de terceros.
+    "public/tesseract/**",
   ]),
 ]);
 
