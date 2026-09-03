@@ -2,118 +2,75 @@ import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { sendInvitationEmail } from "@/lib/server/email";
-import { getSessionContext } from "@/lib/server/session";
-import { writeAudit } from "@/lib/server/audit";
+import { requireApiContext } from "@/lib/server/session";
+import { writeAudit, writeNotification } from "@/lib/server/audit";
+import { eventSelect, mapEvent, mapVisit, visitSelect } from "@/lib/server/visit-mapper";
+import { appUrl } from "@/lib/config";
+import { maskEmail, maskPhone } from "@/lib/security";
+import { sendInvitationWhatsApp } from "@/lib/server/whatsapp";
+
+export const dynamic = "force-dynamic";
 
 const createSchema = z
   .object({
-    visitorName: z.string().max(120).default(""),
+    visitorName: z.string().trim().max(120).default(""),
     email: z.union([z.literal(""), z.email()]).default(""),
-    phone: z.string().max(30).default(""),
-    company: z.string().max(120).default(""),
-    location: z.string().min(1).max(160),
+    phone: z.string().trim().max(30).default(""),
+    company: z.string().trim().max(120).default(""),
+    locationId: z.uuid("Ubicación inválida"),
+    hostId: z.uuid().optional(),
     startsAt: z.iso.datetime(),
     endsAt: z.iso.datetime(),
-    purpose: z.string().min(2).max(160),
-    notes: z.string().max(500).optional(),
-    accessRequirements: z.string().max(500).optional(),
-    sendEmail: z.boolean(),
+    purpose: z.string().trim().min(2).max(160),
+    notes: z.string().trim().max(500).optional(),
+    accessRequirements: z.string().trim().max(500).optional(),
+    sendEmail: z.boolean().default(false),
+    sendWhatsApp: z.boolean().default(false),
   })
   .refine((value) => value.endsAt > value.startsAt, {
     path: ["endsAt"],
-    message: "Horario inválido",
+    message: "El horario es inválido",
   })
   .refine((value) => !value.sendEmail || Boolean(value.email), {
     path: ["email"],
     message: "El correo es necesario para enviar la invitación",
+  })
+  .refine((value) => !value.sendWhatsApp || Boolean(value.phone), {
+    path: ["phone"],
+    message: "El teléfono es necesario para enviar por WhatsApp",
   });
 
-function mapVisit(row: Record<string, unknown>) {
-  const visitor = row.visitor as null | {
-    full_name?: string;
-    email?: string;
-    phone?: string;
-    company?: string;
-  };
-  const host = row.host as null | { full_name?: string };
-  const location = row.location as null | { name?: string };
-  const invitation = row.invitation as null | {
-    invitee_name?: string;
-    invitee_email?: string;
-    invitee_phone?: string;
-    invitee_company?: string;
-  };
-  return {
-    id: row.id,
-    visitorName: visitor?.full_name ?? "Visitante",
-    email: visitor?.email ?? "",
-    phone: visitor?.phone,
-    company: String(row.visitor_company ?? visitor?.company ?? ""),
-    hostName: host?.full_name ?? "Anfitrión",
-    hostId: row.host_id,
-    location: location?.name ?? "Ubicación",
-    startsAt: row.starts_at,
-    endsAt: row.ends_at,
-    checkedInAt: row.checked_in_at ?? undefined,
-    checkedOutAt: row.checked_out_at ?? undefined,
-    purpose: row.purpose,
-    status: row.status,
-    origin: row.origin,
-    notes: row.internal_notes ?? undefined,
-    vehiclePlate: row.vehicle_plate ?? undefined,
-    documentCaptured: Array.isArray(row.documents) && row.documents.length > 0,
-    consentedAt: row.consented_at ?? undefined,
-    denialReason: row.denial_reason ?? undefined,
-    inviteeName: invitation?.invitee_name ?? undefined,
-    inviteeEmail: invitation?.invitee_email ?? undefined,
-    inviteePhone: invitation?.invitee_phone ?? undefined,
-    inviteeCompany: invitation?.invitee_company ?? undefined,
-  };
-}
-
 export async function GET() {
+  const guard = await requireApiContext();
+  if (!guard.ok)
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const { db, organizationId } = guard.context;
+
   try {
-    const context = await getSessionContext();
-    const { db, user, selected } = context;
-    if (!user)
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    if (!selected)
-      return NextResponse.json(
-        { error: "Selecciona una organización" },
-        { status: 409 },
-      );
-    const { data, error } = await db
-      .from("visits")
-      .select(
-        "*,visitor:visitors(full_name,email,phone,company),host:profiles!visits_host_id_fkey(full_name),location:locations(name),documents:visitor_documents(id),invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company)",
-      )
-      .eq("organization_id", selected.organizationId)
-      .order("starts_at", { ascending: false })
-      .limit(500);
+    const [{ data: visits, error }, { data: events }] = await Promise.all([
+      db
+        .from("visits")
+        .select(visitSelect)
+        .eq("organization_id", organizationId)
+        .order("starts_at", { ascending: false })
+        .limit(500),
+      db
+        .from("access_events")
+        .select(eventSelect)
+        .eq("organization_id", organizationId)
+        .order("occurred_at", { ascending: false })
+        .limit(300),
+    ]);
     if (error) throw error;
-    const { data: events } = await db
-      .from("access_events")
-      .select(
-        "id,visit_id,event_type,occurred_at,reason,actor:profiles!access_events_actor_id_fkey(full_name)",
-      )
-      .eq("organization_id", selected.organizationId)
-      .order("occurred_at", { ascending: false })
-      .limit(200);
+
     return NextResponse.json(
       {
-        visits: (data ?? []).map((row) =>
+        visits: (visits ?? []).map((row) =>
           mapVisit(row as unknown as Record<string, unknown>),
         ),
-        events: (events ?? []).map((event) => ({
-          id: event.id,
-          visitId: event.visit_id,
-          type: event.event_type,
-          at: event.occurred_at,
-          actor:
-            (event.actor as unknown as { full_name?: string } | null)
-              ?.full_name ?? "Sistema",
-          detail: event.reason ?? undefined,
-        })),
+        events: (events ?? []).map((row) =>
+          mapEvent(row as unknown as Record<string, unknown>),
+        ),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -127,42 +84,59 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireApiContext(["superadmin", "admin", "host"]);
+  if (!guard.ok)
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const { db, organizationId, userId, role, displayName, organizationName } =
+    guard.context;
+
   try {
     const input = createSchema.parse(await request.json());
-    const context = await getSessionContext();
-    const { db, user, selected } = context;
-    if (!user)
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    if (!selected)
-      return NextResponse.json(
-        { error: "Selecciona una organización" },
-        { status: 409 },
-      );
-    if (!["admin", "host", "superadmin"].includes(selected.role))
-      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+
+    // Un anfitrión solo crea visitas a su nombre; administración puede delegar.
+    const hostId =
+      role === "host" ? userId : (input.hostId ?? userId);
+    if (hostId !== userId) {
+      const { data: member } = await db
+        .from("organization_members")
+        .select("profile_id")
+        .eq("organization_id", organizationId)
+        .eq("profile_id", hostId)
+        .eq("active", true)
+        .in("role", ["superadmin", "admin", "host"])
+        .maybeSingle();
+      if (!member)
+        return NextResponse.json(
+          { error: "El anfitrión no pertenece a la organización" },
+          { status: 400 },
+        );
+    }
+
     const { data: location } = await db
       .from("locations")
       .select("id,name")
-      .eq("organization_id", selected.organizationId)
-      .eq("name", input.location)
+      .eq("id", input.locationId)
+      .eq("organization_id", organizationId)
       .eq("active", true)
-      .single();
+      .maybeSingle();
     if (!location)
       return NextResponse.json(
-        { error: "Ubicación no disponible" },
+        { error: "La ubicación no está disponible" },
         { status: 400 },
       );
-    const { data: profile } = await db
+
+    const { data: hostProfile } = await db
       .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .single();
+      .select("full_name,email")
+      .eq("id", hostId)
+      .maybeSingle();
+
     const { data: visit, error: visitError } = await db
       .from("visits")
       .insert({
-        organization_id: selected.organizationId,
+        organization_id: organizationId,
         location_id: location.id,
-        host_id: user.id,
+        host_id: hostId,
         status: "invited",
         origin: "host_invitation",
         purpose: input.purpose,
@@ -171,76 +145,112 @@ export async function POST(request: Request) {
         ends_at: input.endsAt,
         internal_notes: input.notes || null,
         access_requirements: input.accessRequirements || null,
-        created_by: user.id,
+        created_by: userId,
       })
-      .select("id")
+      .select(visitSelect)
       .single();
-    if (visitError || !visit) throw visitError;
+    if (visitError || !visit) throw visitError ?? new Error("insert failed");
+
+    const visitId = (visit as unknown as { id: string }).id;
     const invitationToken = randomBytes(32).toString("base64url");
-    const tokenHash = createHash("sha256")
-      .update(invitationToken)
-      .digest("hex");
-    await db.from("visit_invitations").insert({
-      organization_id: selected.organizationId,
-      visit_id: visit.id,
-      token_hash: tokenHash,
-      token_hint: `••••${invitationToken.slice(-4)}`,
-      expires_at: new Date(
-        new Date(input.endsAt).getTime() + 86400000,
-      ).toISOString(),
-      sent_at: input.sendEmail ? new Date().toISOString() : null,
-      invitee_name: input.visitorName || null,
-      invitee_email: input.email || null,
-      invitee_phone: input.phone || null,
-      invitee_company: input.company || null,
-    });
+    const tokenHash = createHash("sha256").update(invitationToken).digest("hex");
+
+    const { error: invitationError } = await db
+      .from("visit_invitations")
+      .insert({
+        organization_id: organizationId,
+        visit_id: visitId,
+        token_hash: tokenHash,
+        token_hint: `••••${invitationToken.slice(-4)}`,
+        expires_at: new Date(
+          new Date(input.endsAt).getTime() + 86400000,
+        ).toISOString(),
+        sent_at:
+          input.sendEmail || input.sendWhatsApp ? new Date().toISOString() : null,
+        invitee_name: input.visitorName || null,
+        invitee_email: input.email || null,
+        invitee_phone: input.phone || null,
+        invitee_company: input.company || null,
+      });
+    if (invitationError) throw invitationError;
+
     await writeAudit({
-      organizationId: selected.organizationId,
-      actorId: user.id,
-      visitId: visit.id,
+      organizationId,
+      actorId: userId,
+      visitId,
       eventType: "invitation_created",
-      metadata: { sent: input.sendEmail },
+      metadata: {
+        sent_email: input.sendEmail,
+        sent_whatsapp: input.sendWhatsApp,
+        delegated: hostId !== userId,
+      },
     });
-    if (input.sendEmail)
-      await sendInvitationEmail({
+
+    const invitationUrl = `${appUrl()}/visit/${invitationToken}`;
+
+    if (input.sendEmail && input.email) {
+      const delivery = await sendInvitationEmail({
         to: input.email,
         visitorName: input.visitorName,
-        hostName: profile?.full_name ?? "tu anfitrión",
+        hostName: hostProfile?.full_name ?? displayName,
+        organizationName,
+        locationName: location.name,
         dateLabel: new Intl.DateTimeFormat("es-MX", {
           dateStyle: "full",
           timeStyle: "short",
         }).format(new Date(input.startsAt)),
-        invitationUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/visit/${invitationToken}`,
+        invitationUrl,
+      }).catch(() => ({ status: "failed" as const }));
+
+      await writeNotification({
+        organizationId,
+        visitId,
+        recipientMasked: maskEmail(input.email),
+        template: "visitor_invitation",
+        status: delivery.status,
       });
+    }
+
+    const mapped = mapVisit(visit as unknown as Record<string, unknown>);
+    if (input.sendWhatsApp && input.phone) {
+      const delivery = await sendInvitationWhatsApp({
+        to: input.phone,
+        visitorName: input.visitorName,
+        hostName: hostProfile?.full_name ?? displayName,
+        organizationName,
+        dateLabel: new Intl.DateTimeFormat("es-MX", {
+          dateStyle: "long",
+          timeStyle: "short",
+        }).format(new Date(input.startsAt)),
+        invitationPath: `visit/${invitationToken}`,
+      }).catch(() => ({ status: "failed" as const }));
+
+      await writeNotification({
+        organizationId,
+        visitId,
+        recipientMasked: maskPhone(input.phone),
+        template: "visitor_invitation",
+        status: delivery.status,
+        channel: "whatsapp",
+      }).catch(() => undefined);
+    }
+
     return NextResponse.json(
       {
-        visit: mapVisit({
-          id: visit.id,
-          visitor: {
-            full_name: input.visitorName || "Invitado por confirmar",
-            email: input.email,
-            phone: input.phone,
-            company: input.company,
-          },
-          host: { full_name: profile?.full_name },
-          host_id: user.id,
-          location: { name: location.name },
-          visitor_company: input.company,
-          starts_at: input.startsAt,
-          ends_at: input.endsAt,
-          purpose: input.purpose,
-          status: "invited",
-          origin: "host_invitation",
-          internal_notes: input.notes,
-          documents: [],
-          invitation: {
-            invitee_name: input.visitorName || null,
-            invitee_email: input.email || null,
-            invitee_phone: input.phone || null,
-            invitee_company: input.company || null,
-          },
-        }),
+        visit: {
+          ...mapped,
+          visitorName: input.visitorName || mapped.visitorName,
+          email: input.email || mapped.email,
+          phone: input.phone || mapped.phone,
+          company: input.company || mapped.company,
+          inviteeName: input.visitorName || undefined,
+          inviteeEmail: input.email || undefined,
+          inviteePhone: input.phone || undefined,
+          inviteeCompany: input.company || undefined,
+          invitationToken,
+        },
         invitationToken,
+        invitationUrl,
       },
       { status: 201 },
     );
