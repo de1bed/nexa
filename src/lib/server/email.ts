@@ -1,75 +1,177 @@
 import "server-only";
 import { Resend } from "resend";
-type InvitationEmail = {
-  to: string;
-  visitorName: string;
-  hostName: string;
-  dateLabel: string;
-  invitationUrl: string;
+import { escapeHtml } from "@/lib/security";
+
+/**
+ * Adaptador de correo. Sin RESEND_API_KEY registra el destinatario y el enlace
+ * en consola, de modo que el recorrido completo es verificable en desarrollo.
+ * Todo texto dinámico se escapa antes de entrar al HTML.
+ */
+
+export type DeliveryStatus = "sent" | "development" | "failed";
+export type DeliveryResult = { status: DeliveryStatus; id?: string };
+
+const brand = {
+  ink: "#071426",
+  accent: "#10cfc9",
+  muted: "#64748b",
 };
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]!);
-export async function sendInvitationEmail(input: InvitationEmail) {
+
+function layout(options: {
+  preheader: string;
+  title: string;
+  body: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  footnote?: string;
+}) {
+  const cta =
+    options.ctaLabel && options.ctaUrl
+      ? `<tr><td style="padding:28px 0 8px"><a href="${escapeHtml(options.ctaUrl)}" style="display:inline-block;background:${brand.ink};color:#ffffff;padding:15px 26px;border-radius:14px;text-decoration:none;font-weight:600;font-size:16px">${escapeHtml(options.ctaLabel)}</a></td></tr>`
+      : "";
+  const footnote = options.footnote
+    ? `<tr><td style="padding-top:22px;color:${brand.muted};font-size:12px;line-height:20px">${escapeHtml(options.footnote)}</td></tr>`
+    : "";
+
+  return `<!doctype html><html lang="es"><body style="margin:0;background:#f1f5f9;padding:24px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif">
+<span style="display:none;font-size:1px;color:#f1f5f9">${escapeHtml(options.preheader)}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 18px 48px -28px rgba(7,20,38,.45)">
+<tr><td style="background:${brand.ink};padding:22px 28px">
+<span style="display:inline-block;width:30px;height:30px;background:${brand.accent};border-radius:9px;vertical-align:middle"></span>
+<span style="color:#ffffff;font-size:13px;font-weight:600;letter-spacing:.18em;margin-left:10px;vertical-align:middle">NEXA VISIT</span>
+</td></tr>
+<tr><td style="padding:32px 28px 34px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td style="font-size:24px;line-height:32px;font-weight:600;color:${brand.ink};letter-spacing:-.02em">${options.title}</td></tr>
+<tr><td style="padding-top:14px;font-size:16px;line-height:26px;color:#334155">${options.body}</td></tr>
+${cta}
+${footnote}
+</table>
+</td></tr>
+</table>
+<p style="max-width:560px;color:${brand.muted};font-size:11px;line-height:18px;padding:16px 6px 0;text-align:center">Recibes este mensaje porque una empresa registró una visita a su nombre. Si no la esperabas, ignora el correo.</p>
+</td></tr></table></body></html>`;
+}
+
+async function deliver(input: {
+  to: string;
+  subject: string;
+  html: string;
+  logLabel: string;
+  logPayload: Record<string, unknown>;
+}): Promise<DeliveryResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
-    console.info("[NEXA VISIT: correo de desarrollo]", {
+    console.info(`[NEXA VISIT · correo de desarrollo] ${input.logLabel}`, {
       to: input.to,
-      invitationUrl: input.invitationUrl,
+      ...input.logPayload,
     });
-    return { status: "development" as const };
+    return { status: "development" };
   }
   const resend = new Resend(key);
   const { data, error } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? "NEXA VISIT <visitas@example.com>",
     to: input.to,
-    subject: `${input.hostName} te invita a una visita`,
-    html: `<div style="font-family:Inter,Arial;max-width:560px"><h1>${escapeHtml(input.hostName)} te está invitando.</h1><p>${input.visitorName ? `Hola ${escapeHtml(input.visitorName)}, ` : ""}por favor completa o confirma tus datos para la visita del ${escapeHtml(input.dateLabel)} y presenta el QR generado al personal de seguridad.</p><p><a style="background:#071426;color:white;padding:12px 18px;border-radius:10px;text-decoration:none" href="${escapeHtml(input.invitationUrl)}">Completar mis datos</a></p><p style="color:#64748b;font-size:12px">El enlace es personal y tiene vencimiento.</p></div>`,
+    subject: input.subject,
+    html: input.html,
   });
   if (error) throw error;
-  return { status: "sent" as const, id: data?.id };
+  return { status: "sent", id: data?.id };
+}
+
+export async function sendInvitationEmail(input: {
+  to: string;
+  visitorName: string;
+  hostName: string;
+  organizationName: string;
+  dateLabel: string;
+  locationName: string;
+  invitationUrl: string;
+}): Promise<DeliveryResult> {
+  const greeting = input.visitorName
+    ? `Hola ${escapeHtml(input.visitorName)}: `
+    : "";
+  return deliver({
+    to: input.to,
+    subject: `${input.hostName} te invita a ${input.organizationName}`,
+    logLabel: "invitación",
+    logPayload: { invitationUrl: input.invitationUrl },
+    html: layout({
+      preheader: `Completa tu registro para la visita del ${input.dateLabel}.`,
+      title: `${escapeHtml(input.hostName)} te está esperando`,
+      body: `${greeting}completa tu registro desde el teléfono en menos de dos minutos y recibirás un pase QR para entrar sin filas.<br><br><b>${escapeHtml(input.dateLabel)}</b><br>${escapeHtml(input.organizationName)} · ${escapeHtml(input.locationName)}`,
+      ctaLabel: "Completar mi registro",
+      ctaUrl: input.invitationUrl,
+      footnote:
+        "El enlace es personal, vence después de la visita y no debe compartirse.",
+    }),
+  });
 }
 
 export async function sendPassEmail(input: {
   to: string;
   visitorName: string;
+  organizationName: string;
+  dateLabel: string;
   passUrl: string;
-}) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.info("[NEXA VISIT: pase de desarrollo]", {
-      to: input.to,
-      passUrl: input.passUrl,
-    });
-    return { status: "development" as const };
-  }
-  const resend = new Resend(key);
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? "NEXA VISIT <visitas@example.com>",
+}): Promise<DeliveryResult> {
+  return deliver({
     to: input.to,
-    subject: "Tu pase de visitante está listo",
-    html: `<div style="font-family:Inter,Arial;max-width:560px"><h1>Tu pase está listo, ${input.visitorName}.</h1><p>Ábrelo al llegar y muestra el QR al personal de seguridad.</p><p><a style="background:#071426;color:white;padding:12px 18px;border-radius:10px;text-decoration:none" href="${input.passUrl}">Abrir mi pase</a></p><p style="color:#64748b;font-size:12px">Este enlace es personal. No lo compartas.</p></div>`,
+    subject: "Tu pase de acceso está listo",
+    logLabel: "pase",
+    logPayload: { passUrl: input.passUrl },
+    html: layout({
+      preheader: "Muestra este pase al llegar a recepción.",
+      title: `Todo listo, ${escapeHtml(input.visitorName)}`,
+      body: `Tu pase de acceso para <b>${escapeHtml(input.organizationName)}</b> ya está activo.<br><br><b>${escapeHtml(input.dateLabel)}</b><br><br>Ábrelo al llegar y muestra el código QR al personal de seguridad.`,
+      ctaLabel: "Abrir mi pase",
+      ctaUrl: input.passUrl,
+      footnote:
+        "Guarda este correo. El pase se desactiva automáticamente al registrar tu salida.",
+    }),
   });
-  if (error) throw error;
-  return { status: "sent" as const, id: data?.id };
 }
 
 export async function sendHostArrivalEmail(input: {
   to: string;
   hostName: string;
   visitorName: string;
-}) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.info("[NEXA VISIT: llegada de desarrollo]", input);
-    return { status: "development" as const };
-  }
-  const resend = new Resend(key);
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? "NEXA VISIT <visitas@example.com>",
+  locationName: string;
+  timeLabel: string;
+}): Promise<DeliveryResult> {
+  return deliver({
     to: input.to,
-    subject: `${input.visitorName} ha llegado`,
-    html: `<div style="font-family:Inter,Arial"><h1>Tu visitante ha llegado</h1><p>Hola ${input.hostName}, ${input.visitorName} acaba de registrar su entrada en recepción.</p></div>`,
+    subject: `${input.visitorName} llegó a recepción`,
+    logLabel: "llegada",
+    logPayload: { visitorName: input.visitorName },
+    html: layout({
+      preheader: `${input.visitorName} está en recepción.`,
+      title: "Tu visitante ya llegó",
+      body: `Hola ${escapeHtml(input.hostName)}: <b>${escapeHtml(input.visitorName)}</b> registró su entrada en ${escapeHtml(input.locationName)} a las ${escapeHtml(input.timeLabel)}.`,
+      footnote: "Registro generado automáticamente por control de accesos.",
+    }),
   });
-  if (error) throw error;
-  return { status: "sent" as const, id: data?.id };
+}
+
+export async function sendTeamInviteEmail(input: {
+  to: string;
+  fullName: string;
+  organizationName: string;
+  roleLabel: string;
+  actionUrl: string;
+}): Promise<DeliveryResult> {
+  return deliver({
+    to: input.to,
+    subject: `Te agregaron a ${input.organizationName} en NEXA VISIT`,
+    logLabel: "invitación de equipo",
+    logPayload: { actionUrl: input.actionUrl },
+    html: layout({
+      preheader: "Activa tu cuenta para empezar a operar.",
+      title: `Bienvenido a ${escapeHtml(input.organizationName)}`,
+      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>. Define tu contraseña para entrar.`,
+      ctaLabel: "Activar mi cuenta",
+      ctaUrl: input.actionUrl,
+    }),
+  });
 }
