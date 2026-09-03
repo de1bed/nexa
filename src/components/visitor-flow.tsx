@@ -1,668 +1,921 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useEffect, useMemo, useState } from "react";
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
-import QRCode from "qrcode";
-import { useDemo } from "./demo-provider";
-import { Brand } from "./brand";
-import { MockOCRProvider } from "@/lib/ocr/mock";
-import type { OCRResult } from "@/lib/ocr/types";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Camera,
+  BadgeCheck,
+  Building2,
+  CalendarClock,
   Check,
-  Download,
-  FileImage,
-  LoaderCircle,
+  ChevronRight,
+  Clock3,
+  FileCheck2,
+  Loader2,
   LockKeyhole,
+  MapPin,
+  Pencil,
+  ScanFace,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
+import { Brand } from "./brand";
+import { Button, Callout, Field, cn, fieldClass } from "./ui";
+import {
+  DocumentCapture,
+  type DocumentSide,
+} from "./visitor/document-capture";
+import { PassCard } from "./visitor/pass-card";
+import { WalletButtons } from "./visitor/wallet-buttons";
+import { getOCRProvider, LOW_CONFIDENCE, OCR_DISCLAIMER } from "@/lib/ocr";
+import type { OCRResult } from "@/lib/ocr";
+import { isLiveMode } from "@/lib/config";
+import { documentTypes, formatIsoDate } from "@/lib/domain";
 import { randomToken } from "@/lib/security";
-import { compressIdentityImage } from "@/lib/image";
-import { hasSupabaseConfig } from "@/lib/supabase/client";
-import type { Visit } from "@/lib/domain";
+import { showcaseOrganization, showcaseSettings } from "@/lib/demo-data";
+import {
+  getShowcaseServerSnapshot,
+  getShowcaseSnapshot,
+  patchShowcaseVisit,
+  subscribeShowcase,
+} from "@/lib/showcase-store";
+
 type Step =
   | "welcome"
-  | "personal"
   | "identity"
+  | "document"
+  | "scanning"
   | "review"
-  | "details"
+  | "extras"
   | "consent"
   | "done";
-const steps: Step[] = [
-  "welcome",
-  "personal",
-  "identity",
-  "review",
-  "details",
-  "consent",
-  "done",
-];
+
+const flow: Step[] = ["identity", "document", "review", "extras", "consent", "done"];
+
+type FormField =
+  | "fullName"
+  | "email"
+  | "phone"
+  | "company"
+  | "documentType"
+  | "documentNumber"
+  | "vehiclePlate"
+  | "visitorNotes";
+
+type Invitation = {
+  visitId: string;
+  state: "active" | "completed" | "expired" | "cancelled" | "invalid";
+  organizationName: string;
+  locationName: string;
+  locationAddress: string;
+  hostName: string;
+  startsAt: string;
+  endsAt: string;
+  purpose: string;
+  accessRequirements: string;
+  privacyNotice: string;
+  retentionDays: number;
+  visitorName: string;
+  visitorEmail: string;
+  visitorPhone: string;
+  visitorCompany: string;
+};
+
+const invalidInvitation = {
+  visitId: "",
+  state: "invalid",
+} as Invitation;
+
 export function VisitorFlow({ token }: { token: string }) {
-  const { state, updateVisit } = useDemo();
-  const production =
-    process.env.NEXT_PUBLIC_DEMO_MODE === "false" && hasSupabaseConfig();
-  const localVisit = state.visits.find((v) => v.invitationToken === token);
-  const [remoteVisit, setRemoteVisit] = useState<Visit | null>(null);
-  const [publicLoading, setPublicLoading] = useState(production);
-  const [publicState, setPublicState] = useState<string>();
-  const [organizationName, setOrganizationName] = useState("Nova Logistics");
-  const visit = localVisit ?? remoteVisit;
-  const [step, setStep] = useState<Step>(
-    visit?.status === "invited"
-      ? "welcome"
-      : visit?.qrToken
-        ? "done"
-        : "welcome",
+  const live = isLiveMode();
+
+  /* Vitrina: la invitación se deriva del store compartido, sin estado propio. */
+  const showcaseState = useSyncExternalStore(
+    subscribeShowcase,
+    getShowcaseSnapshot,
+    getShowcaseServerSnapshot,
   );
-  const [data, setData] = useState({
-    fullName: visit?.inviteeName ?? visit?.visitorName ?? "",
-    email: visit?.inviteeEmail ?? visit?.email ?? "",
-    phone: visit?.inviteePhone ?? visit?.phone ?? "",
-    company: visit?.inviteeCompany ?? visit?.company ?? "",
-    documentType: "INE",
-    documentNumber: "",
-    vehiclePlate: "",
-    visitorNotes: "",
-  });
-  const [file, setFile] = useState<File | null>(null);
+  const showcaseVisit = live
+    ? undefined
+    : showcaseState.visits.find((visit) => visit.invitationToken === token);
+
+  const [remoteInvitation, setRemoteInvitation] = useState<Invitation | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(live);
+  const [step, setStep] = useState<Step>("welcome");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Solo se guarda lo que el visitante escribe. Lo que ya se conoce (datos
+   * adelantados por el anfitrión, campos leídos del documento) se combina al
+   * renderizar, así nunca se pisa una corrección hecha a mano.
+   */
+  const [edits, setEdits] = useState<Partial<Record<FormField, string>>>({});
+  /** Una credencial tiene dos caras: el frente identifica, el reverso se lee. */
+  const [files, setFiles] = useState<Partial<Record<DocumentSide, File>>>({});
+  const [previews, setPreviews] = useState<Partial<Record<DocumentSide, string>>>(
+    {},
+  );
+  const [capturing, setCapturing] = useState<DocumentSide | null>(null);
   const [ocr, setOcr] = useState<OCRResult | null>(null);
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState("");
   const [consent, setConsent] = useState(false);
-  const [qr, setQr] = useState("");
-  useEffect(() => {
-    if (!production) return;
-    fetch(`/api/public/invitations/${encodeURIComponent(token)}`, {
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("invalid");
-        return response.json() as Promise<{
-          visit_id: string;
-          location_name: string;
-          host_name: string;
-          visitor_name: string;
-          visitor_email: string;
-          visitor_phone: string;
-          visitor_company: string;
-          organization_name: string;
-          starts_at: string;
-          ends_at: string;
-          purpose: string;
-          state: string;
-        }>;
-      })
-      .then((result) => {
-        setPublicState(result.state);
-        setOrganizationName(result.organization_name);
-        setRemoteVisit({
-          id: result.visit_id,
-          visitorName: result.visitor_name,
-          email: result.visitor_email,
-          phone: result.visitor_phone,
-          company: result.visitor_company,
-          hostName: result.host_name,
-          hostId: "",
-          location: result.location_name,
-          startsAt: result.starts_at,
-          endsAt: result.ends_at,
-          purpose: result.purpose,
-          status:
-            result.state === "cancelled"
+  const [passToken, setPassToken] = useState("");
+  const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
+
+  const invitation: Invitation | null = useMemo(() => {
+    if (live) return remoteInvitation;
+    if (!showcaseVisit) return invalidInvitation;
+    return {
+          visitId: showcaseVisit.id,
+          state:
+            showcaseVisit.status === "cancelled"
               ? "cancelled"
-              : result.state === "expired"
-                ? "expired"
-                : result.state === "completed"
-                  ? "pre_registered"
-                  : "invited",
-          origin: "host_invitation",
-          invitationToken: token,
-          documentCaptured: result.state === "completed",
-          inviteeName: result.visitor_name,
-          inviteeEmail: result.visitor_email,
-          inviteePhone: result.visitor_phone,
-          inviteeCompany: result.visitor_company,
-        });
-        setData((current) => ({
-          ...current,
-          fullName: result.visitor_name || current.fullName,
-          email: result.visitor_email || current.email,
-          phone: result.visitor_phone || current.phone,
-          company: result.visitor_company || current.company,
-        }));
-      })
-      .catch(() => setPublicState("invalid"))
-      .finally(() => setPublicLoading(false));
-  }, [production, token]);
-  const index = steps.indexOf(step);
-  const next = (s: Step) => {
-    setError("");
-    setStep(s);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+              : showcaseVisit.qrToken
+                ? "completed"
+                : "active",
+          organizationName: showcaseOrganization.name,
+          locationName: showcaseVisit.location,
+          locationAddress: showcaseVisit.locationAddress ?? "",
+          hostName: showcaseVisit.hostName,
+          startsAt: showcaseVisit.startsAt,
+          endsAt: showcaseVisit.endsAt,
+          purpose: showcaseVisit.purpose,
+          accessRequirements: showcaseVisit.accessRequirements ?? "",
+          privacyNotice: showcaseSettings.privacyNotice,
+          retentionDays: showcaseSettings.documentRetentionDays,
+          visitorName: showcaseVisit.inviteeName ?? "",
+          visitorEmail: showcaseVisit.inviteeEmail ?? "",
+          visitorPhone: showcaseVisit.inviteePhone ?? "",
+      visitorCompany: showcaseVisit.inviteeCompany ?? "",
+    };
+  }, [live, remoteInvitation, showcaseVisit]);
+
+  /* ------------------------------------------------------------------ */
+  /* Carga (solo en modo real)                                           */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
-    if (visit && (step === "done" || visit.qrToken)) {
-      QRCode.toDataURL(visit.qrToken ?? token, {
-        width: 360,
-        margin: 2,
-        color: { dark: "#071426", light: "#ffffff" },
-      }).then(setQr);
+    if (!live) return;
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/public/invitations/${encodeURIComponent(token)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("invalid");
+        const row = (await response.json()) as Record<string, string>;
+        if (!active) return;
+        setRemoteInvitation({
+          visitId: row.visit_id,
+          state: row.state as Invitation["state"],
+          organizationName: row.organization_name,
+          locationName: row.location_name,
+          locationAddress: row.location_address ?? "",
+          hostName: row.host_name,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          purpose: row.purpose,
+          accessRequirements: row.access_requirements ?? "",
+          privacyNotice: row.privacy_notice ?? "",
+          retentionDays: Number(row.retention_days ?? 30),
+          visitorName: row.visitor_name ?? "",
+          visitorEmail: row.visitor_email ?? "",
+          visitorPhone: row.visitor_phone ?? "",
+          visitorCompany: row.visitor_company ?? "",
+        });
+      } catch {
+        if (active) setRemoteInvitation(invalidInvitation);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [live, token]);
+
+  /* Valor efectivo de cada campo: edición > dato adelantado > lectura OCR. */
+  const value = useCallback(
+    (name: FormField): string => {
+      const edited = edits[name];
+      if (edited !== undefined) return edited;
+      switch (name) {
+        case "fullName":
+          return invitation?.visitorName || ocr?.fullName || "";
+        case "email":
+          return invitation?.visitorEmail || "";
+        case "phone":
+          return invitation?.visitorPhone || "";
+        case "company":
+          return invitation?.visitorCompany || "";
+        case "documentType":
+          return documentTypes[0];
+        case "documentNumber":
+          return ocr?.documentNumber || "";
+        default:
+          return "";
+      }
+    },
+    [edits, invitation, ocr],
+  );
+
+  const set = useCallback((name: FormField, next: string) => {
+    setEdits((current) => ({ ...current, [name]: next }));
+  }, []);
+
+  const go = useCallback((next: Step) => {
+    setError("");
+    setStep(next);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  /* ------------------------------------------------------------------ */
+  /* Lectura del documento                                               */
+  /* ------------------------------------------------------------------ */
+  const runOcr = useCallback(
+    async (image: File) => {
+      go("scanning");
+      setProgress(12);
+      const timer = setInterval(
+        () => setProgress((current) => Math.min(90, current + 9)),
+        160,
+      );
+      try {
+        const provider = await getOCRProvider();
+        const result = await provider.extractIdentityData(image);
+        setOcr(result);
+        setProgress(100);
+        setTimeout(() => go("review"), 420);
+      } catch {
+        setOcr(null);
+        setProgress(100);
+        setError(
+          "No pudimos leer la imagen automáticamente. Puedes escribir tus datos a mano.",
+        );
+        setTimeout(() => go("review"), 300);
+      } finally {
+        clearInterval(timer);
+      }
+    },
+    [go],
+  );
+
+  /* ------------------------------------------------------------------ */
+  /* Envío                                                               */
+  /* ------------------------------------------------------------------ */
+  async function submit() {
+    if (!consent) {
+      setError("Necesitamos tu consentimiento para registrar la visita.");
+      return;
     }
-  }, [step, visit, token]);
-  const date = useMemo(
+    if (!files.front || !files.back) {
+      setError("Faltan las fotos de tu identificación.");
+      go("document");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      if (live) {
+        const form = new FormData();
+        const fields: Array<[string, string]> = [
+          ["fullName", value("fullName")],
+          ["email", value("email")],
+          ["phone", value("phone")],
+          ["company", value("company")],
+          ["documentType", value("documentType")],
+          ["documentNumber", value("documentNumber")],
+          ["vehiclePlate", value("vehiclePlate")],
+          ["visitorNotes", value("visitorNotes")],
+        ];
+        fields.forEach(([key, fieldValue]) => {
+          if (fieldValue) form.set(key, fieldValue);
+        });
+        if (ocr) {
+          form.set("ocrConfidence", String(Math.round(ocr.confidence)));
+          form.set("ocrVerified", ocr.mrz?.verified ? "true" : "false");
+          if (ocr.expiryDate) form.set("documentExpiresAt", ocr.expiryDate);
+        }
+        form.set("consent", "true");
+        form.set("documentFront", files.front);
+        form.set("documentBack", files.back);
+
+        const response = await fetch(
+          `/api/public/invitations/${encodeURIComponent(token)}/register`,
+          { method: "POST", body: form },
+        );
+        const payload = (await response.json()) as {
+          qrToken?: string;
+          wallet?: { apple?: boolean; google?: boolean };
+          error?: string;
+        };
+        if (!response.ok || !payload.qrToken)
+          throw new Error(payload.error ?? "No fue posible completar tu registro");
+
+        setPassToken(payload.qrToken);
+        setWallet(payload.wallet);
+        window.history.replaceState(null, "", `/pass/${payload.qrToken}`);
+      } else {
+        const generated = randomToken(24);
+        const documentNumber = value("documentNumber");
+        patchShowcaseVisit(
+          invitation!.visitId,
+          {
+            visitorName: value("fullName"),
+            email: value("email"),
+            phone: value("phone"),
+            company: value("company"),
+            documentType: value("documentType"),
+            documentMasked: documentNumber
+              ? `•••• ${documentNumber.slice(-4)}`
+              : undefined,
+            vehiclePlate: value("vehiclePlate") || undefined,
+            visitorNotes: value("visitorNotes") || undefined,
+            status: "pre_registered",
+            documentCaptured: true,
+            consentedAt: new Date().toISOString(),
+            qrToken: generated,
+          },
+          { type: "pre_registered", actor: value("fullName") },
+        );
+        setPassToken(generated);
+      }
+      go("done");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "No fue posible completar tu registro",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Estados de portada                                                  */
+  /* ------------------------------------------------------------------ */
+  const stepIndex = flow.indexOf(step);
+  const progressValue =
+    step === "welcome" ? 0 : ((Math.max(0, stepIndex) + 1) / flow.length) * 100;
+
+  const dateLabel = useMemo(
     () =>
-      visit
+      invitation?.startsAt
         ? new Intl.DateTimeFormat("es-MX", {
             dateStyle: "full",
             timeStyle: "short",
-          }).format(new Date(visit.startsAt))
+          }).format(new Date(invitation.startsAt))
         : "",
-    [visit],
+    [invitation],
   );
-  const providedCount = [data.fullName, data.email, data.phone, data.company].filter(Boolean).length;
-  const purposeLabel = visit?.purpose ?? "visita";
-  const invitationPurpose = /^(reunión|entrega|entrevista|auditoría)/i.test(purposeLabel)
-    ? `a una ${purposeLabel.toLowerCase()}`
-    : `para ${purposeLabel.toLowerCase()}`;
-  if (publicLoading)
+
+  if (loading)
     return (
-      <PublicFrame>
-        <div className="py-16 text-center">
-          <LoaderCircle
-            className="mx-auto animate-spin text-[#10aaa5]"
-            size={38}
-          />
-          <p className="mt-4 text-sm text-slate-500">Validando invitación…</p>
+      <Frame>
+        <div className="py-20 text-center">
+          <Loader2 className="mx-auto animate-spin text-[#10aaa5]" size={38} />
+          <p className="mt-4 text-sm text-slate-500">Validando tu invitación…</p>
         </div>
-      </PublicFrame>
+      </Frame>
     );
-  if (!visit)
+
+  if (!invitation || invitation.state === "invalid")
     return (
-      <PublicFrame>
+      <Frame>
         <StateCard
-          icon={<AlertTriangle />}
+          tone="warning"
+          icon={AlertTriangle}
           title="Enlace no disponible"
-          text="El enlace es inválido, venció o fue revocado. Solicita una nueva invitación a tu anfitrión."
+          text="El enlace no es válido, ya venció o fue revocado. Pide a tu anfitrión que te envíe uno nuevo."
         />
-      </PublicFrame>
+      </Frame>
     );
-  if (visit.status === "cancelled")
+
+  if (invitation.state === "cancelled")
     return (
-      <PublicFrame>
+      <Frame>
         <StateCard
-          icon={<AlertTriangle />}
+          tone="warning"
+          icon={AlertTriangle}
           title="Visita cancelada"
-          text="Esta invitación fue cancelada. Contacta a tu anfitrión si necesitas reagendar."
+          text={`${invitation.hostName} canceló esta visita. Contáctalo si necesitas reagendar.`}
         />
-      </PublicFrame>
+      </Frame>
     );
-  if (publicState === "expired" || visit.status === "expired")
+
+  if (invitation.state === "expired")
     return (
-      <PublicFrame>
+      <Frame>
         <StateCard
-          icon={<AlertTriangle />}
-          title="Enlace vencido"
+          tone="warning"
+          icon={Clock3}
+          title="El enlace venció"
           text="La ventana de esta invitación terminó. Solicita una nueva a tu anfitrión."
         />
-      </PublicFrame>
+      </Frame>
     );
-  if (production && publicState === "completed" && step !== "done")
+
+  if (invitation.state === "completed" && step !== "done")
     return (
-      <PublicFrame>
+      <Frame>
         <StateCard
-          icon={<Check />}
-          title="Preregistro completado"
-          text="Este enlace ya fue utilizado. Abre el enlace de tu pase enviado por correo para mostrar tu QR."
+          tone="success"
+          icon={BadgeCheck}
+          title="Tu registro ya está completo"
+          text="Revisa el correo donde recibiste tu pase para mostrar el código QR en recepción."
         />
-      </PublicFrame>
+      </Frame>
     );
-  const activeVisit = visit;
-  async function processFile(f: File) {
-    setError("");
-    if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) {
-      setError("Usa una imagen JPG, PNG o WebP.");
-      return;
-    }
-    if (f.size > 8 * 1024 * 1024) {
-      setError("El documento supera el límite de 8 MB.");
-      return;
-    }
-    const compressed = await compressIdentityImage(f).catch(() => f);
-    setFile(compressed);
-    setProgress(18);
-    next("identity");
-    const timer = setInterval(
-      () => setProgress((p) => Math.min(88, p + 12)),
-      120,
-    );
-    try {
-      const result = await new MockOCRProvider().extractIdentityData(
-        compressed,
-      );
-      clearInterval(timer);
-      setProgress(100);
-      setOcr(result);
-      setData((d) => ({
-        ...d,
-        fullName: result.fullName || d.fullName,
-        documentNumber: result.documentNumber || d.documentNumber,
-      }));
-      setTimeout(() => next("review"), 300);
-    } catch {
-      clearInterval(timer);
-      setError(
-        "No pudimos leer la imagen. Puedes reintentar o capturar los datos manualmente.",
-      );
-    }
-  }
-  async function finish() {
-    if (!consent) {
-      setError("Debes aceptar el aviso de privacidad para continuar.");
-      return;
-    }
-    if (production) {
-      if (!file) {
-        setError("Debes capturar tu identificación antes de continuar.");
-        return;
-      }
-      const form = new FormData();
-      Object.entries({
-        fullName: data.fullName,
-        email: data.email,
-        phone: data.phone,
-        company: data.company,
-        documentType: data.documentType,
-        documentNumber: data.documentNumber,
-        vehiclePlate: data.vehiclePlate,
-        visitorNotes: data.visitorNotes,
-        consent: "true",
-      }).forEach(([key, value]) => form.set(key, value));
-      form.set("document", file);
-      const response = await fetch(
-        `/api/public/invitations/${encodeURIComponent(token)}/register`,
-        { method: "POST", body: form },
-      );
-      const result = (await response.json()) as {
-        qrToken?: string;
-        error?: string;
-      };
-      if (!response.ok || !result.qrToken) {
-        setError(result.error ?? "No fue posible completar el registro.");
-        return;
-      }
-      setRemoteVisit({
-        ...activeVisit,
-        visitorName: data.fullName,
-        company: data.company,
-        status: "pre_registered",
-        documentCaptured: true,
-        consentedAt: new Date().toISOString(),
-        qrToken: result.qrToken,
-      });
-      window.history.replaceState(null, "", `/pass/${result.qrToken}`);
-      next("done");
-      return;
-    }
-    const qrToken = activeVisit.qrToken ?? randomToken(32);
-    await updateVisit(
-      activeVisit.id,
-      {
-        ...data,
-        visitorName: data.fullName,
-        status: "pre_registered",
-        documentCaptured: Boolean(file),
-        consentedAt: new Date().toISOString(),
-        qrToken,
-      },
-      { type: "pre_registered", actor: data.fullName },
-    );
-    next("done");
-  }
-  const field =
-    "h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-[#10aaa5] focus:ring-2 focus:ring-[#10cfc9]/15";
+
+  /* ------------------------------------------------------------------ */
   return (
-    <PublicFrame progress={Math.max(0, index) * 16.6}>
+    <Frame progress={progressValue}>
+      <div ref={topRef} className="scroll-mt-24" />
+
       {step === "welcome" && (
-        <div className="text-center">
-          <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-cyan-50 text-[#0eaaa5]">
-            <ShieldCheck size={30} />
+        <div className="animate-rise text-center">
+          <span className="mx-auto grid size-[72px] place-items-center rounded-[26px] bg-[#10cfc9]/15 text-[#0d9d99]">
+            <Sparkles size={32} />
           </span>
-          <p className="mt-6 text-sm font-semibold text-[#0eaaa5]">
-            {organizationName.toUpperCase()}
+          <p className="mt-6 text-[13px] font-semibold uppercase tracking-[.18em] text-[#0d9d99]">
+            {invitation.organizationName}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-.03em]">
-            {visit.hostName} te está invitando {invitationPurpose}
+          <h1 className="mt-3 text-[30px] font-semibold leading-[1.15] tracking-[-.035em]">
+            {invitation.hostName} te está esperando
           </h1>
-          <p className="mx-auto mt-3 max-w-md text-slate-500">
-            {data.fullName ? `Hola, ${data.fullName.split(" ")[0]}. ` : ""}Por favor completa o confirma tus datos para recibir tu pase QR.
+          <p className="mx-auto mt-3 max-w-sm text-[15px] leading-6 text-slate-500">
+            {value("fullName") ? `Hola, ${value("fullName").split(" ")[0]}. ` : ""}
+            Prepara tu visita en dos minutos y entra sin filas.
           </p>
-          <div className="my-7 rounded-2xl bg-slate-50 p-5 text-left">
-            <p className="font-semibold">Invitación de {visit.hostName}</p>
-            <p className="mt-2 text-sm text-slate-500">{date}</p>
-            <p className="mt-1 text-sm text-slate-500">
-              {visit.location} · {visit.purpose}
-            </p>
-          </div>
-          <button
-            onClick={() => next("personal")}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#071426] font-semibold text-white"
-          >
-            Comenzar <ArrowRight size={18} />
-          </button>
-          <p className="mt-4 flex items-center justify-center gap-1 text-xs text-slate-400">
-            <LockKeyhole size={12} />
-            Tu enlace es privado y vence después de la visita.
-          </p>
-        </div>
-      )}
-      {step === "personal" && (
-        <StepBlock
-          title="Tus datos"
-          subtitle={providedCount ? "Tu anfitrión adelantó algunos datos. Confírmalos o corrígelos libremente." : "Tu anfitrión dejó estos campos para que tú los completes."}
-        >
-          {providedCount > 0 && <div className="mb-5 rounded-xl bg-cyan-50 p-4 text-sm text-cyan-900">Recibimos {providedCount} {providedCount === 1 ? "dato sugerido" : "datos sugeridos"} del anfitrión. Tú tienes la última palabra.</div>}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nombre completo">
-              <input
-                className={field}
-                value={data.fullName}
-                onChange={(e) => setData({ ...data, fullName: e.target.value })}
+
+          <div className="mt-7 space-y-3 text-left">
+            <SummaryRow icon={CalendarClock} label="Cuándo" value={dateLabel} />
+            <SummaryRow
+              icon={MapPin}
+              label="Dónde"
+              value={invitation.locationName}
+              hint={invitation.locationAddress}
+            />
+            <SummaryRow icon={FileCheck2} label="Motivo" value={invitation.purpose} />
+            {invitation.accessRequirements && (
+              <SummaryRow
+                icon={ShieldCheck}
+                label="Requisitos"
+                value={invitation.accessRequirements}
               />
-            </Field>
-            <Field label="Correo">
-              <input
-                type="email"
-                className={field}
-                value={data.email}
-                onChange={(e) => setData({ ...data, email: e.target.value })}
-              />
-            </Field>
-            <Field label="Teléfono">
-              <input
-                className={field}
-                value={data.phone}
-                onChange={(e) => setData({ ...data, phone: e.target.value })}
-              />
-            </Field>
-            <Field label="Empresa">
-              <input
-                className={field}
-                value={data.company}
-                onChange={(e) => setData({ ...data, company: e.target.value })}
-              />
-            </Field>
-          </div>
-          <Controls
-            back={() => next("welcome")}
-            next={() => {
-              if (!data.fullName || !data.email || !data.company)
-                setError("Completa los campos obligatorios.");
-              else next("identity");
-            }}
-          />
-        </StepBlock>
-      )}
-      {step === "identity" && (
-        <StepBlock
-          title="Identificación"
-          subtitle="Usamos OCR para extraer texto. Esto no verifica la autenticidad del documento."
-        >
-          {progress > 0 && progress < 100 ? (
-            <div className="py-10 text-center">
-              <LoaderCircle
-                className="mx-auto animate-spin text-[#10aaa5]"
-                size={38}
-              />
-              <p className="mt-4 font-medium">Extrayendo información…</p>
-              <div className="mx-auto mt-5 h-2 max-w-xs overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full bg-[#10cfc9] transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-400">{progress}%</p>
-            </div>
-          ) : (
-            <>
-              <label className="flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center transition hover:border-[#10aaa5] hover:bg-cyan-50/40">
-                <span className="grid size-14 place-items-center rounded-full bg-slate-100 text-slate-600">
-                  <Camera size={25} />
-                </span>
-                <span className="mt-4 font-semibold">
-                  Tomar foto o elegir archivo
-                </span>
-                <span className="mt-2 text-xs text-slate-500">
-                  JPG, PNG o WebP · máximo 8 MB
-                </span>
-                <input
-                  className="sr-only"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
-                  onChange={(e) =>
-                    e.target.files?.[0] && processFile(e.target.files[0])
-                  }
-                />
-              </label>
-              <div className="mt-4 rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-800">
-                La imagen se guarda en almacenamiento privado y se elimina según
-                la política de retención de la empresa.
-              </div>
-              <Controls
-                back={() => next("personal")}
-                next={() => next("review")}
-                nextLabel="Capturar manualmente"
-              />
-            </>
-          )}
-        </StepBlock>
-      )}
-      {step === "review" && (
-        <StepBlock
-          title="Revisa la extracción"
-          subtitle="Corrige cualquier dato. Los campos en amarillo tienen menor confianza."
-        >
-          <div className="mb-5 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-sm">
-            <span className="flex items-center gap-2">
-              <FileImage size={17} /> {file?.name ?? "Captura manual"}
-            </span>
-            {ocr && (
-              <span className="font-medium">
-                Confianza {Math.round(ocr.confidence)}%
-              </span>
             )}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+
+          <div className="mt-7 space-y-3">
+            <Button variant="accent" size="lg" block onClick={() => go("identity")}>
+              Comenzar mi registro
+              <ArrowRight size={19} />
+            </Button>
+            <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
+              <LockKeyhole size={13} />
+              Enlace personal · vence después de la visita
+            </p>
+          </div>
+        </div>
+      )}
+
+      {step === "identity" && (
+        <StepShell
+          index={1}
+          title="Tus datos"
+          subtitle={
+            invitation.visitorName || invitation.visitorEmail
+              ? "Tu anfitrión adelantó algunos datos. Confírmalos o corrígelos."
+              : "Necesitamos lo mínimo para identificarte en recepción."
+          }
+          onBack={() => go("welcome")}
+          onNext={() => {
+            if (value("fullName").trim().length < 2)
+              return setError("Escribe tu nombre completo.");
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value("email")))
+              return setError("Escribe un correo válido.");
+            if (value("phone").trim().length < 7)
+              return setError("Escribe un teléfono de contacto.");
+            if (value("company").trim().length < 2)
+              return setError("Escribe la empresa que representas.");
+            go("document");
+          }}
+          error={error}
+        >
+          <div className="space-y-4">
             <Field label="Nombre completo">
               <input
-                className={field}
-                value={data.fullName}
-                onChange={(e) => setData({ ...data, fullName: e.target.value })}
+                className={fieldClass}
+                autoComplete="name"
+                placeholder="Como aparece en tu identificación"
+                value={value("fullName")}
+                onChange={(event) => set("fullName", event.target.value)}
               />
             </Field>
-            <Field label="Tipo de identificación">
-              <select
-                className={field}
-                value={data.documentType}
-                onChange={(e) =>
-                  setData({ ...data, documentType: e.target.value })
-                }
-              >
-                <option>INE</option>
-                <option>Pasaporte</option>
-                <option>Licencia</option>
-                <option>Otra</option>
-              </select>
+            <Field label="Correo" hint="Ahí te enviaremos tu pase de acceso.">
+              <input
+                className={fieldClass}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="tu@empresa.com"
+                value={value("email")}
+                onChange={(event) => set("email", event.target.value)}
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Teléfono">
+                <input
+                  className={fieldClass}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="55 1234 5678"
+                  value={value("phone")}
+                  onChange={(event) => set("phone", event.target.value)}
+                />
+              </Field>
+              <Field label="Empresa">
+                <input
+                  className={fieldClass}
+                  autoComplete="organization"
+                  placeholder="A quién representas"
+                  value={value("company")}
+                  onChange={(event) => set("company", event.target.value)}
+                />
+              </Field>
+            </div>
+          </div>
+        </StepShell>
+      )}
+
+      {step === "document" &&
+        (capturing ? (
+          <div className="animate-rise">
+            <p className="text-[13px] font-semibold text-[#0d9d99]">Paso 2 de 5</p>
+            <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
+              Tu identificación
+            </h1>
+            <p className="mb-6 mt-2 text-[15px] leading-6 text-slate-500">
+              Encuadra la credencial y toma la foto.
+            </p>
+
+            <DocumentCapture
+              side={capturing}
+              onCancel={() => setCapturing(null)}
+              onCaptured={(captured, url) => {
+                setFiles((current) => ({ ...current, [capturing]: captured }));
+                setPreviews((current) => ({ ...current, [capturing]: url }));
+                setCapturing(null);
+              }}
+            />
+          </div>
+        ) : (
+          <StepShell
+            index={2}
+            title="Tu identificación"
+            subtitle="Necesitamos las dos caras. El reverso trae los datos que leemos automáticamente."
+            onBack={() => go("identity")}
+            onNext={() => {
+              if (!files.front)
+                return setError("Falta la foto del frente de tu identificación.");
+              if (!files.back)
+                return setError("Falta la foto del reverso de tu identificación.");
+              void runOcr(files.back);
+            }}
+            nextLabel="Leer mi identificación"
+            error={error}
+          >
+            <div className="mb-5">
+              <Field label="Tipo de identificación">
+                <select
+                  className={fieldClass}
+                  value={value("documentType")}
+                  onChange={(event) => set("documentType", event.target.value)}
+                >
+                  {documentTypes.map((type) => (
+                    <option key={type}>{type}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(["front", "back"] as DocumentSide[]).map((side) => (
+                <SideSlot
+                  key={side}
+                  side={side}
+                  preview={previews[side]}
+                  onPick={() => {
+                    setError("");
+                    setCapturing(side);
+                  }}
+                />
+              ))}
+            </div>
+
+            <Callout tone="info" icon={ShieldCheck} className="mt-5">
+              La lectura ocurre en tu propio teléfono: la imagen no se envía a
+              ningún servicio externo para analizarla.
+            </Callout>
+          </StepShell>
+        ))}
+
+      {step === "scanning" && (
+        <div className="animate-rise py-14 text-center">
+          <div className="relative mx-auto grid size-28 place-items-center">
+            <span className="animate-pulse-ring absolute inset-0 rounded-full border-2 border-[#10cfc9]" />
+            <span className="grid size-24 place-items-center rounded-full bg-[#10cfc9]/12 text-[#0d9d99]">
+              <ScanFace size={40} />
+            </span>
+          </div>
+          <h2 className="mt-7 text-xl font-semibold">Leyendo tu identificación</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Extraemos el texto en tu propio dispositivo.
+          </p>
+          <div className="mx-auto mt-6 h-2 max-w-[220px] overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-[#10cfc9] transition-all duration-200"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs font-medium text-slate-400">{progress}%</p>
+        </div>
+      )}
+
+      {step === "review" && (
+        <StepShell
+          index={3}
+          title="Revisa lo que leímos"
+          subtitle="Corrige cualquier dato. Tú tienes la última palabra."
+          onBack={() => go("document")}
+          onNext={() => {
+            if (!value("fullName").trim())
+              return setError("El nombre no puede quedar vacío.");
+            go("extras");
+          }}
+          error={error}
+        >
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            {previews.front ? (
+              <img
+                src={previews.front}
+                alt=""
+                className="size-16 shrink-0 overflow-hidden rounded-xl bg-white object-cover text-[0px]"
+              />
+            ) : (
+              <span className="grid size-16 place-items-center rounded-xl bg-white text-slate-400">
+                <FileCheck2 size={22} />
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Identificación capturada</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {ocr
+                  ? `Confianza de lectura ${Math.round(ocr.confidence)}%`
+                  : "Captura manual"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => go("document")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold active:bg-slate-50"
+            >
+              <Pencil size={14} />
+              Repetir
+            </button>
+          </div>
+
+          {/* La banda del reverso trae dígitos de control: cuando cuadran, los
+              datos no son una conjetura del OCR sino una lectura comprobada. */}
+          {ocr?.mrz?.verified && (
+            <Callout tone="success" icon={BadgeCheck} className="mb-4">
+              <b>Lectura verificada.</b> Los datos coinciden con los dígitos de
+              control de tu credencial.
+              {ocr.expiryDate && (
+                <>
+                  {" "}
+                  Vigencia hasta {formatIsoDate(ocr.expiryDate)}.
+                </>
+              )}
+            </Callout>
+          )}
+
+          {ocr?.expired && (
+            <Callout tone="warning" icon={AlertTriangle} className="mb-4">
+              Tu identificación aparece como <b>vencida</b>. Puedes continuar,
+              pero es posible que en recepción te pidan otra.
+            </Callout>
+          )}
+
+          {ocr && !ocr.mrz && (
+            <Callout tone="neutral" icon={AlertTriangle} className="mb-4">
+              No pudimos leer la banda del reverso. Revisa o escribe tus datos a
+              mano.
+            </Callout>
+          )}
+
+          <div className="space-y-4">
+            <Field
+              label="Nombre completo"
+              warning={hasLowConfidence(ocr, "fullName")}
+            >
+              <input
+                className={fieldClass}
+                value={value("fullName")}
+                onChange={(event) => set("fullName", event.target.value)}
+              />
             </Field>
             <Field
               label="Número o folio"
-              warning={Boolean(
-                ocr &&
-                ocr.fields.find(
-                  (f) => f.name === "documentNumber" && f.confidence < 70,
-                ),
-              )}
+              optional
+              hint="Solo guardamos los últimos cuatro dígitos."
+              warning={hasLowConfidence(ocr, "documentNumber")}
             >
               <input
-                className={field}
-                value={data.documentNumber}
-                onChange={(e) =>
-                  setData({ ...data, documentNumber: e.target.value })
-                }
+                className={fieldClass}
+                value={value("documentNumber")}
+                onChange={(event) => set("documentNumber", event.target.value)}
               />
             </Field>
           </div>
-          <Controls
-            back={() => next("identity")}
-            next={() => next("details")}
-          />
-        </StepBlock>
+
+          <Callout tone="info" icon={ShieldCheck} className="mt-5">
+            {OCR_DISCLAIMER}
+          </Callout>
+        </StepShell>
       )}
-      {step === "details" && (
-        <StepBlock
+
+      {step === "extras" && (
+        <StepShell
+          index={4}
           title="Detalles finales"
-          subtitle="Agrega información opcional que facilite tu acceso."
+          subtitle="Opcional, pero agiliza tu entrada."
+          onBack={() => go("review")}
+          onNext={() => go("consent")}
+          error={error}
         >
           <div className="space-y-4">
-            <Field label="Placas del vehículo (opcional)">
+            <Field label="Placas del vehículo" optional>
               <input
-                className={field}
-                value={data.vehiclePlate}
-                onChange={(e) =>
-                  setData({
-                    ...data,
-                    vehiclePlate: e.target.value.toUpperCase(),
-                  })
+                className={fieldClass}
+                placeholder="ABC-1234"
+                value={value("vehiclePlate")}
+                onChange={(event) =>
+                  set("vehiclePlate", event.target.value.toUpperCase())
                 }
               />
             </Field>
-            <Field label="Notas para recepción (opcional)">
+            <Field label="Notas para recepción" optional>
               <textarea
-                className="w-full rounded-xl border border-slate-200 p-4 outline-none focus:border-[#10aaa5]"
                 rows={3}
-                value={data.visitorNotes}
-                onChange={(e) =>
-                  setData({ ...data, visitorNotes: e.target.value })
-                }
+                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-[16px] outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
+                placeholder="Traigo equipo, llego con un acompañante…"
+                value={value("visitorNotes")}
+                onChange={(event) => set("visitorNotes", event.target.value)}
               />
             </Field>
           </div>
-          <div className="mt-5 rounded-2xl bg-slate-50 p-5 text-sm">
-            <p className="font-semibold">{visit.hostName}</p>
-            <p className="mt-1 text-slate-500">
-              {date} · {visit.location}
+
+          <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">
+              Tu visita
             </p>
-            <p className="mt-1 text-slate-500">{visit.purpose}</p>
+            <p className="mt-1.5 font-semibold">{invitation.hostName}</p>
+            <p className="mt-1 text-sm text-slate-500">{dateLabel}</p>
+            <p className="text-sm text-slate-500">{invitation.locationName}</p>
           </div>
-          <Controls back={() => next("review")} next={() => next("consent")} />
-        </StepBlock>
+        </StepShell>
       )}
+
       {step === "consent" && (
-        <StepBlock
-          title="Privacidad y consentimiento"
-          subtitle="Lee cómo se utilizará tu información."
+        <StepShell
+          index={5}
+          title="Privacidad"
+          subtitle="Lee cómo se usará tu información antes de continuar."
+          onBack={() => go("extras")}
+          onNext={submit}
+          nextLabel={submitting ? "Generando tu pase…" : "Aceptar y generar pase"}
+          nextDisabled={!consent || submitting}
+          busy={submitting}
+          error={error}
         >
-          <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-            <p className="font-semibold text-slate-900">
-              Aviso de privacidad — versión MVP
+          <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+            <p className="font-semibold text-[#071426]">
+              Aviso de privacidad · {invitation.organizationName}
             </p>
-            <p className="mt-2">
-              Nova Logistics solicita estos datos únicamente para gestionar y
-              auditar tu acceso a sus instalaciones. La identificación se
-              conservará durante 30 días y después será eliminada según la
-              política configurada.
+            <p className="mt-2 whitespace-pre-line">
+              {invitation.privacyNotice ||
+                "Los datos se utilizan únicamente para gestionar y auditar tu acceso a las instalaciones."}
             </p>
-            <p className="mt-2">
-              No se realiza reconocimiento facial ni se almacenan datos
-              biométricos. El OCR extrae texto y no verifica la autenticidad de
-              tu documento.
-            </p>
-            <p className="mt-2 font-medium text-amber-700">
-              Este aviso es demostrativo y debe ser revisado legalmente antes de
-              producción.
+            <p className="mt-3">
+              Tu identificación se conserva{" "}
+              <b>{invitation.retentionDays} días</b> y después se elimina de forma
+              permanente. {OCR_DISCLAIMER}
             </p>
           </div>
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-              className="mt-1 size-5 accent-[#10aaa5]"
-            />
-            <span className="text-sm leading-6">
+
+          <button
+            type="button"
+            onClick={() => setConsent(!consent)}
+            className={cn(
+              "mt-4 flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition",
+              consent ? "border-[#10cfc9] bg-[#10cfc9]/10" : "border-slate-200 bg-white",
+            )}
+          >
+            <span
+              className={cn(
+                "mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg border-2 transition",
+                consent ? "border-[#0d9d99] bg-[#10cfc9] text-white" : "border-slate-300",
+              )}
+            >
+              {consent && <Check size={15} strokeWidth={3} />}
+            </span>
+            <span className="text-sm leading-6 text-[#071426]">
               He leído el aviso y acepto el tratamiento de mis datos para
               gestionar esta visita.
             </span>
-          </label>
-          <Controls
-            back={() => next("details")}
-            next={finish}
-            nextLabel="Aceptar y generar pase"
-          />
-        </StepBlock>
+          </button>
+        </StepShell>
       )}
+
       {step === "done" && (
-        <div className="text-center">
-          <span className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-            <Check size={28} />
+        <div className="animate-rise text-center">
+          <span className="animate-pop mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+            <Check size={32} strokeWidth={3} />
           </span>
-          <h1 className="mt-4 text-2xl font-semibold">Tu pase está listo</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Muéstralo al personal de seguridad al llegar.
+          <h1 className="mt-5 text-[26px] font-semibold tracking-[-.03em]">
+            ¡Todo listo!
+          </h1>
+          <p className="mt-2 text-[15px] text-slate-500">
+            Muestra este código al llegar a recepción.
           </p>
-          <div className="mx-auto mt-6 max-w-sm rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
-            <p className="text-xs font-semibold tracking-widest text-slate-400">
-              NEXA VISIT PASS
-            </p>
-            {qr ? (
-              <img
-                src={qr}
-                alt="Código QR de acceso"
-                className="mx-auto my-4 w-64"
-              />
-            ) : (
-              <div className="mx-auto my-8 size-56 animate-pulse rounded-xl bg-slate-100" />
-            )}
-            <p className="font-semibold">
-              {data.fullName || visit.visitorName}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {visit.hostName} · {visit.location}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">{date}</p>
+
+          <div className="mt-7">
+            <PassCard
+              token={passToken}
+              visitorName={value("fullName")}
+              organizationName={invitation.organizationName}
+              hostName={invitation.hostName}
+              location={invitation.locationName}
+              startsAt={invitation.startsAt}
+              accessRequirements={invitation.accessRequirements || undefined}
+            />
           </div>
-          {qr && (
-            <a
-              download="nexa-visit-pass.png"
-              href={qr}
-              className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-[#071426] px-5 text-sm font-semibold text-white"
+
+          <div className="mt-6 space-y-4">
+            <WalletButtons token={passToken} available={wallet} />
+
+            <Link
+              href={`/pass/${passToken}`}
+              className="inline-flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#071426] text-[15px] font-semibold text-white"
             >
-              <Download size={17} />
-              Descargar pase
-            </a>
-          )}
-          <p className="mx-auto mt-5 max-w-md text-xs leading-5 text-slate-400">
-            El QR contiene únicamente un token aleatorio. No incluye tu nombre
-            ni datos personales.
-          </p>
+              Abrir mi pase
+              <ChevronRight size={18} />
+            </Link>
+            <p className="mx-auto max-w-xs text-xs leading-5 text-slate-400">
+              También te lo enviamos por correo. El código contiene solo un token
+              aleatorio, sin tus datos personales.
+            </p>
+          </div>
         </div>
       )}
-      {error && (
-        <div
-          role="alert"
-          className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"
-        >
-          {error}
-        </div>
-      )}
-    </PublicFrame>
+    </Frame>
   );
 }
 
-function PublicFrame({
+function hasLowConfidence(ocr: OCRResult | null, field: string) {
+  return Boolean(
+    ocr?.fields.some(
+      (item) => item.name === field && item.confidence < LOW_CONFIDENCE,
+    ),
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Presentación                                                                */
+/* -------------------------------------------------------------------------- */
+
+function Frame({
   children,
   progress,
 }: {
@@ -670,11 +923,11 @@ function PublicFrame({
   progress?: number;
 }) {
   return (
-    <main className="min-h-screen bg-[#f7f9fc]">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
-          <Brand />
-          <span className="flex items-center gap-1 text-xs text-slate-500">
+    <main className="min-h-screen bg-[#f4f7fb]">
+      <header className="safe-top sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
+        <div className="mx-auto flex h-15 max-w-2xl items-center justify-between px-5">
+          <Brand href="#" />
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
             <LockKeyhole size={13} />
             Conexión segura
           </span>
@@ -682,113 +935,202 @@ function PublicFrame({
         {progress !== undefined && (
           <div className="h-1 bg-slate-100">
             <div
-              className="h-full bg-[#10cfc9] transition-all"
+              className="h-full bg-[#10cfc9] transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
         )}
       </header>
-      <div className="mx-auto max-w-2xl px-5 py-10 sm:py-16">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
+
+      <div className="safe-bottom mx-auto max-w-2xl px-4 py-7 sm:px-6 sm:py-12">
+        <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(7,20,38,.04),0_18px_48px_-30px_rgba(7,20,38,.4)] sm:p-8">
           {children}
         </div>
       </div>
     </main>
   );
 }
-function StepBlock({
+
+function StepShell({
+  index,
   title,
   subtitle,
   children,
+  onBack,
+  onNext,
+  nextLabel = "Continuar",
+  nextDisabled,
+  hideNext,
+  busy,
+  error,
 }: {
+  index: number;
   title: string;
   subtitle: string;
   children: React.ReactNode;
-}) {
-  return (
-    <>
-      <h1 className="text-2xl font-semibold tracking-[-.02em]">{title}</h1>
-      <p className="mb-7 mt-2 text-sm text-slate-500">{subtitle}</p>
-      {children}
-    </>
-  );
-}
-function Field({
-  label,
-  warning,
-  children,
-}: {
-  label: string;
-  warning?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label
-      className={`block rounded-xl ${warning ? "bg-amber-50 p-3 ring-1 ring-amber-200" : ""}`}
-    >
-      <span className="mb-2 block text-sm font-medium">
-        {label}
-        {warning && (
-          <span className="ml-2 text-xs font-normal text-amber-700">
-            Revisar
-          </span>
-        )}
-      </span>
-      {children}
-    </label>
-  );
-}
-function Controls({
-  back,
-  next,
-  nextLabel = "Continuar",
-}: {
-  back: () => void;
-  next: () => void;
+  onBack: () => void;
+  onNext?: () => void;
   nextLabel?: string;
+  nextDisabled?: boolean;
+  hideNext?: boolean;
+  busy?: boolean;
+  error?: string;
 }) {
   return (
-    <div className="mt-7 flex items-center justify-between gap-3">
-      <button
-        onClick={back}
-        className="inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-500 hover:bg-slate-50"
-      >
-        <ArrowLeft size={17} />
-        Atrás
-      </button>
-      <button
-        onClick={next}
-        className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#071426] px-5 text-sm font-semibold text-white"
-      >
-        {nextLabel}
-        <ArrowRight size={17} />
-      </button>
+    <div className="animate-rise">
+      <p className="text-[13px] font-semibold text-[#0d9d99]">Paso {index} de 5</p>
+      <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
+        {title}
+      </h1>
+      <p className="mb-6 mt-2 text-[15px] leading-6 text-slate-500">{subtitle}</p>
+
+      {children}
+
+      {error && (
+        <div
+          role="alert"
+          className="mt-5 flex items-start gap-2 rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-700"
+        >
+          <AlertTriangle size={17} className="mt-0.5 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      <div className="mt-7 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex h-13 items-center gap-1.5 rounded-2xl px-3 text-sm font-medium text-slate-500 active:bg-slate-100"
+        >
+          <ArrowLeft size={18} />
+          Atrás
+        </button>
+        {!hideNext && onNext && (
+          <Button
+            variant="accent"
+            size="lg"
+            onClick={onNext}
+            disabled={nextDisabled}
+            className="flex-1"
+          >
+            {busy && <Loader2 size={18} className="animate-spin" />}
+            {nextLabel}
+            {!busy && <ArrowRight size={18} />}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
+
+/** Casilla de una de las dos caras: vacía invita a capturar, llena deja repetir. */
+function SideSlot({
+  side,
+  preview,
+  onPick,
+}: {
+  side: DocumentSide;
+  preview?: string;
+  onPick: () => void;
+}) {
+  const label = side === "front" ? "Frente" : "Reverso";
+  const hint = side === "front" ? "Con tu foto" : "Con las líneas de datos";
+
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left transition active:scale-[.99]",
+        preview
+          ? "border-[#10cfc9] bg-[#10cfc9]/[.07]"
+          : "border-dashed border-slate-200 bg-white",
+      )}
+    >
+      {preview ? (
+        <img
+          src={preview}
+          alt=""
+          className="size-16 shrink-0 overflow-hidden rounded-xl bg-white object-cover text-[0px]"
+        />
+      ) : (
+        <span className="grid size-16 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-400">
+          <ScanFace size={24} />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5 font-semibold">
+          {label}
+          {preview && <Check size={15} className="text-[#0d9d99]" />}
+        </span>
+        <span className="mt-0.5 block text-xs text-slate-500">
+          {preview ? "Tocar para repetir" : hint}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function SummaryRow({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: typeof MapPin;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-slate-500 shadow-sm">
+        <Icon size={18} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] uppercase tracking-wide text-slate-400">
+          {label}
+        </p>
+        <p className="mt-0.5 text-sm font-semibold leading-5">{value}</p>
+        {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
 function StateCard({
-  icon,
+  icon: Icon,
   title,
   text,
+  tone,
 }: {
-  icon: React.ReactNode;
+  icon: typeof AlertTriangle;
   title: string;
   text: string;
+  tone: "warning" | "success";
 }) {
   return (
     <div className="py-8 text-center">
-      <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-50 text-amber-600">
-        {icon}
+      <span
+        className={cn(
+          "mx-auto grid size-16 place-items-center rounded-full",
+          tone === "success"
+            ? "bg-emerald-50 text-emerald-600"
+            : "bg-amber-50 text-amber-600",
+        )}
+      >
+        <Icon size={30} />
       </span>
-      <h1 className="mt-5 text-2xl font-semibold">{title}</h1>
-      <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+      <h1 className="mt-5 text-2xl font-semibold tracking-[-.02em]">{title}</h1>
+      <p className="mx-auto mt-2.5 max-w-sm text-[15px] leading-6 text-slate-500">
         {text}
       </p>
       <Link
         href="/"
-        className="mt-6 inline-block text-sm font-medium text-blue-600"
+        className="mt-7 inline-flex h-12 items-center gap-2 rounded-2xl border border-slate-200 px-5 text-sm font-semibold"
       >
-        Volver al inicio
+        <Building2 size={17} />
+        Conocer NEXA VISIT
       </Link>
     </div>
   );

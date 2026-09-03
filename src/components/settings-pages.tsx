@@ -1,474 +1,764 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import {
   Building2,
   Check,
+  Clock3,
+  Loader2,
+  MapPin,
   Plus,
   Shield,
   UserPlus,
-  X,
+  Users,
 } from "lucide-react";
-import { hasSupabaseConfig } from "@/lib/supabase/client";
-const isProduction = () =>
-  process.env.NEXT_PUBLIC_DEMO_MODE === "false" && hasSupabaseConfig();
-type Member = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  active: boolean;
-};
-const demoMembers: Member[] = [
-  {
-    id: "1",
-    name: "Elena Torres",
-    email: "admin@novalogistics.demo",
-    role: "admin",
-    active: true,
-  },
-  {
-    id: "2",
-    name: "Mateo García",
-    email: "mateo@novalogistics.demo",
-    role: "host",
-    active: true,
-  },
-  {
-    id: "3",
-    name: "Valeria Cruz",
-    email: "valeria@novalogistics.demo",
-    role: "host",
-    active: true,
-  },
-  {
-    id: "4",
-    name: "Carlos Mendoza",
-    email: "guardia1@novalogistics.demo",
-    role: "guard",
-    active: true,
-  },
-  {
-    id: "5",
-    name: "Lucía Herrera",
-    email: "guardia2@novalogistics.demo",
-    role: "guard",
-    active: true,
-  },
-];
-const roleLabel: Record<string, string> = {
-  admin: "Administración",
-  host: "Anfitrión",
-  guard: "Guardia",
-};
+import { toast } from "sonner";
+import { useWorkspace } from "./workspace-provider";
+import {
+  Avatar,
+  Button,
+  Callout,
+  Card,
+  EmptyState,
+  Field,
+  SectionTitle,
+  cn,
+  fieldClass,
+} from "./ui";
+import { Sheet, Toggle } from "./ui-client";
+import {
+  showcaseLocations,
+  showcaseSettings,
+  showcaseTeam,
+} from "@/lib/demo-data";
+import {
+  roleLabels,
+  type Location,
+  type MemberRole,
+  type OrganizationSettings,
+  type TeamMember,
+} from "@/lib/domain";
+
+async function readError(response: Response, fallback: string) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/* ========================================================================== */
+/* Equipo                                                                     */
+/* ========================================================================== */
+
 export function TeamPage() {
-  const [members, setMembers] = useState<Member[]>(demoMembers);
+  const { live, viewer, reload } = useWorkspace();
+  const [members, setMembers] = useState<TeamMember[]>(live ? [] : showcaseTeam);
+  const [loading, setLoading] = useState(live);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [form, setForm] = useState({ fullName: "", email: "", role: "host" });
+  const [editing, setEditing] = useState<TeamMember | null>(null);
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    role: "host" as MemberRole,
+  });
+
   useEffect(() => {
-    if (isProduction())
-      fetch("/api/team")
-        .then((r) => r.json())
-        .then(
-          (d: { members?: Member[] }) => d.members && setMembers(d.members),
-        );
-  }, []);
-  async function invite(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    if (isProduction()) {
-      const response = await fetch("/api/team", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = (await response.json()) as {
-        member?: Member;
-        error?: string;
-      };
-      if (!response.ok || !data.member) {
-        setError(data.error ?? "No fue posible invitar");
-        setBusy(false);
-        return;
+    if (!live) return;
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/team", { cache: "no-store" });
+        if (!response.ok) throw new Error(await readError(response, "Error"));
+        const payload = (await response.json()) as { members: TeamMember[] };
+        if (active) setMembers(payload.members ?? []);
+      } catch (reason) {
+        if (active)
+          toast.error(
+            reason instanceof Error
+              ? reason.message
+              : "No fue posible cargar el equipo",
+          );
+      } finally {
+        if (active) setLoading(false);
       }
-      setMembers((x) => [...x, data.member!]);
-    } else
-      setMembers((x) => [
-        ...x,
-        {
-          id: crypto.randomUUID(),
-          name: form.fullName,
-          email: form.email,
-          role: form.role,
-          active: true,
-        },
-      ]);
-    setBusy(false);
-    setOpen(false);
-    setForm({ fullName: "", email: "", role: "host" });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [live]);
+
+  async function invite(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      if (live) {
+        const response = await fetch("/api/team", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible invitar"));
+        const payload = (await response.json()) as { member: TeamMember };
+        setMembers((current) => [...current, payload.member]);
+      } else {
+        setMembers((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            name: form.fullName,
+            email: form.email,
+            role: form.role,
+            active: true,
+          },
+        ]);
+      }
+      toast.success("Invitación enviada");
+      setOpen(false);
+      setForm({ fullName: "", email: "", role: "host" });
+      if (live) void reload();
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible invitar",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
+
+  async function updateMember(member: TeamMember, patch: Partial<TeamMember>) {
+    setBusy(true);
+    try {
+      if (live) {
+        const response = await fetch(`/api/team/${member.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: patch.role, active: patch.active }),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible actualizar"));
+      }
+      setMembers((current) =>
+        current.map((item) =>
+          item.id === member.id ? { ...item, ...patch } : item,
+        ),
+      );
+      toast.success("Acceso actualizado");
+      setEditing(null);
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible actualizar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
-      <PageHead
+      <SectionTitle
         eyebrow="Administración"
         title="Equipo"
-        text="Usuarios y permisos de la organización"
+        description="Quién puede invitar, recibir visitantes y operar la caseta."
+        action={
+          <Button onClick={() => setOpen(true)}>
+            <UserPlus size={17} />
+            Invitar
+          </Button>
+        }
       />
-      <div className="mb-5 flex justify-end">
-        <button
-          onClick={() => setOpen(true)}
-          className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#071426] px-4 text-sm font-semibold text-white"
-        >
-          <UserPlus size={17} />
-          Invitar usuario
-        </button>
-      </div>
-      <div className="overflow-hidden rounded-2xl border bg-white">
-        {members.map((m) => (
-          <div
-            key={m.id}
-            className="flex items-center gap-4 border-b border-slate-100 p-5 last:border-0"
-          >
-            <span className="grid size-11 place-items-center rounded-full bg-slate-100 font-semibold">
-              {m.name
-                .split(" ")
-                .map((x) => x[0])
-                .slice(0, 2)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">{m.name}</p>
-              <p className="truncate text-sm text-slate-500">{m.email}</p>
-            </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium">
-              {roleLabel[m.role] ?? m.role}
-            </span>
-          </div>
-        ))}
-      </div>
-      {open && (
-        <Modal close={() => setOpen(false)}>
-          <form onSubmit={invite}>
-            <h2 className="text-xl font-semibold">Invitar al equipo</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Recibirá un correo para definir su contraseña.
-            </p>
-            <Input
-              label="Nombre"
-              value={form.fullName}
-              onChange={(value) => setForm({ ...form, fullName: value })}
-            />
-            <Input
-              label="Correo"
-              type="email"
-              value={form.email}
-              onChange={(value) => setForm({ ...form, email: value })}
-            />
-            <label className="mt-4 block text-sm">
-              <span className="mb-2 block font-medium">Rol</span>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="h-11 w-full rounded-xl border px-3"
+
+      {loading ? (
+        <Card>
+          <p className="text-sm text-slate-500">Cargando equipo…</p>
+        </Card>
+      ) : members.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="Todavía estás solo"
+          description="Invita a tus anfitriones y al personal de seguridad."
+          action={
+            <Button variant="accent" onClick={() => setOpen(true)}>
+              <UserPlus size={18} />
+              Invitar al equipo
+            </Button>
+          }
+        />
+      ) : (
+        <div className="space-y-2.5">
+          {members.map((member) => (
+            <Card key={member.id} className="flex items-center gap-3 p-4">
+              <Avatar name={member.name} size={44} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">
+                  {member.name}
+                  {member.id === viewer.id && (
+                    <span className="ml-1.5 text-xs font-normal text-slate-400">
+                      (tú)
+                    </span>
+                  )}
+                </p>
+                <p className="truncate text-sm text-slate-500">{member.email}</p>
+              </div>
+              <button
+                type="button"
+                disabled={member.id === viewer.id}
+                onClick={() => setEditing(member)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                  member.active
+                    ? "bg-slate-100 text-slate-700"
+                    : "bg-amber-50 text-amber-700",
+                  member.id !== viewer.id && "active:bg-slate-200",
+                )}
               >
-                <option value="host">Anfitrión</option>
-                <option value="guard">Guardia</option>
-                <option value="admin">Administración</option>
-              </select>
-            </label>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-            <button
-              disabled={busy}
-              className="mt-5 h-11 w-full rounded-xl bg-[#071426] font-semibold text-white"
-            >
-              {busy ? "Enviando…" : "Enviar invitación"}
-            </button>
-          </form>
-        </Modal>
+                {member.active ? roleLabels[member.role] : "Suspendido"}
+              </button>
+            </Card>
+          ))}
+        </div>
       )}
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Invitar al equipo"
+        description="Recibirá un correo para definir su contraseña y entrar."
+      >
+        <form onSubmit={invite} className="space-y-4">
+          <Field label="Nombre completo">
+            <input
+              required
+              className={fieldClass}
+              value={form.fullName}
+              onChange={(event) =>
+                setForm({ ...form, fullName: event.target.value })
+              }
+            />
+          </Field>
+          <Field label="Correo">
+            <input
+              required
+              type="email"
+              className={fieldClass}
+              value={form.email}
+              onChange={(event) => setForm({ ...form, email: event.target.value })}
+            />
+          </Field>
+          <Field label="Rol">
+            <select
+              className={fieldClass}
+              value={form.role}
+              onChange={(event) =>
+                setForm({ ...form, role: event.target.value as MemberRole })
+              }
+            >
+              <option value="host">Anfitrión — invita y recibe visitas</option>
+              <option value="guard">Guardia — valida accesos en caseta</option>
+              <option value="admin">Administración — control total</option>
+            </select>
+          </Field>
+          <Button type="submit" variant="accent" size="lg" block disabled={busy}>
+            {busy ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
+            Enviar invitación
+          </Button>
+        </form>
+      </Sheet>
+
+      <Sheet
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title={editing?.name ?? ""}
+        description="Cambia su rol o suspende su acceso."
+      >
+        {editing && (
+          <div className="space-y-3">
+            {(["admin", "host", "guard"] as MemberRole[]).map((role) => (
+              <button
+                key={role}
+                type="button"
+                disabled={busy}
+                onClick={() => updateMember(editing, { role, active: true })}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-2xl border p-4 text-left transition",
+                  editing.role === role && editing.active
+                    ? "border-[#10cfc9] bg-[#10cfc9]/10"
+                    : "border-slate-200",
+                )}
+              >
+                <span className="text-sm font-semibold">{roleLabels[role]}</span>
+                {editing.role === role && editing.active && (
+                  <Check size={18} className="text-[#0d9d99]" />
+                )}
+              </button>
+            ))}
+            <Button
+              variant={editing.active ? "outline" : "accent"}
+              size="lg"
+              block
+              disabled={busy}
+              className={editing.active ? "border-red-200 text-red-600" : ""}
+              onClick={() => updateMember(editing, { active: !editing.active })}
+            >
+              {editing.active ? "Suspender acceso" : "Reactivar acceso"}
+            </Button>
+          </div>
+        )}
+      </Sheet>
     </>
   );
 }
-type Location = {
-  id: string;
-  name: string;
-  address: string;
-  timezone: string;
-  active: boolean;
-};
-const demoLocation: Location = {
-  id: "demo",
-  name: "Centro de Distribución Tijuana",
-  address: "Blvd. Industrial 2400, Tijuana, B.C.",
-  timezone: "America/Tijuana",
-  active: true,
-};
+
+/* ========================================================================== */
+/* Ubicaciones                                                                */
+/* ========================================================================== */
+
 export function LocationsPage() {
-  const [locations, setLocations] = useState<Location[]>([demoLocation]);
+  const { live, reload } = useWorkspace();
+  const [locations, setLocations] = useState<Location[]>(
+    live ? [] : showcaseLocations,
+  );
+  const [loading, setLoading] = useState(live);
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: "",
     address: "",
-    timezone: "America/Tijuana",
+    timezone: "America/Mexico_City",
   });
+
   useEffect(() => {
-    if (isProduction())
-      fetch("/api/locations")
-        .then((r) => r.json())
-        .then(
-          (d: { locations?: Location[] }) =>
-            d.locations && setLocations(d.locations),
-        );
-  }, []);
-  async function toggle(item: Location) {
-    const active = !item.active;
-    setLocations((rows) =>
-      rows.map((row) => (row.id === item.id ? { ...row, active } : row)),
-    );
-    if (isProduction())
-      await fetch(`/api/locations/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active }),
-      });
-  }
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    let location: Location = { id: crypto.randomUUID(), ...form, active: true };
-    if (isProduction()) {
-      const response = await fetch("/api/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = (await response.json()) as { location?: Location };
-      if (!response.ok || !data.location) return;
-      location = data.location;
+    if (!live) return;
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/locations", { cache: "no-store" });
+        if (!response.ok) throw new Error(await readError(response, "Error"));
+        const payload = (await response.json()) as { locations: Location[] };
+        if (active) setLocations(payload.locations ?? []);
+      } catch (reason) {
+        if (active)
+          toast.error(
+            reason instanceof Error
+              ? reason.message
+              : "No fue posible cargar las ubicaciones",
+          );
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [live]);
+
+  async function create(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      if (live) {
+        const response = await fetch("/api/locations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible crear"));
+        const payload = (await response.json()) as { location: Location };
+        setLocations((current) => [...current, payload.location]);
+      } else {
+        setLocations((current) => [
+          ...current,
+          { id: crypto.randomUUID(), ...form, active: true },
+        ]);
+      }
+      toast.success("Ubicación creada");
+      setOpen(false);
+      setForm({ name: "", address: "", timezone: "America/Mexico_City" });
+      if (live) void reload();
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible crear",
+      );
+    } finally {
+      setBusy(false);
     }
-    setLocations((rows) => [...rows, location]);
-    setOpen(false);
   }
+
+  async function toggle(location: Location) {
+    const active = !location.active;
+    try {
+      if (live) {
+        const response = await fetch(`/api/locations/${location.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active }),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible actualizar"));
+      }
+      setLocations((current) =>
+        current.map((item) =>
+          item.id === location.id ? { ...item, active } : item,
+        ),
+      );
+      if (live) void reload();
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible actualizar",
+      );
+    }
+  }
+
   return (
     <>
-      <PageHead
+      <SectionTitle
         eyebrow="Administración"
         title="Ubicaciones"
-        text="Puntos donde se reciben visitantes"
+        description="Los puntos donde recibes visitantes."
+        action={
+          <Button onClick={() => setOpen(true)}>
+            <Plus size={17} />
+            Nueva
+          </Button>
+        }
       />
-      <div className="mb-5 flex justify-end">
-        <button
-          onClick={() => setOpen(true)}
-          className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#071426] px-4 text-sm font-semibold text-white"
-        >
-          <Plus size={17} />
-          Nueva ubicación
-        </button>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {locations.map((item) => (
-          <article key={item.id} className="rounded-2xl border bg-white p-6">
-            <div className="flex items-start gap-4">
-              <span className="grid size-12 place-items-center rounded-xl bg-blue-50 text-blue-600">
-                <Building2 />
-              </span>
-              <div className="flex-1">
-                <h2 className="font-semibold">{item.name}</h2>
-                <p className="mt-1 text-sm text-slate-500">{item.address}</p>
-                <p className="mt-1 text-xs text-slate-400">{item.timezone}</p>
-              </div>
-              <button
-                onClick={() => toggle(item)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${item.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100"}`}
-              >
-                {item.active ? "Activa" : "Inactiva"}
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-      {open && (
-        <Modal close={() => setOpen(false)}>
-          <form onSubmit={create}>
-            <h2 className="text-xl font-semibold">Nueva ubicación</h2>
-            <Input
-              label="Nombre"
-              value={form.name}
-              onChange={(value) => setForm({ ...form, name: value })}
-            />
-            <Input
-              label="Dirección"
-              value={form.address}
-              onChange={(value) => setForm({ ...form, address: value })}
-            />
-            <Input
-              label="Zona horaria"
-              value={form.timezone}
-              onChange={(value) => setForm({ ...form, timezone: value })}
-            />
-            <button className="mt-5 h-11 w-full rounded-xl bg-[#071426] font-semibold text-white">
+
+      {loading ? (
+        <Card>
+          <p className="text-sm text-slate-500">Cargando ubicaciones…</p>
+        </Card>
+      ) : locations.length === 0 ? (
+        <EmptyState
+          icon={MapPin}
+          title="Sin ubicaciones"
+          description="Crea al menos una recepción para poder invitar visitantes."
+          action={
+            <Button variant="accent" onClick={() => setOpen(true)}>
+              <Plus size={18} />
               Crear ubicación
-            </button>
-          </form>
-        </Modal>
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {locations.map((location) => (
+            <Card key={location.id} className="p-5">
+              <div className="flex items-start gap-4">
+                <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                  <Building2 size={22} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate font-semibold">{location.name}</h2>
+                  <p className="mt-1 text-sm leading-5 text-slate-500">
+                    {location.address}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {location.timezone}
+                  </p>
+                </div>
+                <button
+                  onClick={() => toggle(location)}
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                    location.active
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-500",
+                  )}
+                >
+                  {location.active ? "Activa" : "Inactiva"}
+                </button>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Nueva ubicación"
+        description="Aparecerá como opción al crear invitaciones."
+      >
+        <form onSubmit={create} className="space-y-4">
+          <Field label="Nombre">
+            <input
+              required
+              className={fieldClass}
+              placeholder="Recepción principal"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+            />
+          </Field>
+          <Field label="Dirección">
+            <input
+              required
+              className={fieldClass}
+              placeholder="Calle, número, ciudad"
+              value={form.address}
+              onChange={(event) =>
+                setForm({ ...form, address: event.target.value })
+              }
+            />
+          </Field>
+          <Field label="Zona horaria">
+            <select
+              className={fieldClass}
+              value={form.timezone}
+              onChange={(event) =>
+                setForm({ ...form, timezone: event.target.value })
+              }
+            >
+              {[
+                "America/Mexico_City",
+                "America/Tijuana",
+                "America/Monterrey",
+                "America/Cancun",
+                "America/Bogota",
+                "America/Lima",
+                "America/Santiago",
+                "America/Buenos_Aires",
+                "Europe/Madrid",
+              ].map((zone) => (
+                <option key={zone}>{zone}</option>
+              ))}
+            </select>
+          </Field>
+          <Button type="submit" variant="accent" size="lg" block disabled={busy}>
+            {busy ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+            Crear ubicación
+          </Button>
+        </form>
+      </Sheet>
     </>
   );
 }
+
+/* ========================================================================== */
+/* Configuración                                                              */
+/* ========================================================================== */
+
 export function SettingsPage() {
-  const [days, setDays] = useState(30);
-  const [preview, setPreview] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const { live, organization, reload } = useWorkspace();
+  const [settings, setSettings] = useState<OrganizationSettings>(showcaseSettings);
+  const [loading, setLoading] = useState(live);
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
-    if (isProduction())
-      fetch("/api/settings")
-        .then((r) => r.json())
-        .then(
-          (d: {
-            settings?: {
-              documentRetentionDays: number;
-              allowDocumentPreviewForGuards: boolean;
-            };
-          }) => {
-            if (d.settings) {
-              setDays(d.settings.documentRetentionDays);
-              setPreview(d.settings.allowDocumentPreviewForGuards);
-            }
-          },
-        );
-  }, []);
+    if (!live) return;
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        if (!response.ok) throw new Error(await readError(response, "Error"));
+        const payload = (await response.json()) as {
+          settings: OrganizationSettings;
+        };
+        if (active) setSettings(payload.settings);
+      } catch (reason) {
+        if (active)
+          toast.error(
+            reason instanceof Error
+              ? reason.message
+              : "No fue posible cargar la configuración",
+          );
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [live]);
+
   async function save() {
-    if (isProduction()) {
-      const response = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentRetentionDays: days,
-          allowDocumentPreviewForGuards: preview,
-        }),
-      });
-      if (!response.ok) return;
+    setBusy(true);
+    try {
+      if (live) {
+        const response = await fetch("/api/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(settings),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible guardar"));
+        void reload();
+      }
+      toast.success("Configuración guardada");
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible guardar",
+      );
+    } finally {
+      setBusy(false);
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
   }
+
   return (
     <>
-      <PageHead
-        eyebrow="Organización"
+      <SectionTitle
+        eyebrow={organization.name}
         title="Configuración"
-        text="Privacidad, seguridad y operación"
+        description="Privacidad, retención y ventanas de acceso."
       />
-      <div className="max-w-3xl space-y-5">
-        <section className="rounded-2xl border bg-white p-6">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <Shield size={18} />
-            Retención y privacidad
-          </h2>
-          <label className="mt-5 block text-sm">
-            <span className="mb-2 block font-medium">
-              Eliminar identificaciones después de
-            </span>
-            <select
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              className="h-11 w-full rounded-xl border px-3"
-            >
-              <option value={7}>7 días</option>
-              <option value={30}>30 días</option>
-              <option value={90}>90 días</option>
-            </select>
-          </label>
-          <label className="mt-5 flex items-center justify-between gap-4 rounded-xl bg-slate-50 p-4 text-sm">
-            <span>
-              <b>Vista de documento para guardias</b>
-              <small className="mt-1 block text-slate-500">
-                Desactivado minimiza la exposición de datos.
-              </small>
-            </span>
-            <input
-              type="checkbox"
-              checked={preview}
-              onChange={(e) => setPreview(e.target.checked)}
-              className="size-5 accent-[#10aaa5]"
+
+      {loading ? (
+        <Card>
+          <p className="text-sm text-slate-500">Cargando configuración…</p>
+        </Card>
+      ) : (
+        <div className="max-w-3xl space-y-5">
+          <Card className="p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <Shield size={18} />
+              Retención de identificaciones
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Al cumplirse el plazo, la imagen se borra del almacenamiento y queda
+              constancia en la bitácora.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {[7, 15, 30, 60, 90].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() =>
+                    setSettings({ ...settings, documentRetentionDays: days })
+                  }
+                  className={cn(
+                    "h-11 rounded-2xl border px-4 text-sm font-semibold transition",
+                    settings.documentRetentionDays === days
+                      ? "border-[#10cfc9] bg-[#10cfc9]/12 text-[#0d9d99]"
+                      : "border-slate-200 bg-white text-slate-600",
+                  )}
+                >
+                  {days} días
+                </button>
+              ))}
+            </div>
+
+            <Callout tone="neutral" className="mt-4">
+              El plazo se aplica a las identificaciones que se capturen a partir
+              de ahora; las ya almacenadas conservan la fecha con la que se
+              subieron.
+            </Callout>
+
+            <div className="mt-5">
+              <Toggle
+                checked={settings.allowDocumentPreviewForGuards}
+                onChange={(value) =>
+                  setSettings({
+                    ...settings,
+                    allowDocumentPreviewForGuards: value,
+                  })
+                }
+                label="Guardias pueden ver la identificación"
+                description="Desactivado minimiza la exposición de datos personales en caseta."
+              />
+            </div>
+          </Card>
+
+          <Card className="p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <Clock3 size={18} />
+              Ventana de acceso
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Cuánta tolerancia hay antes y después del horario programado. Fuera
+              de la ventana, el guardia debe autorizar explícitamente.
+            </p>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field label="Tolerancia de llegada anticipada">
+                <select
+                  className={fieldClass}
+                  value={settings.earlyEntryMinutes}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      earlyEntryMinutes: Number(event.target.value),
+                    })
+                  }
+                >
+                  {[0, 10, 15, 30, 60, 120].map((value) => (
+                    <option key={value} value={value}>
+                      {value === 0 ? "Sin tolerancia" : `${value} minutos antes`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Tolerancia de llegada tardía">
+                <select
+                  className={fieldClass}
+                  value={settings.lateEntryMinutes}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      lateEntryMinutes: Number(event.target.value),
+                    })
+                  }
+                >
+                  {[0, 15, 30, 60, 120, 240].map((value) => (
+                    <option key={value} value={value}>
+                      {value === 0 ? "Sin tolerancia" : `${value} minutos después`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </Card>
+
+          <Card className="p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <Building2 size={18} />
+              Aviso de privacidad
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Es el texto que lee y acepta cada visitante antes de entregar sus
+              datos. Al cambiarlo se genera una versión nueva.
+            </p>
+            <textarea
+              rows={7}
+              value={settings.privacyNotice}
+              onChange={(event) =>
+                setSettings({ ...settings, privacyNotice: event.target.value })
+              }
+              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white p-4 text-[15px] leading-6 outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
             />
-          </label>
-          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-            El aviso de privacidad de este MVP debe ser revisado legalmente
-            antes de producción.
+            <p className="mt-2 text-xs text-slate-400">
+              Versión vigente: {settings.privacyNoticeVersion} ·{" "}
+              {settings.privacyNotice.length} caracteres
+            </p>
+            <Callout tone="warning" className="mt-4">
+              Este texto debe ser revisado por tu área legal antes de operar con
+              datos reales.
+            </Callout>
+          </Card>
+
+          <div className="sticky bottom-[calc(84px+env(safe-area-inset-bottom))] -mx-4 bg-gradient-to-t from-[#f4f7fb] via-[#f4f7fb] to-transparent px-4 pb-2 pt-4 lg:static lg:mx-0 lg:bg-none lg:p-0">
+            <Button
+              variant="accent"
+              size="lg"
+              block
+              disabled={busy}
+              onClick={save}
+            >
+              {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+              Guardar cambios
+            </Button>
           </div>
-        </section>
-        <button
-          onClick={save}
-          className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#071426] px-5 text-sm font-semibold text-white"
-        >
-          {saved && <Check size={17} />}{" "}
-          {saved ? "Guardado" : "Guardar cambios"}
-        </button>
-      </div>
+        </div>
+      )}
     </>
-  );
-}
-function PageHead({
-  eyebrow,
-  title,
-  text,
-}: {
-  eyebrow: string;
-  title: string;
-  text: string;
-}) {
-  return (
-    <header className="mb-8">
-      <p className="mb-2 text-sm font-medium text-[#0eaaa5]">{eyebrow}</p>
-      <h1 className="text-3xl font-semibold tracking-[-.03em]">{title}</h1>
-      <p className="mt-2 text-slate-500">{text}</p>
-    </header>
-  );
-}
-function Input({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
-  return (
-    <label className="mt-4 block text-sm">
-      <span className="mb-2 block font-medium">{label}</span>
-      <input
-        required
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-11 w-full rounded-xl border px-3 outline-none focus:border-[#10aaa5]"
-      />
-    </label>
-  );
-}
-function Modal({
-  children,
-  close,
-}: {
-  children: React.ReactNode;
-  close: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
-      <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
-        <button
-          aria-label="Cerrar"
-          onClick={close}
-          className="absolute right-5 top-5 rounded-lg p-1 text-slate-400"
-        >
-          <X />
-        </button>
-        {children}
-      </div>
-    </div>
   );
 }

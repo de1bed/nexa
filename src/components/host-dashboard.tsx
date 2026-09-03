@@ -1,51 +1,333 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, BellRing, CalendarDays, CheckCircle2, Clock3, UserRoundCheck } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useDemo } from "./demo-provider";
-import { StatusPill } from "./status-pill";
+import {
+  ArrowUpRight,
+  BellRing,
+  CalendarDays,
+  Clock3,
+  Link2,
+  LogIn,
+  LogOut,
+  Plus,
+  Send,
+  ShieldX,
+  UserRoundCheck,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useWorkspace, useMyVisits } from "./workspace-provider";
+import { Avatar, Button, Card, EmptyState, MetricTile, StatusPill, Skeleton } from "./ui";
+import { LiveDuration, ShareButton, Sheet } from "./ui-client";
+import { eventLabels, type AccessEventType } from "@/lib/domain";
 
-const hostName = "Mateo García";
-const date = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-const eventLabels: Record<string, string> = {
-  invitation_created: "Invitación creada",
-  pre_registered: "Preregistro completado",
-  qr_scanned: "Pase escaneado",
-  check_in: "Entrada registrada",
-  check_out: "Salida registrada",
-  denied: "Acceso denegado",
+const activityIcon: Record<AccessEventType, typeof LogIn> = {
+  check_in: LogIn,
+  check_out: LogOut,
+  denied: ShieldX,
+  qr_scanned: UserRoundCheck,
+  pre_registered: UserRoundCheck,
+  invitation_created: Send,
+  invitation_resent: Send,
+  cancelled: ShieldX,
 };
 
-export function HostDashboard() {
-  const { state, production } = useDemo();
-  const visits = production ? state.visits : state.visits.filter((visit) => visit.hostName === hostName);
-  const displayName = production ? visits[0]?.hostName ?? "Anfitrión" : hostName;
-  const upcoming = visits.filter((visit) => new Date(visit.endsAt) >= new Date() && !["cancelled", "denied", "checked_out"].includes(visit.status));
-  const inside = visits.filter((visit) => visit.status === "checked_in");
-  const pending = visits.filter((visit) => visit.status === "invited");
-  const activity = state.events
-    .filter((event) => visits.some((visit) => visit.id === event.visitId))
-    .slice(0, 6);
-  const cards: Array<[string, number, LucideIcon, string]> = [
-    ["Próximas", upcoming.length, CalendarDays, "bg-blue-50 text-blue-600"],
-    ["Esperan preregistro", pending.length, Clock3, "bg-amber-50 text-amber-600"],
-    ["Mis visitantes dentro", inside.length, UserRoundCheck, "bg-emerald-50 text-emerald-600"],
-  ];
+const activityTone: Record<AccessEventType, string> = {
+  check_in: "text-emerald-600",
+  check_out: "text-blue-600",
+  denied: "text-red-600",
+  qr_scanned: "text-slate-500",
+  pre_registered: "text-[#0d9d99]",
+  invitation_created: "text-slate-500",
+  invitation_resent: "text-slate-500",
+  cancelled: "text-amber-600",
+};
 
-  return <>
-    <header className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="mb-2 text-sm font-medium text-[#0eaaa5]">Portal del anfitrión</p><h1 className="text-3xl font-semibold tracking-[-.03em]">Hola, {displayName.split(" ")[0]}</h1><p className="mt-2 text-slate-500">Prepara tus próximas visitas y recibe a quienes ya llegaron.</p></div>
-      <Link href="/app/visits/new" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#071426] px-5 text-sm font-semibold text-white">Nueva invitación <ArrowUpRight size={17}/></Link>
-    </header>
-    <section className="grid gap-4 sm:grid-cols-3">
-      {cards.map(([label,value,Icon,color]) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span className={`grid size-10 place-items-center rounded-xl ${color}`}><Icon size={19}/></span><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-slate-500">{label}</p></article>)}
-    </section>
-    {inside.length > 0 && <section className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><div className="flex items-start gap-3"><BellRing className="mt-0.5 text-emerald-700"/><div><h2 className="font-semibold text-emerald-950">{inside.length === 1 ? "Tu visitante ya llegó" : "Tus visitantes ya llegaron"}</h2><p className="mt-1 text-sm text-emerald-800">{inside.map((visit) => visit.visitorName).join(", ")} {inside.length === 1 ? "está" : "están"} en las instalaciones.</p></div></div></section>}
-    <section className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-5"><div><h2 className="font-semibold">Mis próximas visitas</h2><p className="text-sm text-slate-500">Solo invitaciones creadas por ti</p></div><Link href="/app/visits" className="text-sm font-medium text-blue-600">Ver todas</Link></div><div className="divide-y divide-slate-100">{upcoming.slice(0,6).map((visit) => <Link key={visit.id} href={`/app/visits/${visit.id}` as never} className="flex items-center gap-4 p-5 hover:bg-slate-50"><span className="grid size-11 place-items-center rounded-full bg-slate-100 font-semibold">{visit.visitorName.split(" ").map((part) => part[0]).slice(0,2)}</span><span className="min-w-0 flex-1"><span className="block truncate font-semibold">{visit.visitorName}</span><span className="block truncate text-xs text-slate-500">{visit.company} · {date(visit.startsAt)}</span></span><StatusPill status={visit.status}/></Link>)}{upcoming.length === 0 && <div className="py-14 text-center text-sm text-slate-500">No tienes visitas próximas.</div>}</div></div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-semibold">Actividad de mis visitas</h2><div className="mt-4 space-y-3">{activity.map((event) => {const visit=visits.find((item)=>item.id===event.visitId);return <div key={event.id} className="flex gap-3 rounded-xl bg-slate-50 p-3"><CheckCircle2 size={18} className="mt-0.5 text-[#0eaaa5]"/><div><p className="text-sm font-medium">{visit?.visitorName}</p><p className="text-xs text-slate-500">{eventLabels[event.type] ?? event.type} · {date(event.at)}</p></div></div>})}</div></div>
-    </section>
-  </>;
+const dateLabel = (value: string) =>
+  new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+
+export function HostDashboard() {
+  const { events, viewer, loading, resendLink } = useWorkspace();
+  const visits = useMyVisits();
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareName, setShareName] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  const groups = useMemo(() => {
+    const now = new Date();
+    return {
+      upcoming: visits
+        .filter(
+          (visit) =>
+            new Date(visit.endsAt) >= now &&
+            ["invited", "pre_registered", "approved"].includes(visit.status),
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+        ),
+      inside: visits.filter((visit) => visit.status === "checked_in"),
+      waiting: visits.filter((visit) => visit.status === "invited"),
+    };
+  }, [visits]);
+
+  const activity = useMemo(
+    () =>
+      events
+        .filter((event) => visits.some((visit) => visit.id === event.visitId))
+        .slice(0, 6),
+    [events, visits],
+  );
+
+  async function share(visitId: string, visitorName: string) {
+    setBusyId(visitId);
+    try {
+      const url = await resendLink(visitId, "invitation", false);
+      if (!url) throw new Error("No fue posible generar el enlace");
+      setShareUrl(url);
+      setShareName(visitorName);
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible compartir",
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  if (loading && visits.length === 0)
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-52" />
+        <Skeleton className="h-28" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[0, 1, 2].map((key) => (
+            <Skeleton key={key} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+
+  return (
+    <>
+      <header className="mb-6">
+        <p className="text-[13px] font-semibold text-[#0d9d99]">
+          Portal del anfitrión
+        </p>
+        <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
+          Hola, {viewer.name.split(" ")[0]}
+        </h1>
+        <p className="mt-1.5 text-[15px] text-slate-500">
+          Comparte un enlace y tu visitante se registra solo.
+        </p>
+      </header>
+
+      <Link href="/app/visits/new" className="block">
+        <div className="dark-panel flex items-center gap-4 rounded-[26px] p-5 text-white transition active:scale-[.99]">
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-[#10cfc9] text-[#043b39]">
+            <Plus size={28} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-semibold">Invitar a alguien</p>
+            <p className="mt-0.5 text-sm text-slate-300">
+              Toma 30 segundos. El visitante completa el resto.
+            </p>
+          </div>
+          <ArrowUpRight size={22} className="shrink-0 text-slate-400" />
+        </div>
+      </Link>
+
+      {groups.inside.length > 0 && (
+        <section className="mt-5 rounded-[26px] border border-emerald-200 bg-emerald-50 p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+              <BellRing size={20} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold text-emerald-950">
+                {groups.inside.length === 1
+                  ? "Tu visitante ya llegó"
+                  : "Tus visitantes ya llegaron"}
+              </h2>
+              <div className="mt-3 space-y-2">
+                {groups.inside.map((visit) => (
+                  <div
+                    key={visit.id}
+                    className="flex items-center gap-3 rounded-2xl bg-white p-3"
+                  >
+                    <Avatar name={visit.visitorName} size={38} tone="accent" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {visit.visitorName}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {visit.company}
+                      </p>
+                    </div>
+                    <LiveDuration
+                      since={visit.checkedInAt}
+                      className="shrink-0 text-xs font-medium text-emerald-700"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="mt-5 grid grid-cols-3 gap-3">
+        <MetricTile
+          label="Próximas"
+          value={groups.upcoming.length}
+          icon={CalendarDays}
+          tone="info"
+        />
+        <MetricTile
+          label="Sin registrar"
+          value={groups.waiting.length}
+          icon={Clock3}
+          tone="warning"
+        />
+        <MetricTile
+          label="Dentro"
+          value={groups.inside.length}
+          icon={UserRoundCheck}
+          tone="success"
+        />
+      </section>
+
+      <section className="mt-6 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+        <Card className="p-0">
+          <div className="flex items-center justify-between border-b border-slate-100 p-5">
+            <div>
+              <h2 className="font-semibold">Mis próximas visitas</h2>
+              <p className="text-sm text-slate-500">
+                Solo las invitaciones creadas por ti
+              </p>
+            </div>
+            <Link
+              href="/app/visits"
+              className="shrink-0 text-sm font-medium text-blue-600"
+            >
+              Ver todas
+            </Link>
+          </div>
+
+          {groups.upcoming.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                icon={CalendarDays}
+                title="No tienes visitas próximas"
+                description="Crea una invitación y compártela por WhatsApp o correo."
+                action={
+                  <Link href="/app/visits/new">
+                    <Button variant="accent">
+                      <Plus size={18} />
+                      Nueva invitación
+                    </Button>
+                  </Link>
+                }
+              />
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {groups.upcoming.slice(0, 8).map((visit) => (
+                <li key={visit.id} className="flex items-center gap-3 p-4">
+                  <Link
+                    href={`/app/visits/${visit.id}`}
+                    className="flex min-w-0 flex-1 items-center gap-3"
+                  >
+                    <Avatar name={visit.visitorName} size={42} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate font-semibold">
+                          {visit.visitorName}
+                        </span>
+                        <StatusPill status={visit.status} />
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">
+                        {dateLabel(visit.startsAt)} · {visit.location}
+                      </span>
+                    </span>
+                  </Link>
+                  {visit.status === "invited" && (
+                    <button
+                      type="button"
+                      onClick={() => share(visit.id, visit.visitorName)}
+                      disabled={busyId === visit.id}
+                      aria-label={`Compartir enlace de ${visit.visitorName}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-2xl border border-slate-200 text-slate-600 active:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Send size={17} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="font-semibold">Actividad de mis visitas</h2>
+          {activity.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              Aquí verás cuándo se registran y llegan tus visitantes.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-2.5">
+              {activity.map((event) => {
+                const visit = visits.find((item) => item.id === event.visitId);
+                const Icon = activityIcon[event.type];
+                return (
+                  <div
+                    key={event.id}
+                    className="flex gap-3 rounded-2xl bg-slate-50 p-3"
+                  >
+                    <Icon
+                      size={18}
+                      className={`mt-0.5 shrink-0 ${activityTone[event.type]}`}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {visit?.visitorName ?? "Visita"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {eventLabels[event.type]} · {dateLabel(event.at)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </section>
+
+      <Sheet
+        open={Boolean(shareUrl)}
+        onClose={() => setShareUrl("")}
+        title="Compartir invitación"
+        description={`Envía este enlace a ${shareName}. Al abrirlo completará su registro y recibirá su pase.`}
+      >
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <Link2 size={18} className="shrink-0 text-slate-400" />
+          <span className="min-w-0 flex-1 truncate text-sm text-slate-600">
+            {shareUrl}
+          </span>
+        </div>
+        <div className="mt-4">
+          <ShareButton
+            url={shareUrl}
+            title="Invitación de visita"
+            text={`Hola ${shareName}, completa tu registro para tu visita:`}
+            className="w-full"
+          />
+        </div>
+      </Sheet>
+    </>
+  );
 }

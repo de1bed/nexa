@@ -1,8 +1,313 @@
 "use client";
-import { useMemo,useState } from "react"; import Link from "next/link"; import { Download,Filter,Plus,Search } from "lucide-react"; import { useDemo } from "./demo-provider"; import { StatusPill } from "./status-pill"; import type { VisitStatus } from "@/lib/domain"; import { safeCsvCell } from "@/lib/security";
-const date=(v:string)=>new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(v));
-export function VisitsTable({hostOnly=false}:{hostOnly?:boolean}){const {state}=useDemo();const [query,setQuery]=useState("");const [status,setStatus]=useState<VisitStatus|"all">("all");const rows=useMemo(()=>state.visits.filter(v=>(!hostOnly||v.hostName==="Mateo García")&&(status==="all"||v.status===status)&&[v.visitorName,v.company,v.hostName,v.purpose].join(" ").toLowerCase().includes(query.toLowerCase())),[state,query,status,hostOnly]);
- function exportCsv(){const csv=[["Visitante","Empresa","Anfitrión","Ubicación","Inicio","Entrada","Salida","Motivo","Estado","Origen"],...rows.map(v=>[v.visitorName,v.company,v.hostName,v.location,v.startsAt,v.checkedInAt??"",v.checkedOutAt??"",v.purpose,v.status,v.origin])].map(r=>r.map(safeCsvCell).join(",")).join("\r\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv"}));a.download="nexa-visitas.csv";a.click();URL.revokeObjectURL(a.href)}
- return <><header className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-2 text-sm font-medium text-[#0eaaa5]">{hostOnly?"Portal del anfitrión":"Operación"}</p><h1 className="text-3xl font-semibold tracking-[-.03em]">{hostOnly?"Mis visitas":"Visitas"}</h1><p className="mt-2 text-slate-500">{hostOnly?"Consulta y administra únicamente tus invitaciones.":"Consulta y administra cada acceso."}</p></div><Link href="/app/visits/new" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#071426] px-5 text-sm font-semibold text-white"><Plus size={17}/>Nueva invitación</Link></header>
- <div className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={18}/><input aria-label="Buscar visitas" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar visitante, empresa o anfitrión…" className="h-11 w-full rounded-xl border border-slate-200 pl-10 pr-4 outline-none focus:border-[#10aaa5]"/></label><label className="relative"><Filter className="absolute left-3 top-3 text-slate-400" size={17}/><select aria-label="Filtrar por estado" value={status} onChange={e=>setStatus(e.target.value as VisitStatus|"all")} className="h-11 rounded-xl border border-slate-200 bg-white pl-10 pr-8"><option value="all">Todos los estados</option><option value="invited">Invitadas</option><option value="pre_registered">Preregistradas</option><option value="checked_in">Dentro</option><option value="checked_out">Salida registrada</option><option value="denied">Denegadas</option></select></label><button onClick={exportCsv} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-medium hover:bg-slate-50"><Download size={17}/>CSV</button></div>
- <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{["Visitante","Anfitrión","Fecha","Entrada / salida","Motivo","Estado","Origen"].map(h=><th key={h} className="px-5 py-3 font-medium">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map(v=><tr key={v.id} className="hover:bg-slate-50"><td className="px-5 py-4"><Link href={`/app/visits/${v.id}` as never} className="font-semibold hover:text-blue-600">{v.visitorName}</Link><p className="text-xs text-slate-500">{v.company}</p></td><td className="px-5 py-4">{v.hostName}</td><td className="px-5 py-4">{date(v.startsAt)}</td><td className="px-5 py-4 text-xs text-slate-600">{v.checkedInAt?date(v.checkedInAt):"—"} / {v.checkedOutAt?date(v.checkedOutAt):"—"}</td><td className="px-5 py-4">{v.purpose}</td><td className="px-5 py-4"><StatusPill status={v.status}/></td><td className="px-5 py-4 text-xs">{v.origin==="guard_manual"?"Guardia":"Invitación"}</td></tr>)}</tbody></table>{rows.length===0&&<div className="py-16 text-center"><p className="font-medium">No encontramos visitas</p><p className="mt-1 text-sm text-slate-500">Cambia la búsqueda o los filtros.</p></div>}</div><div className="border-t border-slate-100 px-5 py-4 text-sm text-slate-500">{rows.length} resultados</div></div></>}
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { CalendarDays, Download, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { useWorkspace, useMyVisits } from "./workspace-provider";
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  StatusPill,
+  cn,
+  fieldClass,
+} from "./ui";
+import { LiveDuration } from "./ui-client";
+import { safeCsvCell } from "@/lib/security";
+import { statusLabels, type VisitStatus } from "@/lib/domain";
+
+const shortDate = (value: string) =>
+  new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+
+const filterable: VisitStatus[] = [
+  "invited",
+  "pre_registered",
+  "checked_in",
+  "checked_out",
+  "denied",
+  "cancelled",
+];
+
+export function VisitsTable() {
+  const { viewer, loading } = useWorkspace();
+  const allVisits = useMyVisits();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<VisitStatus | "all">("all");
+
+  const isHost = viewer.role === "host";
+
+  const rows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return allVisits.filter((visit) => {
+      if (status !== "all" && visit.status !== status) return false;
+      if (!needle) return true;
+      return [visit.visitorName, visit.company, visit.hostName, visit.purpose, visit.location]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [allVisits, query, status]);
+
+  function exportCsv() {
+    const content = [
+      [
+        "Visitante",
+        "Empresa",
+        "Anfitrión",
+        "Ubicación",
+        "Inicio",
+        "Entrada",
+        "Salida",
+        "Motivo",
+        "Estado",
+        "Origen",
+      ],
+      ...rows.map((visit) => [
+        visit.visitorName,
+        visit.company,
+        visit.hostName,
+        visit.location,
+        visit.startsAt,
+        visit.checkedInAt ?? "",
+        visit.checkedOutAt ?? "",
+        visit.purpose,
+        statusLabels[visit.status],
+        visit.origin === "guard_manual" ? "Registro en caseta" : "Invitación",
+      ]),
+    ]
+      .map((row) => row.map(safeCsvCell).join(","))
+      .join("\r\n");
+
+    const blob = new Blob([`﻿${content}`], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `nexa-visitas-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <>
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[13px] font-semibold text-[#0d9d99]">
+            {isHost ? "Portal del anfitrión" : "Operación"}
+          </p>
+          <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
+            {isHost ? "Mis visitas" : "Visitas"}
+          </h1>
+          <p className="mt-1.5 text-[15px] text-slate-500">
+            {isHost
+              ? "Consulta y administra únicamente tus invitaciones."
+              : "Historial completo de accesos de la organización."}
+          </p>
+        </div>
+        <Link href="/app/visits/new" className="hidden lg:block">
+          <Button>
+            <Plus size={17} />
+            Nueva invitación
+          </Button>
+        </Link>
+      </header>
+
+      <div className="mb-4 space-y-3">
+        <label className="relative block">
+          <Search
+            size={18}
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Buscar visitas"
+            placeholder="Buscar visitante, empresa o anfitrión…"
+            className={cn(fieldClass, "pl-11")}
+          />
+        </label>
+
+        <div className="hide-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <FilterChip
+            active={status === "all"}
+            onClick={() => setStatus("all")}
+            label="Todas"
+            count={allVisits.length}
+          />
+          {filterable.map((value) => {
+            const count = allVisits.filter((visit) => visit.status === value).length;
+            if (count === 0 && status !== value) return null;
+            return (
+              <FilterChip
+                key={value}
+                active={status === value}
+                onClick={() => setStatus(value)}
+                label={statusLabels[value]}
+                count={count}
+              />
+            );
+          })}
+          <button
+            onClick={exportCsv}
+            className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600"
+          >
+            <Download size={16} />
+            CSV
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={query || status !== "all" ? SlidersHorizontal : CalendarDays}
+          title={
+            query || status !== "all"
+              ? "Sin resultados"
+              : "Todavía no hay visitas"
+          }
+          description={
+            query || status !== "all"
+              ? "Cambia la búsqueda o quita los filtros."
+              : "Crea tu primera invitación y compártela con el visitante."
+          }
+          action={
+            !query && status === "all" ? (
+              <Link href="/app/visits/new">
+                <Button variant="accent">
+                  <Plus size={18} />
+                  Nueva invitación
+                </Button>
+              </Link>
+            ) : undefined
+          }
+        />
+      ) : (
+        <>
+          {/* Móvil: tarjetas tocables */}
+          <div className="space-y-2.5 lg:hidden">
+            {rows.map((visit) => (
+              <Link key={visit.id} href={`/app/visits/${visit.id}`}>
+                <Card className="flex items-center gap-3 p-4 transition active:scale-[.99]">
+                  <Avatar name={visit.visitorName} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-semibold">{visit.visitorName}</p>
+                      <StatusPill status={visit.status} />
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {visit.company || "Sin empresa"} · {visit.hostName}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-slate-400">
+                      {shortDate(visit.startsAt)}
+                      {visit.status === "checked_in" && (
+                        <>
+                          {" · "}
+                          <LiveDuration since={visit.checkedInAt} prefix="dentro " />
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+
+          {/* Escritorio: tabla densa */}
+          <Card className="hidden overflow-hidden p-0 lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    {[
+                      "Visitante",
+                      "Anfitrión",
+                      "Programada",
+                      "Entrada / salida",
+                      "Motivo",
+                      "Estado",
+                      "Origen",
+                    ].map((header) => (
+                      <th key={header} className="px-5 py-3 font-medium">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((visit) => (
+                    <tr key={visit.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-4">
+                        <Link
+                          href={`/app/visits/${visit.id}`}
+                          className="font-semibold hover:text-blue-600"
+                        >
+                          {visit.visitorName}
+                        </Link>
+                        <p className="text-xs text-slate-500">{visit.company}</p>
+                      </td>
+                      <td className="px-5 py-4">{visit.hostName}</td>
+                      <td className="px-5 py-4">{shortDate(visit.startsAt)}</td>
+                      <td className="px-5 py-4 text-xs text-slate-600">
+                        {visit.checkedInAt ? shortDate(visit.checkedInAt) : "—"} /{" "}
+                        {visit.checkedOutAt ? shortDate(visit.checkedOutAt) : "—"}
+                      </td>
+                      <td className="px-5 py-4">{visit.purpose}</td>
+                      <td className="px-5 py-4">
+                        <StatusPill status={visit.status} />
+                      </td>
+                      <td className="px-5 py-4 text-xs">
+                        {visit.origin === "guard_manual" ? "Caseta" : "Invitación"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      <p className="mt-4 text-center text-sm text-slate-500">
+        {loading ? "Sincronizando…" : `${rows.length} de ${allVisits.length} visitas`}
+      </p>
+    </>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition",
+        active
+          ? "bg-[#071426] text-white"
+          : "border border-slate-200 bg-white text-slate-600",
+      )}
+    >
+      {label}
+      <span className={cn("text-xs", active ? "text-white/60" : "text-slate-400")}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
