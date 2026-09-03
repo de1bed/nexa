@@ -1,105 +1,117 @@
 # NEXA VISIT
 
-MVP empresarial multiempresa para preregistro, identificación, pases QR, entrada y salida de visitantes. La interfaz está en español, es responsive y separa los portales de administración, guardia y visitante.
+Plataforma web multiempresa de control de visitantes, **diseñada primero para el teléfono**. El anfitrión comparte un enlace; el visitante se registra solo desde su móvil, recibe un pase QR y el guardia valida su entrada en un toque, arrancando el conteo de tiempo dentro.
 
-> Este repositorio es un MVP. El aviso de privacidad, la retención y los procedimientos deben ser revisados por especialistas legales y de seguridad antes de producción.
+Cuatro experiencias sobre una sola base de datos: **administración, anfitrión, guardia y visitante**.
 
-## Incluye
+![Flujo móvil del visitante](docs/screenshots/visitor-mobile.png)
 
-- Dashboard administrativo y portal del anfitrión con sus propias visitas, alertas de llegada y actividad.
-- Invitaciones personalizadas con enlace aleatorio: el anfitrión puede adelantar todos, algunos o ninguno de los datos del visitante; Resend y el adaptador de desarrollo entregan el enlace.
-- Mini app pública: captura comprimida, OCR intercambiable, revisión, consentimiento y QR.
-- QR con token aleatorio, sin información personal en texto plano.
-- Portal mobile-first para cámara, token manual, aprobación, rechazo y check-out.
-- Registro manual, búsqueda, personas dentro y exportación CSV segura.
-- Reportes por rango, impresión, motivos, anfitriones y duración.
-- PostgreSQL multiempresa, RLS, Storage privado, auditoría y retención.
-- Seed con 25 visitas y cinco usuarios demostrativos.
-- Selector demo de perfil con navegación y protección diferenciada para administración, anfitrión y guardia.
-- Vitest y Playwright en escritorio y móvil.
-- Modo demo persistente en `localStorage` para ejecutar sin credenciales.
+## Cómo funciona
 
-## Requisitos
+1. **El anfitrión invita.** Elige día, hora y sede. Los datos del visitante son opcionales: puede adelantar todos, algunos o ninguno.
+2. **El visitante se registra solo.** Abre el enlace en su teléfono, confirma sus datos, fotografía su identificación (con cámara en vivo y lectura de texto en el propio dispositivo), acepta el aviso de privacidad y recibe su pase.
+3. **El pase QR.** Contiene únicamente un token aleatorio: ni nombre, ni correo, ni identificación.
+4. **El guardia valida.** Escanea, ve a quién tiene enfrente, autoriza o deniega. Desde ese momento corre el cronómetro de estancia.
+5. **La operación mide.** Aforo en vivo, tiempos de permanencia, motivos, anfitriones y exportación a CSV.
 
-- Node.js 20.9+ y npm 10+.
-- Para Supabase local: Docker Desktop.
-- Para E2E: `npx playwright install chromium`.
-
-## Inicio rápido sin servicios externos
+## Arrancar sin instalar nada
 
 ```bash
 npm install
-copy .env.example .env.local
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). `.env.example` activa el modo demo, por lo que el recorrido funciona sin Supabase ni Resend.
+Abre <http://localhost:3000> y elige un perfil: **Administración**, **Anfitrión** o **Guardia**.
 
-Rutas útiles:
+Sin credenciales de Supabase la plataforma arranca en **modo vitrina**: el recorrido completo funciona con datos locales del navegador, compartidos entre pestañas. Sirve para evaluar la experiencia, no como sustituto de producción.
 
-- Administración: [http://localhost:3000/app/dashboard](http://localhost:3000/app/dashboard)
-- Anfitrión: [http://localhost:3000/app/host](http://localhost:3000/app/host)
-- Guardia: [http://localhost:3000/guard/scan](http://localhost:3000/guard/scan)
-- Entrada demostrativa del visitante: [http://localhost:3000/demo/visitor](http://localhost:3000/demo/visitor)
-- Visitante: [http://localhost:3000/visit/nexa-demo-invitation-2026](http://localhost:3000/visit/nexa-demo-invitation-2026)
-- Token QR: `nexa-demo-pass-2026`
+Rutas útiles en vitrina:
 
-## Credenciales demo
-
-Contraseña común: `NexaDemo2026!`
-
-| Rol | Correo |
+| Portal | Ruta |
 | --- | --- |
-| Administradora | `admin@novalogistics.demo` |
-| Anfitrión | `mateo@novalogistics.demo` |
-| Anfitriona | `valeria@novalogistics.demo` |
-| Guardia | `guardia1@novalogistics.demo` |
-| Guardia | `guardia2@novalogistics.demo` |
+| Administración | `/app/dashboard` |
+| Anfitrión | `/app/host` |
+| Guardia | `/guard/scan` |
+| Visitante (preregistro) | `/visit/nexa-demo-invitation-2026` |
+| Pase de ejemplo | `/pass/nexa-demo-pass-2026` |
+| Recorrido explicado | `/demo/visitor` |
 
-Son datos ficticios; nunca deben reutilizarse en producción.
+## Conectar Supabase (paso a producción)
 
-## Supabase local
-
-Con Docker Desktop activo:
+**No hay que tocar código.** En cuanto existan credenciales, la plataforma exige autenticación real, aplica RLS y guarda documentos en almacenamiento privado.
 
 ```bash
-npx supabase start
-npx supabase db reset
+copy .env.example .env.local     # macOS/Linux: cp .env.example .env.local
+npx supabase start               # requiere Docker Desktop
+npx supabase db reset            # aplica migraciones + seed demostrativo
 ```
 
-Se aplican las migraciones de `supabase/migrations` y `supabase/seed.sql`. Copia la URL, anon key y service-role key de `supabase status` a `.env.local`. Usa `NEXT_PUBLIC_DEMO_MODE=false` para Auth real. Nunca expongas `SUPABASE_SERVICE_ROLE_KEY` con el prefijo `NEXT_PUBLIC_`.
+Copia `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` de `npx supabase status` a `.env.local`, reinicia `npm run dev` y entra a `/signup`.
 
-El bucket `visitor-documents` es privado. Las rutas comienzan con `organization_id`, las lecturas dependen de RLS y cualquier vista debe usar URL firmada temporal.
+> **Un paso que se olvida:** los correos de confirmación de cuenta no salen por Resend, los manda Supabase Auth. Sin configurar SMTP propio en el panel de Supabase, quien se registre nunca recibirá el correo. Está explicado en [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md#12-correos-de-cuenta--smtp-de-supabase).
 
-### Supabase cloud
+### En la nube
 
-1. Crea el proyecto y ejecuta `npx supabase link --project-ref <ref>`.
-2. Publica con `npx supabase db push`.
-3. Ejecuta el seed solo en ambientes demo; `db reset --linked` es destructivo.
-4. Configura dominios y redirecciones de Auth.
-5. Define `CRON_SECRET`. `vercel.json` ejecuta diariamente `/api/cron/purge-documents`; el worker elimina primero el objeto del bucket privado y solo entonces marca el registro y escribe auditoría. No programes la función SQL heredada: la migración `202608270004` la bloquea para evitar archivos huérfanos.
+1. Crea el proyecto y enlázalo: `npx supabase link --project-ref <ref>`.
+2. Publica el esquema: `npx supabase db push`.
+3. Configura en Auth el dominio del sitio y las URLs de redirección (`/auth/callback`).
+4. Ejecuta el seed **solo** en ambientes de demostración.
+5. Define `CRON_SECRET`; `vercel.json` llama a diario a `/api/cron/purge-documents`.
 
-## Resend
+El bucket `visitor-documents` es privado. Las rutas empiezan con `organization_id`, la lectura depende de RLS y la vista se entrega siempre con URL firmada de 60 segundos, dejando registro en la bitácora.
 
-Verifica un dominio y define `RESEND_API_KEY` y `RESEND_FROM_EMAIL`. Sin API key, `src/lib/server/email.ts` registra el destinatario y el enlace en consola. El correo usa los datos reales de la invitación.
+### Alta de una empresa
 
-## OCR
+`/signup` crea la cuenta y `/onboarding` la organización. En una sola transacción quedan creados: organización, membresía de administración, aviso de privacidad y primera ubicación. A partir de ahí se invita al equipo desde **Equipo**.
 
-`OCRProvider` vive en `src/lib/ocr/types.ts`. Hay un proveedor mock reproducible y otro Tesseract local. La imagen se comprime a 1800 px antes del procesamiento. La UI marca baja confianza y permite corregir o capturar manualmente. OCR significa extracción de texto, no autenticidad ni reconocimiento facial.
+## Los cuatro portales
 
-## Seguridad
+### Administración
+Aforo en vivo con cronómetro por persona, flujo semanal, próximas visitas, actividad, reportes con filtros y CSV, equipo (alta, cambio de rol, suspensión), ubicaciones y configuración de privacidad.
 
-- `organization_id` y RLS en todas las tablas operativas.
-- Roles aplicados en SQL y UI.
-- Invitaciones y QR persistidos como SHA-256, no texto plano.
-- `record_access_decision` bloquea la fila y evita duplicados.
-- Bucket privado, 8 MiB máximo y allowlist JPG/PNG/WebP.
-- Service role exclusiva de servidor.
-- Consentimiento explícito y versión del aviso.
-- Identificación enmascarada en datos operativos.
-- Rate limiting local; en Vercel debe sustituirse por un contador distribuido.
-- Errores públicos genéricos y CSV protegido contra fórmulas.
-- IP no persistida: el MVP no demuestra una finalidad proporcional.
+### Anfitrión
+Un botón para invitar, aviso cuando su visitante llega, compartir el enlace por el diálogo nativo del sistema (WhatsApp, correo, lo que tenga el teléfono) y visibilidad **únicamente** de sus propias visitas, garantizada por RLS.
+
+### Guardia
+Escáner a pantalla completa con marco guía, validación por código manual como respaldo, ficha del visitante con requisitos de acceso y notas, autorización explícita fuera de ventana, rechazo con motivo obligatorio, alta manual sin pase y bitácora del turno. Vibración corta al leer y confirmar.
+
+### Visitante
+Sin cuenta ni aplicación. Cinco pasos, captura con cámara en vivo, lectura de texto local, corrección de cualquier campo, consentimiento con el aviso real de la organización y su plazo de retención, y pase QR descargable.
+
+## Seguridad y privacidad
+
+- `organization_id` y RLS en todas las tablas operativas; roles aplicados en SQL y en la interfaz.
+- Invitaciones y pases guardados como SHA-256 (`public.token_hash`), nunca en texto plano.
+- `record_access_decision` bloquea la fila, revalida el estado y escribe evento y auditoría en la misma transacción.
+- `resolve_qr_token` valida la organización **dentro** de la función, no solo en la API.
+- Documentos en bucket privado, 8 MiB máximo, allowlist JPG/PNG/WebP, retención configurable y borrado físico antes de marcar la fila.
+- Identificación enmascarada (solo los últimos cuatro dígitos) en los datos operativos.
+- Consentimiento explícito, versionado del aviso y registro de qué versión aceptó cada visitante.
+- Llave de servicio exclusiva del servidor; redirecciones restringidas a rutas internas; CSV protegido contra fórmulas; correos con todo el texto dinámico escapado.
+- IP no persistida: solo se usa de forma transitoria para limitar abuso.
+
+## Lectura de identificaciones
+
+El visitante fotografía **las dos caras** de su credencial. El reverso es el que se lee: las credenciales para votar recientes traen ahí una banda MRZ (norma ICAO 9303, formato TD1) con **dígitos de control**, así que la lectura se puede *verificar* en lugar de confiar en ella. Cuando los cuatro cuadran, la interfaz muestra «Lectura verificada» y extrae nombre, fecha de nacimiento, vigencia y CURP.
+
+Todo ocurre en el teléfono del visitante: la imagen no se envía a ningún servicio de terceros para analizarla. Los archivos del motor se sirven desde el propio dominio (`npm run setup:ocr`), no desde un CDN, para poder mantener la CSP estricta.
+
+```bash
+npm run setup:ocr                    # una vez; `npm run build` ya lo ejecuta
+NEXT_PUBLIC_OCR_PROVIDER=tesseract
+```
+
+Sin esa variable se usa un proveedor reproducible que devuelve una banda de ejemplo bien formada, útil para demostraciones y pruebas.
+
+**Con honestidad:** el OCR extrae texto, no valida que la credencial sea auténtica ni hace reconocimiento facial. Si el documento no tiene banda MRZ —credenciales antiguas, gafetes— el visitante escribe sus datos y el flujo sigue igual. Todo campo es editable y la interfaz avisa cuando la lectura no quedó comprobada. Para verificación de autenticidad o prueba de vida hace falta un servicio especializado; ver [integraciones](docs/INTEGRACIONES.md).
+
+## Carteras, WhatsApp e instalación
+
+- **Apple Wallet y Google Wallet.** El visitante guarda su pase en la cartera del teléfono. Los botones solo aparecen si el servidor tiene las credenciales; Google no cuesta licencia, Apple requiere el Developer Program.
+- **WhatsApp.** El enlace de invitación puede enviarse por la API de Meta Cloud con una plantilla aprobada. Sin configurarlo, el anfitrión comparte el enlace con el botón nativo del teléfono, que abre WhatsApp y no cuesta nada.
+- **Aplicación instalable.** Manifiesto, iconos y atajos directos al escáner y a la invitación. En la caseta se instala en la pantalla de inicio y desaparece la barra del navegador.
+
+Los pasos de cada una están en [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md).
 
 ## Pruebas
 
@@ -107,50 +119,46 @@ Verifica un dominio y define `RESEND_API_KEY` y `RESEND_FROM_EMAIL`. Sin API key
 npm run lint
 npm run typecheck
 npm test
-npm run test:e2e
+npm run test:e2e     # npx playwright install chromium (una vez)
 npm run build
 ```
 
-`npm run check` ejecuta lint, TypeScript, unitarias y build. Las unitarias cubren aislamiento, roles, invitaciones, expiración, OCR, hashing, QR revocado, check-in, duplicados, check-out, manual, CSV y retención. Los E2E recorren anfitrión → visitante → QR → guardia → reportes y verifican por separado el portal restringido del anfitrión y la entrada pública del visitante, en escritorio y móvil.
+`npm run check` encadena lint, TypeScript, unitarias y build.
 
-## Vercel
-
-1. Importa el repositorio y usa Node 20 con `npm run build`.
-2. Configura `.env.example`, `NEXT_PUBLIC_APP_URL` HTTPS y `NEXT_PUBLIC_DEMO_MODE=false`.
-3. Configura el dominio en Supabase Auth y Resend.
-4. Aplica migraciones antes de publicar.
-5. Genera un `CRON_SECRET` aleatorio; Vercel lo envía como Bearer al cron de retención.
-6. Prueba login, carga privada, invitación, QR, cámara, entrada y salida en Preview.
-7. Activa logs con redacción, alertas y backups.
+Las 55 unitarias cubren las reglas de acceso (ventanas configurables, duplicados, rechazo con motivo, expiración), el lector de MRZ —validado contra el ejemplo canónico de la norma ICAO 9303, incluidos los dígitos de control—, el hashing verificado contra el mismo valor que produce PostgreSQL, el enmascarado, el CSV, las redirecciones y el cálculo de estancia. Los 14 E2E recorren anfitrión → visitante → guardia → administración y verifican el aislamiento entre portales, en escritorio y en móvil.
 
 ## Arquitectura
 
-- Next.js App Router y Route Handlers.
-- Server Components por defecto; cliente solo para cámara, formularios, charts y demo.
-- Supabase PostgreSQL/Auth/Storage como fuente productiva.
-- Adaptadores en `src/lib/server` y `src/lib/ocr`.
-- RLS como frontera autoritativa.
-- Acceso atómico mediante funciones PostgreSQL.
-- Demo local como adaptador de evaluación, no sustituto productivo.
+- Next.js 16 (App Router, Route Handlers, `proxy.ts`) y React 19.
+- Server Components por defecto; cliente solo donde hay cámara, formularios, gráficas o estado en vivo.
+- Supabase PostgreSQL/Auth/Storage como fuente productiva; RLS como frontera autoritativa.
+- Un solo contrato de dominio (`src/lib/domain.ts`) para servidor y cliente: la interfaz es idéntica en vitrina y en producción.
+- Un único reloj compartido (`src/lib/clock.ts`) alimenta todos los cronómetros en vivo.
 
-Consulta [decisiones](docs/DECISIONS.md), [limitaciones](docs/LIMITATIONS.md) y [checklist](docs/PRODUCTION_CHECKLIST.md).
+Consulta [decisiones](docs/DECISIONS.md), [integraciones](docs/INTEGRACIONES.md), [limitaciones](docs/LIMITATIONS.md) y [checklist de producción](docs/PRODUCTION_CHECKLIST.md).
+
+> **¿Vas a conectar la base de datos?** [`docs/HANDOFF-SUPABASE.md`](docs/HANDOFF-SUPABASE.md) es el guion paso a paso: migraciones, verificaciones con el SQL exacto y su resultado esperado, y los criterios para dar el trabajo por bueno.
 
 ## Capturas
 
+| Anfitrión | Guardia | Pase |
+| --- | --- | --- |
+| ![Portal del anfitrión](docs/screenshots/host-mobile.png) | ![Portal del guardia](docs/screenshots/guard-mobile.png) | ![Pase de acceso](docs/screenshots/pass-mobile.png) |
+
 ![Dashboard administrativo](docs/screenshots/dashboard-desktop.png)
-
-![Flujo móvil del visitante](docs/screenshots/visitor-mobile.png)
-
-![Portal móvil del guardia](docs/screenshots/guard-mobile.png)
 
 ## Estructura
 
 ```text
-src/app/                 rutas Next.js y API
-src/components/          administración, visitante y guardia
-src/lib/                 dominio, seguridad, OCR y adaptadores
+src/app/                 rutas y API
+src/components/          interfaz de los cuatro portales
+src/components/ui.tsx    primitivas de diseño
+src/lib/ocr/             lector de MRZ y proveedores de reconocimiento
+src/lib/                 dominio, seguridad y adaptadores
+src/lib/server/          Supabase, sesión, correo, WhatsApp y carteras
+scripts/setup-ocr.mjs    prepara el motor de OCR local
+src/proxy.ts             refresco de sesión y guardas optimistas
 supabase/migrations/     esquema, funciones y RLS
-supabase/seed.sql        datos demo reproducibles
-tests/e2e/               recorrido Playwright
-docs/                    decisiones, limitaciones, checklist y capturas
+tests/e2e/               recorridos Playwright
+docs/                    decisiones, limitaciones y checklist
 ```
