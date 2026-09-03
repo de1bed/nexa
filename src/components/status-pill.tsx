@@ -1,3 +1,0 @@
-import type { VisitStatus } from "@/lib/domain"; import { statusLabels } from "@/lib/domain";
-const colors:Record<VisitStatus,string>={draft:"bg-slate-100 text-slate-600",invited:"bg-blue-50 text-blue-700",pre_registered:"bg-cyan-50 text-cyan-700",approved:"bg-indigo-50 text-indigo-700",checked_in:"bg-emerald-50 text-emerald-700",checked_out:"bg-slate-100 text-slate-700",denied:"bg-red-50 text-red-700",cancelled:"bg-amber-50 text-amber-700",expired:"bg-zinc-100 text-zinc-600"};
-export function StatusPill({status}:{status:VisitStatus}){return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${colors[status]}`}>{statusLabels[status]}</span>}
