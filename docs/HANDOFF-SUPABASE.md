@@ -29,13 +29,21 @@ base de datos. Opera en dos modos, decididos por una sola función
 lint ✓   typecheck ✓   55 unitarias ✓   14 E2E ✓ (escritorio y móvil)   build ✓
 ```
 
-### Lo único que bloquea producción
+### Estado del despliegue
 
-> **Las migraciones nunca se han ejecutado contra PostgreSQL.** La máquina donde
-> se construyó no tenía Docker ni acceso al proyecto. Todo el SQL está escrito y
-> razonado, pero **no probado en ejecución**. Ese es tu trabajo principal.
+> **Las migraciones ya se aplicaron** el 3 de septiembre de 2026 contra el
+> proyecto `ogrdzqrvbrpgbtkmhuus`, y las verificaciones de la sección 5 pasaron
+> todas: hash canónico, las catorce funciones, RLS en las trece tablas, bucket
+> privado, aislamiento entre dos empresas, trigger de columnas por rol, decisión
+> de acceso por rol y ventanas configurables. Los datos de prueba se borraron
+> después: el proyecto quedó vacío.
 
-No asumas que funciona porque está escrito. La sección 5 trae las pruebas.
+Lo que falta no se puede hacer con SQL: el SMTP propio y las URLs de Auth viven
+en el panel (sección 4), y el recorrido completo necesita un teléfono real
+(sección 6).
+
+Si cambias el esquema, repite la sección 5. No asumas que sigue bien porque un
+día lo estuvo.
 
 ---
 
@@ -58,16 +66,17 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 `SUPABASE_DB_URL` no la lee la aplicación; sirve para aplicar migraciones y
 correr las verificaciones con `psql`.
 
-> **Contexto útil:** en `C:\Users\david\.cursor\mcp.json` hay una conexión MCP de
-> Supabase con `project_ref=ympluwkqneyiqjjlbnwx`, pero ese subdominio **ya no
-> resuelve en DNS** (verificado). Es de junio y casi seguro corresponde a un
-> proyecto borrado. **No lo uses**: pide el ref actual del proyecto de NEXA.
+> **Contexto útil:** el proyecto en uso es `ogrdzqrvbrpgbtkmhuus`, y es el que
+> apunta la conexión MCP de Supabase en `C:\Users\david\.cursor\mcp.json`. El ref
+> anterior, `ympluwkqneyiqjjlbnwx`, todavía existe en el plano de control —la API
+> de gestión responde— pero su base de datos da timeout y su subdominio no
+> resuelve en DNS: está pausado o abandonado. **No lo uses.**
 
 ---
 
 ## 3. Paso 1 — Aplicar las migraciones
 
-Siete archivos en `supabase/migrations/`, en orden estricto:
+Ocho archivos en `supabase/migrations/`, en orden estricto:
 
 | # | Archivo | Qué hace |
 | --- | --- | --- |
@@ -78,6 +87,7 @@ Siete archivos en `supabase/migrations/`, en orden estricto:
 | 5 | `202608270005_partial_invitation_data.sql` | Datos que el anfitrión adelanta |
 | 6 | `202609020006_platform_foundation.sql` | **La importante.** `token_hash`, alta de empresas, ventanas configurables, correcciones de RLS |
 | 7 | `202609020007_whatsapp_channel.sql` | Canal `whatsapp` en la bitácora de envíos |
+| 8 | `202609030008_lock_trigger_functions.sql` | Quita de la API las dos funciones de disparador |
 
 ### Opción A — CLI de Supabase (recomendada)
 
@@ -383,18 +393,29 @@ desaparecer **del bucket** antes de que la fila se marque.
 
 Antes de decir «conectado», todo esto debe cumplirse:
 
-- [ ] Las siete migraciones aplicadas sin error.
-- [ ] `public.token_hash('abc')` da el hash esperado (5.1).
-- [ ] `resolve_invitation` y `resolve_qr_token` devuelven cero filas sin excepción (5.2).
-- [ ] Las 14 funciones existen (5.3).
-- [ ] RLS activo en todas las tablas (5.4).
-- [ ] Bucket privado con límite y allowlist (5.5).
-- [ ] Un anfitrión de A no ve nada de B, ni el padrón completo de visitantes (5.6).
-- [ ] Un guardia no puede alterar columnas que no le tocan (5.7).
-- [ ] Un anfitrión no puede registrar entradas (5.8).
+- [x] Las ocho migraciones aplicadas sin error.
+- [x] `public.token_hash('abc')` da el hash esperado (5.1).
+- [x] `resolve_invitation` y `resolve_qr_token` devuelven cero filas sin excepción (5.2).
+- [x] Las 14 funciones existen (5.3).
+- [x] RLS activo en todas las tablas (5.4).
+- [x] Bucket privado con límite y allowlist (5.5).
+- [x] Un anfitrión de A no ve nada de B, ni el padrón completo de visitantes (5.6).
+- [x] Un guardia no puede alterar columnas que no le tocan (5.7).
+- [x] Un anfitrión no puede registrar entradas (5.8).
+- [x] La ventana de entrada sale de la configuración, no de constantes (5.9).
 - [ ] SMTP propio configurado y un registro real confirmado por correo (4.1).
 - [ ] Recorrido completo con un teléfono real (sección 6).
 - [ ] El cron de retención borra el objeto antes de marcar la fila.
+
+Sobre el asesor de seguridad del panel: quedan once avisos
+`*_security_definer_function_executable`, y son esperados. Cuatro señalan
+funciones concedidas a propósito (`resolve_invitation` a `anon`;
+`resolve_qr_token`, `record_access_decision` y `create_organization` a
+`authenticated`), todas con su propia validación de rol dentro. Los otros siete
+señalan `is_member`, `has_role` y `can_access_visit`, que **no se pueden
+revocar**: las políticas RLS se evalúan con los privilegios de quien consulta y
+sin `EXECUTE` toda lectura falla con `permission denied for function`
+(comprobado). Si aparece un aviso distinto a estos, revísalo.
 
 Cuando se cumplan, actualiza [`docs/LIMITATIONS.md`](LIMITATIONS.md): la sección
 «No verificado aquí» debe reflejar la realidad nueva. **No la borres, corrígela.**

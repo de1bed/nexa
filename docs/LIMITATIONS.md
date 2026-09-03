@@ -13,16 +13,40 @@ verificar, sin adornos.
 - El recorrido completo se probó en **modo vitrina**, que es el que corre sin
   credenciales.
 
+## Verificado contra Supabase
+
+Proyecto `ogrdzqrvbrpgbtkmhuus`, el 3 de septiembre de 2026. Las ocho migraciones
+se aplicaron en orden y sin error, y se comprobó con SQL:
+
+- `public.token_hash('abc')` devuelve el mismo hash que fija la prueba unitaria,
+  de modo que los tokens hasheados sí se encuentran.
+- Las catorce funciones existen, y las que declaran `search_path` vacío se
+  ejecutan sin excepción.
+- RLS activo en las trece tablas, y el bucket es privado con su límite de tamaño
+  y su lista de tipos permitidos.
+- Con dos empresas y datos propios: un anfitrión ve solo su visita y solo el
+  visitante ligado a ella —no el padrón—, un guardia ve toda su empresa y nada de
+  la otra, y una administradora de la segunda no ve nada de la primera.
+- El guardia no puede alterar columnas que no le corresponden, el anfitrión no
+  puede registrar entradas, y la tolerancia de entrada sale de la configuración
+  de la organización y no de constantes.
+- Un token de invitación real se resolvió como visitante anónimo.
+- Con credenciales puestas, la aplicación exige autenticación: el panel y el
+  portal del guardia redirigen a `/login` y la API responde 401.
+
+Los datos de prueba se borraron: el proyecto quedó vacío.
+
 ## No verificado aquí
 
 Nada de esto está roto que se sepa; simplemente no se ha podido ejercer.
 
-- **Las migraciones no se ejecutaron contra PostgreSQL.** Esta máquina no tiene
-  Docker. Antes de operar hay que correr `npx supabase db reset` en CI o en un
-  equipo con Docker y revisar que las funciones se creen sin error.
-- **El adaptador productivo no se ejerció extremo a extremo.** Rutas de API, RLS
-  y políticas de Storage están escritas y tipadas, pero no se han ejecutado
-  contra una base real.
+- **Nadie ha recorrido la aplicación de extremo a extremo contra la base real.**
+  El esquema está desplegado y verificado por SQL, pero el recorrido de
+  invitación, registro, pase y escaneo no se ha hecho por la interfaz. El primer
+  bloqueo es el SMTP propio: sin él nadie puede confirmar su cuenta.
+- **Las políticas de Storage no se han ejercido con un archivo real.** El bucket
+  existe y es privado, y las políticas están escritas y revisadas, pero no se ha
+  subido ninguna identificación.
 - **El OCR con Tesseract nunca se ha ejecutado contra una credencial real.** El
   motor se descarga y se configura correctamente, y el lector de la banda está
   probado, pero la calidad del reconocimiento sobre fotos reales solo se puede
@@ -70,8 +94,9 @@ consulta, está en [HANDOFF-SUPABASE.md](HANDOFF-SUPABASE.md).
 
 ## Antes de operar con datos reales
 
-1. Ejecutar las migraciones y probar RLS con dos organizaciones.
-2. Configurar SMTP propio en Supabase, o **nadie podrá confirmar su cuenta**.
+1. Configurar SMTP propio en Supabase, o **nadie podrá confirmar su cuenta**.
+2. Completar el recorrido por la interfaz contra la base real, incluida la subida
+   de una identificación al bucket.
 3. Probar el OCR con credenciales reales en un teléfono, no en el escritorio.
 4. Hacer que el área legal revise el aviso de privacidad, que es editable desde
    Configuración.
