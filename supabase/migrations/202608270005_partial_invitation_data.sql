@@ -1,3 +1,9 @@
+-- Nota: el hash se calcula con sha256() y convert_to(), ambos built-ins de
+-- pg_catalog. No se usa digest() de pgcrypto porque estas funciones declaran
+-- search_path = '' y en Supabase pgcrypto vive en el esquema "extensions",
+-- donde no sería resoluble: la función fallaría al crearse o al ejecutarse.
+-- La migración 202609020006 centraliza esto en public.token_hash().
+
 alter table public.visit_invitations
   add column if not exists invitee_name text,
   add column if not exists invitee_email text,
@@ -26,7 +32,7 @@ language sql stable security definer set search_path='' as $$
   join public.locations l on l.id=v.location_id
   join public.profiles p on p.id=v.host_id
   left join public.visitors x on x.id=v.visitor_id
-  where i.token_hash=encode(digest(p_token,'sha256'),'hex') limit 1
+  where i.token_hash=encode(sha256(convert_to(p_token,'UTF8')),'hex') limit 1
 $$;
 
 revoke all on function public.resolve_invitation(text) from public;
