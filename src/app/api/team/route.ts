@@ -60,7 +60,6 @@ export async function POST(request: Request) {
     const input = teamInviteSchema.parse(await request.json());
     const admin = createAdminClient();
     const email = input.email.toLowerCase();
-    const redirectTo = `${appUrl()}/auth/callback?next=/update-password`;
 
     // Un correo que ya existe se suma a esta organización en vez de fallar:
     // la misma persona puede trabajar en varias empresas.
@@ -71,20 +70,22 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     let profileId = existing?.id as string | undefined;
-    let invited = false;
+    const createdAccount = !profileId;
 
     if (!profileId) {
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-        data: { full_name: input.fullName },
-        redirectTo,
+      // Cuenta sin contraseña: quien la reciba entra pidiendo un código en
+      // /login, así que no hace falta el correo de invitación de Supabase.
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: { full_name: input.fullName },
       });
       if (error || !data.user)
         return NextResponse.json(
-          { error: "No fue posible enviar la invitación a ese correo" },
+          { error: "No fue posible crear la cuenta de esa persona" },
           { status: 409 },
         );
       profileId = data.user.id;
-      invited = true;
     }
 
     await admin
@@ -107,20 +108,19 @@ export async function POST(request: Request) {
       );
     if (memberError) throw memberError;
 
-    if (!invited)
-      await sendTeamInviteEmail({
-        to: email,
-        fullName: input.fullName,
-        organizationName,
-        roleLabel: roleLabels[input.role],
-        actionUrl: `${appUrl()}/login`,
-      }).catch(() => undefined);
+    await sendTeamInviteEmail({
+      to: email,
+      fullName: input.fullName,
+      organizationName,
+      roleLabel: roleLabels[input.role],
+      actionUrl: `${appUrl()}/login`,
+    }).catch(() => undefined);
 
     await writeAudit({
       organizationId,
       actorId: userId,
       eventType: "member_invited",
-      metadata: { role: input.role, existing_account: !invited },
+      metadata: { role: input.role, existing_account: !createdAccount },
     });
 
     return NextResponse.json(

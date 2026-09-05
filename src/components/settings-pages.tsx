@@ -228,7 +228,7 @@ export function TeamPage() {
         open={open}
         onClose={() => setOpen(false)}
         title="Invitar al equipo"
-        description="Recibirá un correo para definir su contraseña y entrar."
+        description="Recibirá un correo con la liga de acceso; entra pidiendo un código, sin contraseña."
       >
         <form onSubmit={invite} className="space-y-4">
           <Field label="Nombre completo">

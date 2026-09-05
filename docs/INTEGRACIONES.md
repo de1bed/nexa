@@ -9,38 +9,62 @@ registrarse.
 
 ## 1. Correo (crítico)
 
-Hay **dos** sistemas de correo distintos y es fácil pasar uno por alto.
+El correo dejó de ser un accesorio: **la autenticación es un código de seis
+dígitos que llega por correo**. No hay contraseñas ni enlaces que abrir. Si el
+correo no sale, nadie entra.
 
-### 1.1 Correos de la aplicación — Resend
+Hay **dos** sistemas de correo distintos y es fácil pasar uno por alto: los
+mensajes de la aplicación (Resend, desde el servidor) y los de la cuenta
+(Supabase Auth). Los dos se resuelven con la misma cuenta de Resend.
 
-Invitación al visitante, pase QR, aviso de llegada al anfitrión e invitación al
-equipo. Salen por Resend con las plantillas de `src/lib/server/email.ts`.
+### 1.1 Verificar el subdominio en Resend
 
-1. Crea la cuenta en [resend.com](https://resend.com) y verifica tu dominio
-   (agrega los registros SPF y DKIM que te indique en tu DNS).
-2. Genera una API key.
-3. Configura:
+El plan gratuito de Resend cubre **3.000 correos al mes y 100 al día**, de sobra
+para operar. Pero solo entrega a terceros desde un dominio verificado: con
+`onboarding@resend.dev` únicamente puedes escribirte a ti mismo, así que las
+invitaciones a visitantes no llegarían.
+
+No hace falta un dominio nuevo. Usa un subdominio del que ya tienes, por ejemplo
+`nexavisit.vortexlabai.com`, y así el correo de NEXA VISIT queda aislado de la
+reputación del dominio principal.
+
+1. Crea la cuenta en [resend.com](https://resend.com) → **Domains → Add Domain** y
+   escribe `nexavisit.vortexlabai.com`.
+2. Resend te muestra tres registros. Agrégalos en el DNS de `vortexlabai.com`
+   **tal como aparecen en el panel** (la clave DKIM es única de tu cuenta):
+
+   | Tipo | Nombre | Valor |
+   | --- | --- | --- |
+   | `MX` | `send.nexavisit` | `feedback-smtp.<región>.amazonses.com` (prioridad 10) |
+   | `TXT` | `send.nexavisit` | `v=spf1 include:amazonses.com ~all` |
+   | `TXT` | `resend._domainkey.nexavisit` | `p=MIGfMA0…` |
+
+   Si tu proveedor de DNS pide el nombre completo, escribe
+   `send.nexavisit.vortexlabai.com` y `resend._domainkey.nexavisit.vortexlabai.com`.
+   La verificación suele tardar minutos; el panel la marca en verde.
+3. Genera una API key en **API Keys** y configúrala:
 
    ```bash
    RESEND_API_KEY=re_xxxxxxxx
-   RESEND_FROM_EMAIL="NEXA VISIT <visitas@tudominio.com>"
+   RESEND_FROM_EMAIL="NEXA VISIT <visitas@nexavisit.vortexlabai.com>"
    ```
 
-**Si no lo configuras:** los correos no se envían; el destinatario y el enlace se
-imprimen en la consola del servidor. El recorrido completo sigue funcionando
-porque el anfitrión puede compartir el enlace desde su teléfono.
+**Si no lo configuras:** los correos de la aplicación no se envían; el
+destinatario y el enlace se imprimen en la consola del servidor. El recorrido
+sigue siendo demostrable porque el anfitrión puede compartir el enlace del pase
+desde su teléfono.
 
 ### 1.2 Correos de cuenta — SMTP de Supabase
 
-Confirmación de registro, recuperación de contraseña y activación de un miembro
-del equipo **no pasan por Resend**: los envía Supabase Auth.
+El código de acceso lo envía **Supabase Auth**, no la aplicación. El SMTP
+integrado de Supabase no sirve para producción: entrega solo a miembros de tu
+propio equipo y admite un par de mensajes por hora.
 
-> Sin este paso, quien se registre en `/signup` **nunca recibirá el correo de
-> confirmación**. El SMTP integrado de Supabase está limitado a unos pocos
-> mensajes por hora y solo entrega a miembros de tu propio equipo.
+> Sin este paso **nadie puede iniciar sesión ni registrarse**, porque el código
+> nunca llega.
 
 En el panel de Supabase → **Authentication → Emails → SMTP Settings**, activa
-«Enable Custom SMTP» y usa el mismo Resend:
+«Enable Custom SMTP» con el mismo Resend:
 
 | Campo | Valor |
 | --- | --- |
@@ -48,16 +72,45 @@ En el panel de Supabase → **Authentication → Emails → SMTP Settings**, act
 | Puerto | `465` |
 | Usuario | `resend` |
 | Contraseña | tu `RESEND_API_KEY` |
-| Sender email | el mismo de `RESEND_FROM_EMAIL` |
+| Sender email | `visitas@nexavisit.vortexlabai.com` |
+| Sender name | `NEXA VISIT` |
+
+### 1.3 Plantillas con el código, no con el enlace
+
+Supabase envía un enlace mágico por omisión. Para que llegue el código hay que
+poner `{{ .Token }}` en las plantillas de **Authentication → Emails →
+Templates**. Son **dos**: «Magic Link» (quien ya tiene cuenta) y «Confirm
+signup» (quien se registra por primera vez). Si solo cambias una, la mitad de
+tus usuarios seguirá recibiendo un enlace.
+
+El correo ya está escrito en
+[`supabase/templates/access-code.html`](../supabase/templates/access-code.html):
+copia ese archivo tal cual en las dos plantillas y pon como asunto «Tu código de
+acceso a NEXA VISIT». En desarrollo local no hace falta copiar nada, porque
+`supabase/config.toml` apunta al mismo archivo y los correos se leen en Inbucket
+(`http://localhost:54324`).
+
+Esto es lo que ve quien entra:
+
+![Pantalla del código de acceso](screenshots/access-mobile.png)
+
+El campo se valida solo al sexto dígito y usa `autocomplete="one-time-code"`, así
+que en iOS y Android el código se rellena desde la notificación sin copiarlo a
+mano.
+
+En **Authentication → Sign In / Providers → Email** deja «Email OTP expiration»
+en 3600 segundos (una hora) y el largo del código en 6 dígitos. La opción
+«Confirm email» puede quedarse encendida: con el código, la confirmación y el
+inicio de sesión son el mismo acto.
 
 En **Authentication → URL Configuration** define:
 
-- Site URL: `https://tudominio.com`
-- Redirect URLs: `https://tudominio.com/auth/callback`
+- Site URL: `https://nexavisit.vortexlabai.com`
+- Redirect URLs: `https://nexavisit.vortexlabai.com/auth/callback`
 
-Y en **Authentication → Emails → Templates**, traduce las plantillas al español.
-La de «Confirm signup» debe apuntar a `{{ .ConfirmationURL }}`, que ya llega a
-`/auth/callback?next=/onboarding`.
+Esas URL ya no se usan para entrar, pero sí para cualquier enlace que genere
+Supabase desde el panel (por ejemplo un acceso de emergencia si el correo
+fallara).
 
 ---
 
@@ -233,7 +286,8 @@ correo.
 | `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` · `SUPABASE_SERVICE_ROLE_KEY` | Base de datos, sesión y almacenamiento | Modo vitrina |
 | `NEXT_PUBLIC_APP_URL` | Construir enlaces de invitación y pase | Usa `localhost` |
 | `RESEND_API_KEY` · `RESEND_FROM_EMAIL` | Correos de la aplicación | Se registran en consola |
-| SMTP en el panel de Supabase | Confirmación de cuenta y contraseñas | **Los registros no se confirman** |
+| SMTP en el panel de Supabase | Código de acceso de seis dígitos | **Nadie puede iniciar sesión** |
+| Plantillas con `{{ .Token }}` | Que llegue el código y no un enlace | Llega un enlace que no lleva a ningún lado |
 | `CRON_SECRET` | Retención diaria de documentos | El cron responde 401 |
 | `NEXT_PUBLIC_OCR_PROVIDER=tesseract` | Lectura real del MRZ | Lectura simulada |
 | `GOOGLE_WALLET_*` | Pase en Google Wallet | Botón oculto |

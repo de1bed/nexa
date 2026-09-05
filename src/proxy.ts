@@ -17,8 +17,6 @@ const publicPrefixes = [
   "/login",
   "/signup",
   "/onboarding",
-  "/forgot-password",
-  "/update-password",
   "/auth",
   "/visit",
   "/pass",

@@ -167,11 +167,12 @@ export async function sendTeamInviteEmail(input: {
     logLabel: "invitación de equipo",
     logPayload: { actionUrl: input.actionUrl },
     html: layout({
-      preheader: "Activa tu cuenta para empezar a operar.",
+      preheader: "Entra con tu correo para empezar a operar.",
       title: `Bienvenido a ${escapeHtml(input.organizationName)}`,
-      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>. Define tu contraseña para entrar.`,
-      ctaLabel: "Activar mi cuenta",
+      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>. Escribe este correo en la pantalla de acceso y te enviaremos un código de un solo uso. No hay contraseñas que recordar.`,
+      ctaLabel: "Entrar a NEXA VISIT",
       ctaUrl: input.actionUrl,
+      footnote: "El código llega a este mismo correo y vence en una hora.",
     }),
   });
 }

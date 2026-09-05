@@ -29,3 +29,5 @@
 14. **Datos parciales de invitación.** Lo que el anfitrión adelanta se guarda en `visit_invitations` como sugerencia editable; no se convierte en identidad hasta que el visitante confirma su preregistro.
 
 15. **Aviso de privacidad como dato.** El texto y su versión viven en `organization_settings`. Al editarlo se genera una versión nueva, y cada visita registra qué versión aceptó el visitante.
+
+16. **Acceso con código, sin contraseñas.** Registrarse e iniciar sesión son el mismo gesto: se escribe el correo y se teclea un código de seis dígitos (`signInWithOtp` + `verifyOtp`). Desaparecen la contraseña, su recuperación y el enlace de confirmación —el correo se verifica en el mismo acto de entrar—, y con ello desaparece toda una clase de fallas: contraseñas reutilizadas, enlaces que caducan en el cliente de correo equivocado y usuarios atorados sin confirmar. El precio es que el correo pasa a ser infraestructura crítica: sin SMTP propio nadie entra, y la plantilla debe llevar `{{ .Token }}` y no `{{ .ConfirmationURL }}`. El campo del código usa `autocomplete="one-time-code"`, así que en iOS y Android se rellena solo desde la notificación.

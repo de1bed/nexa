@@ -3,19 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Check,
-  Eye,
-  EyeOff,
-  Loader2,
-  MailCheck,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowRight, Check, Loader2, ShieldCheck } from "lucide-react";
 import { Brand } from "./brand";
-import { Button, Callout, Field, cn, fieldClass } from "./ui";
+import { AccessCodeStep, accessRequestError } from "./access-code";
+import { Button, Callout, Field, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
-import { isLiveMode, appUrl } from "@/lib/config";
+import { isLiveMode } from "@/lib/config";
 import { signUpSchema } from "@/lib/schemas";
 
 const benefits = [
@@ -28,11 +21,19 @@ const benefits = [
 export function SignUpForm() {
   const router = useRouter();
   const live = isLiveMode();
-  const [form, setForm] = useState({ fullName: "", email: "", password: "" });
-  const [show, setShow] = useState(false);
+  const [form, setForm] = useState({ fullName: "", email: "" });
+  const [sentTo, setSentTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+
+  async function sendCode(address: string, fullName: string) {
+    const { error: authError } = await createClient().auth.signInWithOtp({
+      email: address,
+      // El nombre viaja como metadato: el trigger de Supabase crea el perfil.
+      options: { shouldCreateUser: true, data: { full_name: fullName } },
+    });
+    if (authError) throw new Error(accessRequestError(authError.message));
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -45,28 +46,9 @@ export function SignUpForm() {
     setBusy(true);
     setError("");
     try {
-      const { data, error: authError } = await createClient().auth.signUp({
-        email: form.email.trim(),
-        password: form.password,
-        options: {
-          data: { full_name: form.fullName.trim() },
-          emailRedirectTo: `${appUrl()}/auth/callback?next=/onboarding`,
-        },
-      });
-      if (authError)
-        throw new Error(
-          authError.message.includes("already registered")
-            ? "Ese correo ya tiene una cuenta. Inicia sesión."
-            : "No fue posible crear la cuenta. Intenta de nuevo.",
-        );
-
-      // Con confirmación de correo activada no hay sesión todavía.
-      if (!data.session) {
-        setNeedsConfirmation(true);
-        return;
-      }
-      router.push("/onboarding");
-      router.refresh();
+      const address = parsed.data.email.toLowerCase();
+      await sendCode(address, parsed.data.fullName);
+      setSentTo(address);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -78,24 +60,23 @@ export function SignUpForm() {
     }
   }
 
-  if (needsConfirmation)
+  if (sentTo)
     return (
       <Shell>
-        <div className="text-center">
-          <span className="animate-pop mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-            <MailCheck size={30} />
-          </span>
-          <h1 className="mt-5 text-2xl font-semibold tracking-[-.02em]">
-            Confirma tu correo
-          </h1>
-          <p className="mt-2.5 text-[15px] leading-6 text-slate-500">
-            Enviamos un enlace a <b>{form.email}</b>. Ábrelo para activar tu
-            cuenta y terminar de configurar tu empresa.
-          </p>
-          <Link href="/login" className="mt-7 inline-block">
-            <Button variant="outline">Ir a iniciar sesión</Button>
-          </Link>
-        </div>
+        <AccessCodeStep
+          email={sentTo}
+          title="Confirma tu correo"
+          description="Escribe el código de 6 dígitos para activar tu cuenta."
+          onVerified={() => {
+            router.push("/onboarding");
+            router.refresh();
+          }}
+          onResend={() => sendCode(sentTo, form.fullName.trim())}
+          onBack={() => {
+            setSentTo("");
+            setError("");
+          }}
+        />
       </Shell>
     );
 
@@ -108,7 +89,8 @@ export function SignUpForm() {
           Registra tu empresa
         </h1>
         <p className="mt-3 text-[15px] leading-6 text-slate-500">
-          En dos minutos tendrás tu recepción digital funcionando.
+          En dos minutos tendrás tu recepción digital funcionando. Sin
+          contraseñas: te enviamos un código al correo.
         </p>
       </header>
 
@@ -147,28 +129,6 @@ export function SignUpForm() {
             value={form.email}
             onChange={(event) => setForm({ ...form, email: event.target.value })}
           />
-        </Field>
-        <Field label="Contraseña" hint="Mínimo 12 caracteres.">
-          <div className="relative">
-            <input
-              required
-              type={show ? "text" : "password"}
-              autoComplete="new-password"
-              className={cn(fieldClass, "pr-12")}
-              value={form.password}
-              onChange={(event) =>
-                setForm({ ...form, password: event.target.value })
-              }
-            />
-            <button
-              type="button"
-              aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-              onClick={() => setShow(!show)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400"
-            >
-              {show ? <EyeOff size={19} /> : <Eye size={19} />}
-            </button>
-          </div>
         </Field>
 
         {error && (

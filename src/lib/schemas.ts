@@ -101,8 +101,12 @@ export const settingsSchema = z.object({
 export const signUpSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe tu nombre").max(120),
   email: z.email("Correo inválido"),
-  password: z
-    .string()
-    .min(12, "Usa al menos 12 caracteres")
-    .max(200),
 });
+
+export const accessEmailSchema = z.email("Correo inválido");
+
+/** Código de un solo uso que Supabase envía por correo. */
+export const accessCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, "El código tiene 6 dígitos");

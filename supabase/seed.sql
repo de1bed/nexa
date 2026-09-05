@@ -1,4 +1,6 @@
--- Datos exclusivamente demostrativos. Contraseña común: NexaDemo2026!
+-- Datos exclusivamente demostrativos. La aplicación entra con un código de seis
+-- dígitos por correo, no con contraseña; la contraseña común `NexaDemo2026!`
+-- queda solo para probar la API de Auth desde la terminal.
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values
 ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','admin@novalogistics.demo',crypt('NexaDemo2026!',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{}',now(),now()),
@@ -6,11 +8,11 @@ values
 ('10000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','valeria@novalogistics.demo',crypt('NexaDemo2026!',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{}',now(),now()),
 ('10000000-0000-0000-0000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','guardia1@novalogistics.demo',crypt('NexaDemo2026!',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{}',now(),now()),
 ('10000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','guardia2@novalogistics.demo',crypt('NexaDemo2026!',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{}',now(),now());
--- Auth lee estas columnas como texto, no como nulos. Si quedan en NULL, el
--- inicio de sesión falla con «Database error querying schema» aunque la
--- contraseña sea correcta (verificado contra un proyecto real). Al registrarse
--- por la aplicación las escribe Auth; al insertar usuarios a mano, hay que
--- ponerlas en cadena vacía.
+-- Auth lee estas columnas como texto, no como nulos. Si quedan en NULL, todo
+-- inicio de sesión falla con «Database error querying schema», sea con código o
+-- con contraseña (verificado contra un proyecto real). Al registrarse por la
+-- aplicación las escribe Auth; al insertar usuarios a mano, hay que ponerlas en
+-- cadena vacía.
 update auth.users set
   confirmation_token = '', recovery_token = '', email_change = '',
   email_change_token_new = '', email_change_token_current = '',

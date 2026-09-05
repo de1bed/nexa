@@ -26,6 +26,22 @@ additional_redirect_urls = ["http://127.0.0.1:3000/**", "http://localhost:3000/*
 jwt_expiry = 3600
 enable_signup = true
 
+# La aplicación entra con un código de seis dígitos, no con contraseña ni con
+# enlace mágico. Las dos plantillas comparten archivo porque el correo es el
+# mismo: quien se registra y quien vuelve reciben un código idéntico.
+[auth.email]
+enable_signup = true
+otp_length = 6
+otp_expiry = 3600
+
+[auth.email.template.magic_link]
+subject = "Tu código de acceso a NEXA VISIT"
+content_path = "./supabase/templates/access-code.html"
+
+[auth.email.template.confirmation]
+subject = "Tu código de acceso a NEXA VISIT"
+content_path = "./supabase/templates/access-code.html"
+
 [storage]
 enabled = true
 file_size_limit = "8MiB"

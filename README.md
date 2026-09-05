@@ -48,7 +48,7 @@ npx supabase db reset            # aplica migraciones + seed demostrativo
 
 Copia `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` de `npx supabase status` a `.env.local`, reinicia `npm run dev` y entra a `/signup`.
 
-> **Un paso que se olvida:** los correos de confirmación de cuenta no salen por Resend, los manda Supabase Auth. Sin configurar SMTP propio en el panel de Supabase, quien se registre nunca recibirá el correo. Está explicado en [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md#12-correos-de-cuenta--smtp-de-supabase).
+> **El paso que se olvida:** no hay contraseñas. Se entra con un código de seis dígitos que manda Supabase Auth, no la aplicación. Hace falta SMTP propio en el panel de Supabase y pegar la plantilla del código en «Magic Link» y «Confirm signup»; sin eso nadie entra. En local, `npx supabase start` ya usa la plantilla del repositorio y los correos se leen en Inbucket (`http://localhost:54324`). Está explicado en [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md#12-correos-de-cuenta--smtp-de-supabase).
 
 ### En la nube
 

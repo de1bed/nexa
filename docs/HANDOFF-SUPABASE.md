@@ -136,9 +136,10 @@ Tres cosas que no viven en el código.
 
 ### 4.1 SMTP propio (crítico)
 
-**Sin esto, quien se registre en `/signup` nunca recibirá el correo de
-confirmación y no podrá entrar.** El SMTP integrado de Supabase está limitado a
-unos pocos mensajes por hora y solo entrega a miembros del propio equipo.
+**Sin esto nadie puede entrar.** La aplicación no usa contraseñas: pide un código
+de seis dígitos que envía Supabase Auth. El SMTP integrado de Supabase está
+limitado a unos pocos mensajes por hora y solo entrega a miembros del propio
+equipo, así que sirve para probar y para nada más.
 
 Panel → **Authentication → Emails → SMTP Settings** → «Enable Custom SMTP»:
 
@@ -160,11 +161,19 @@ Panel → **Authentication → URL Configuration**:
 La ruta [`src/app/auth/callback/route.ts`](../src/app/auth/callback/route.ts)
 solo acepta destinos internos, así que un `next` externo se ignora por diseño.
 
-### 4.3 Registro habilitado
+### 4.3 Registro y plantillas del código
 
-Panel → **Authentication → Providers → Email**: «Enable Sign Up» activo, o el
-alta de empresas no funcionará. (`supabase/config.toml` ya lo trae para el
-entorno local.)
+Panel → **Authentication → Sign In / Providers → Email**: «Enable Sign Up»
+activo, o el alta de empresas no funcionará. (`supabase/config.toml` ya lo trae
+para el entorno local.)
+
+En el mismo lugar, «Email OTP expiration» en 3600 segundos y el código en 6
+dígitos. Y en **Authentication → Emails → Templates** hay que pegar
+[`supabase/templates/access-code.html`](../supabase/templates/access-code.html)
+en **«Magic Link» y «Confirm signup»**: si una plantilla se queda con
+`{{ .ConfirmationURL }}`, esos usuarios reciben un enlace en lugar del código y
+se quedan fuera. Detalle completo en
+[INTEGRACIONES.md](./INTEGRACIONES.md#13-plantillas-con-el-código-no-con-el-enlace).
 
 ---
 

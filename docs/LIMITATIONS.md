@@ -33,11 +33,12 @@ se aplicaron en orden y sin error, y se comprobó con SQL:
 - Un token de invitación real se resolvió como visitante anónimo.
 - Con credenciales puestas, la aplicación exige autenticación: el panel y el
   portal del guardia redirigen a `/login` y la API responde 401.
-- El registro está habilitado en Auth y la confirmación por correo es
-  obligatoria (`mailer_autoconfirm: false`), así que el SMTP propio es el primer
+- El registro está habilitado en Auth. La aplicación ya no usa contraseñas: pide
+  un código de seis dígitos por correo, así que el SMTP propio es el primer
   bloqueo real.
-- Inicio de sesión con contraseña: devuelve una sesión válida, y el perfil se
-  crea solo con el nombre que viene en el registro.
+- Una sesión real de Auth devuelve un perfil creado por el trigger, con el nombre
+  que viajó en el registro. Se comprobó con el flujo de contraseña, que era el
+  que existía en ese momento.
 - Alta de empresa desde una sesión real: `create_organization` dejó la
   organización, la membresía de administradora, la sede, la configuración con su
   aviso de privacidad y la entrada en la bitácora.
@@ -52,8 +53,13 @@ Nada de esto está roto que se sepa; simplemente no se ha podido ejercer.
   Sesión, alta de empresa y resolución de tokens se ejercieron contra el proyecto
   real, pero por la API de Supabase, no pulsando botones. El recorrido de
   invitación, captura de identificación, pase y escaneo sigue sin hacerse en
-  pantalla, y el primer bloqueo es el SMTP propio: sin él nadie confirma su
-  cuenta y por tanto nadie llega al panel.
+  pantalla, y el primer bloqueo es el SMTP propio: sin él no llega el código y
+  por tanto nadie entra al panel.
+- **El código de acceso por correo no se ha probado contra el proyecto real.**
+  El flujo está escrito contra `signInWithOtp` y `verifyOtp`, pero depende de dos
+  ajustes del panel que solo el dueño del proyecto puede hacer: el SMTP propio y
+  las plantillas «Magic Link» y «Confirm signup» con `{{ .Token }}`. Mientras la
+  plantilla siga trayendo el enlace de siempre, el correo llegará sin código.
 - **Las políticas de Storage no se han ejercido con un archivo real.** El bucket
   existe y es privado, y las políticas están escritas y revisadas, pero no se ha
   subido ninguna identificación.
