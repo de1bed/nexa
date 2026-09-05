@@ -17,37 +17,34 @@ Hay **dos** sistemas de correo distintos y es fácil pasar uno por alto: los
 mensajes de la aplicación (Resend, desde el servidor) y los de la cuenta
 (Supabase Auth). Los dos se resuelven con la misma cuenta de Resend.
 
-### 1.1 Verificar el subdominio en Resend
+### 1.1 Resend
 
-El plan gratuito de Resend cubre **3.000 correos al mes y 100 al día**, de sobra
-para operar. Pero solo entrega a terceros desde un dominio verificado: con
+El plan gratuito de Resend cubre **3.000 correos al mes con un tope de 100 al
+día**. El tope diario es el que aprieta primero, porque cada inicio de sesión
+gasta uno y cada invitación a visitante otro.
+
+Resend solo entrega a terceros desde un dominio verificado: con
 `onboarding@resend.dev` únicamente puedes escribirte a ti mismo, así que las
 invitaciones a visitantes no llegarían.
 
-No hace falta un dominio nuevo. Usa un subdominio del que ya tienes, por ejemplo
-`nexavisit.vortexlabai.com`, y así el correo de NEXA VISIT queda aislado de la
-reputación del dominio principal.
+**En este proyecto el dominio `vortexlabai.com` ya está verificado** —DKIM en
+`resend._domainkey`, SPF y MX de rebotes en `send`, los tres en verde— así que no
+hay nada que hacer en el DNS. Solo la llave:
 
-1. Crea la cuenta en [resend.com](https://resend.com) → **Domains → Add Domain** y
-   escribe `nexavisit.vortexlabai.com`.
-2. Resend te muestra tres registros. Agrégalos en el DNS de `vortexlabai.com`
-   **tal como aparecen en el panel** (la clave DKIM es única de tu cuenta):
+```bash
+RESEND_API_KEY=re_xxxxxxxx
+RESEND_FROM_EMAIL="NEXA VISIT <visitas@vortexlabai.com>"
+```
 
-   | Tipo | Nombre | Valor |
-   | --- | --- | --- |
-   | `MX` | `send.nexavisit` | `feedback-smtp.<región>.amazonses.com` (prioridad 10) |
-   | `TXT` | `send.nexavisit` | `v=spf1 include:amazonses.com ~all` |
-   | `TXT` | `resend._domainkey.nexavisit` | `p=MIGfMA0…` |
+Conviene que la llave tenga permiso de **solo envío** y esté restringida a ese
+dominio: si se filtra, no sirve para leer ni administrar la cuenta.
 
-   Si tu proveedor de DNS pide el nombre completo, escribe
-   `send.nexavisit.vortexlabai.com` y `resend._domainkey.nexavisit.vortexlabai.com`.
-   La verificación suele tardar minutos; el panel la marca en verde.
-3. Genera una API key en **API Keys** y configúrala:
-
-   ```bash
-   RESEND_API_KEY=re_xxxxxxxx
-   RESEND_FROM_EMAIL="NEXA VISIT <visitas@nexavisit.vortexlabai.com>"
-   ```
+Para un dominio nuevo el camino es **Domains → Add Domain**, y Resend dicta tres
+registros que hay que copiar tal cual (la clave DKIM es única de cada cuenta).
+Si el proveedor de DNS agrega el dominio por su cuenta al final del nombre
+—Network Solutions y GoDaddy lo hacen— hay que escribir solo la parte izquierda,
+`send` y `resend._domainkey`, o el registro queda duplicando el dominio y nunca
+verifica.
 
 **Si no lo configuras:** los correos de la aplicación no se envían; el
 destinatario y el enlace se imprimen en la consola del servidor. El recorrido
@@ -72,7 +69,7 @@ En el panel de Supabase → **Authentication → Emails → SMTP Settings**, act
 | Puerto | `465` |
 | Usuario | `resend` |
 | Contraseña | tu `RESEND_API_KEY` |
-| Sender email | `visitas@nexavisit.vortexlabai.com` |
+| Sender email | `visitas@vortexlabai.com` |
 | Sender name | `NEXA VISIT` |
 
 ### 1.3 Plantillas con el código, no con el enlace
@@ -103,14 +100,19 @@ en 3600 segundos (una hora) y el largo del código en 6 dígitos. La opción
 «Confirm email» puede quedarse encendida: con el código, la confirmación y el
 inicio de sesión son el mismo acto.
 
-En **Authentication → URL Configuration** define:
+En **Authentication → URL Configuration** define el origen donde vive la
+aplicación, que no tiene por qué ser el dominio del correo:
 
 - Site URL: `https://nexavisit.vortexlabai.com`
 - Redirect URLs: `https://nexavisit.vortexlabai.com/auth/callback`
 
+Son dos cosas distintas y conviene no confundirlas: la aplicación se sirve desde
+`nexavisit.vortexlabai.com` (un subdominio apuntado a Vercel) y el correo sale
+desde `vortexlabai.com` (el dominio verificado en Resend).
+
 Esas URL ya no se usan para entrar, pero sí para cualquier enlace que genere
-Supabase desde el panel (por ejemplo un acceso de emergencia si el correo
-fallara).
+Supabase desde el panel, por ejemplo un acceso de emergencia si el correo
+fallara.
 
 ---
 

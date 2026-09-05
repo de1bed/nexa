@@ -42,6 +42,10 @@ se aplicaron en orden y sin error, y se comprobó con SQL:
 - Alta de empresa desde una sesión real: `create_organization` dejó la
   organización, la membresía de administradora, la sede, la configuración con su
   aviso de privacidad y la entrada en la bitácora.
+- Los correos de la aplicación se entregan de verdad. Se ejecutó el adaptador de
+  `src/lib/server/email.ts` con la llave real y Resend reporta la invitación de
+  equipo como `delivered` en una bandeja de Gmail. El dominio `vortexlabai.com`
+  está verificado con DKIM, SPF y MX de rebotes.
 
 Los datos de prueba se borraron: el proyecto quedó vacío.
 
@@ -55,11 +59,16 @@ Nada de esto está roto que se sepa; simplemente no se ha podido ejercer.
   invitación, captura de identificación, pase y escaneo sigue sin hacerse en
   pantalla, y el primer bloqueo es el SMTP propio: sin él no llega el código y
   por tanto nadie entra al panel.
-- **El código de acceso por correo no se ha probado contra el proyecto real.**
-  El flujo está escrito contra `signInWithOtp` y `verifyOtp`, pero depende de dos
-  ajustes del panel que solo el dueño del proyecto puede hacer: el SMTP propio y
-  las plantillas «Magic Link» y «Confirm signup» con `{{ .Token }}`. Mientras la
-  plantilla siga trayendo el enlace de siempre, el correo llegará sin código.
+- **El código de acceso por correo no se ha recibido todavía.** El flujo está
+  escrito contra `signInWithOtp` y `verifyOtp`, y ambos se ejercieron contra el
+  proyecto real: el alta crea el usuario con su nombre y un correo desconocido
+  responde `Signups not allowed for otp`. Lo que falta es que el mensaje salga, y
+  eso depende de dos ajustes del panel de Supabase que no se pueden hacer por
+  código ni por su API de gestión: el SMTP propio y las plantillas «Magic Link» y
+  «Confirm signup» con `{{ .Token }}`. Mientras la plantilla siga trayendo el
+  enlace de siempre, el correo llegará sin código. El propio código de seis
+  dígitos se guarda hasheado en `auth.users`, así que no hay forma de leerlo de
+  la base de datos para probar el paso final sin una bandeja de entrada.
 - **Las políticas de Storage no se han ejercido con un archivo real.** El bucket
   existe y es privado, y las políticas están escritas y revisadas, pero no se ha
   subido ninguna identificación.
