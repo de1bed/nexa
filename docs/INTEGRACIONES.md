@@ -60,6 +60,10 @@ propio equipo y admite un par de mensajes por hora.
 > Sin este paso **nadie puede iniciar sesión ni registrarse**, porque el código
 > nunca llega.
 
+**En este proyecto ya está aplicado y comprobado**: el código sale por Resend
+desde `visitas@vortexlabai.com`. Los valores quedan aquí por si hay que
+reconstruirlo o levantar otro proyecto.
+
 En el panel de Supabase → **Authentication → Emails → SMTP Settings**, activa
 «Enable Custom SMTP» con el mismo Resend:
 
@@ -83,9 +87,30 @@ tus usuarios seguirá recibiendo un enlace.
 El correo ya está escrito en
 [`supabase/templates/access-code.html`](../supabase/templates/access-code.html):
 copia ese archivo tal cual en las dos plantillas y pon como asunto «Tu código de
-acceso a NEXA VISIT». En desarrollo local no hace falta copiar nada, porque
-`supabase/config.toml` apunta al mismo archivo y los correos se leen en Inbucket
+acceso a NEXA VISIT». Lo que lo convierte en código es la variable
+`{{ .Token }}`; si aparece `{{ .ConfirmationURL }}` en cualquier parte del
+cuerpo, incluso dentro de un comentario de HTML, Supabase la sustituye por un
+enlace real. Por eso el archivo es HTML limpio y la explicación vive aquí.
+
+En desarrollo local no hace falta copiar nada, porque `supabase/config.toml`
+apunta al mismo archivo y los correos se leen en Inbucket
 (`http://localhost:54324`).
+
+Nada de esto tiene que hacerse a mano. La API de gestión configura el SMTP y las
+dos plantillas de una sola vez, y sirve para revisar el estado sin abrir el
+panel. Requiere un token personal de la cuenta, que conviene revocar al terminar
+porque da acceso completo:
+
+```bash
+curl -H "Authorization: Bearer $SUPABASE_PAT" \
+  https://api.supabase.com/v1/projects/<REF>/config/auth
+```
+
+El `PATCH` al mismo endpoint acepta `smtp_host`, `smtp_port` (cadena, no número),
+`smtp_user`, `smtp_pass`, `smtp_admin_email`, `smtp_sender_name`,
+`mailer_otp_length`, `mailer_otp_exp` y el contenido y asunto de cada plantilla en
+`mailer_templates_magic_link_content`, `mailer_subjects_magic_link`,
+`mailer_templates_confirmation_content` y `mailer_subjects_confirmation`.
 
 Esto es lo que ve quien entra:
 
