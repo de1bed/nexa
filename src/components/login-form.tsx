@@ -14,10 +14,11 @@ import {
 } from "lucide-react";
 import { Brand } from "./brand";
 import { AccessCodeStep, accessRequestError } from "./access-code";
+import { ChoosePasswordStep } from "./choose-password";
 import { Button, Callout, Field, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { isLiveMode, roleHome } from "@/lib/config";
-import { accessEmailSchema } from "@/lib/schemas";
+import { accessEmailSchema, signInSchema } from "@/lib/schemas";
 import { SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
 import type { MemberRole } from "@/lib/domain";
 
@@ -53,8 +54,8 @@ function rememberShowcaseRole(role: MemberRole) {
 }
 
 /**
- * Acceso sin contraseñas: pedimos el correo, Supabase envía un código de un
- * solo uso y ese código abre la sesión. No hay nada que recordar ni recuperar.
+ * El código por correo solo confirma la identidad la primera vez (o si
+ * olvidaste la contraseña). El día a día es correo + contraseña.
  */
 export function LoginForm() {
   const router = useRouter();
@@ -62,11 +63,13 @@ export function LoginForm() {
   const live = isLiveMode();
 
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [sentTo, setSentTo] = useState("");
+  const [choosePassword, setChoosePassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(
     params.get("error") === "invalid_link"
-      ? "El enlace venció o ya se usó. Pide un código nuevo."
+      ? "El enlace venció o ya se usó. Entra con tu contraseña o pide un código."
       : "",
   );
 
@@ -85,11 +88,43 @@ export function LoginForm() {
     if (authError) throw new Error(accessRequestError(authError.message));
   }
 
-  async function requestCode(event: React.FormEvent) {
+  async function signIn(event: React.FormEvent) {
     event.preventDefault();
+    const parsed = signInSchema.safeParse({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Revisa los datos");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const { error: authError } = await createClient().auth.signInWithPassword({
+        email: parsed.data.email,
+        password: parsed.data.password,
+      });
+      if (authError) {
+        throw new Error(
+          "Correo o contraseña incorrectos. Si es tu primer acceso, pide un código.",
+        );
+      }
+      finishSignIn();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "No pudimos entrar.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestCode() {
     const parsed = accessEmailSchema.safeParse(email.trim().toLowerCase());
     if (!parsed.success) {
-      setError("Escribe un correo válido");
+      setError("Escribe un correo válido para enviarte el código");
       return;
     }
 
@@ -121,12 +156,14 @@ export function LoginForm() {
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="safe-top flex items-center justify-center bg-white px-5 py-10 sm:px-8">
         <div className="w-full max-w-md">
-          {sentTo ? (
+          {choosePassword ? (
+            <ChoosePasswordStep onSaved={finishSignIn} />
+          ) : sentTo ? (
             <AccessCodeStep
               email={sentTo}
               title="Escribe tu código"
-              description="Es un código de 6 dígitos y vence en una hora."
-              onVerified={finishSignIn}
+              description="Solo esta vez: confirma el correo y después eliges tu contraseña."
+              onVerified={() => setChoosePassword(true)}
               onResend={() => sendCode(sentTo)}
               onBack={() => {
                 setSentTo("");
@@ -146,7 +183,7 @@ export function LoginForm() {
                 </h1>
                 <p className="mt-3 text-[15px] leading-6 text-slate-500">
                   {live
-                    ? "Te enviamos un código al correo. Sin contraseñas que recordar."
+                    ? "Entra con tu correo y contraseña. El código solo se pide la primera vez."
                     : "Explora los tres portales sin credenciales. Los datos viven solo en este navegador."}
                 </p>
               </header>
@@ -176,12 +213,12 @@ export function LoginForm() {
 
                   <Callout tone="neutral" className="mt-5">
                     Al conectar Supabase, esta pantalla pasa automáticamente a
-                    autenticación real con código por correo.
+                    autenticación real.
                   </Callout>
                 </div>
               ) : (
                 <>
-                  <form onSubmit={requestCode} className="mt-8 space-y-4">
+                  <form onSubmit={signIn} className="mt-8 space-y-4">
                     <Field label="Correo">
                       <input
                         required
@@ -193,6 +230,16 @@ export function LoginForm() {
                         placeholder="tu@empresa.com"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Contraseña">
+                      <input
+                        required
+                        type="password"
+                        autoComplete="current-password"
+                        className={fieldClass}
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
                       />
                     </Field>
 
@@ -216,11 +263,19 @@ export function LoginForm() {
                         <Loader2 size={19} className="animate-spin" />
                       ) : (
                         <>
-                          Enviarme un código
+                          Entrar
                           <ArrowRight size={18} />
                         </>
                       )}
                     </Button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void requestCode()}
+                      className="w-full text-center text-sm font-semibold text-blue-600"
+                    >
+                      Es mi primer acceso o olvidé la contraseña
+                    </button>
                   </form>
 
                   <p className="mt-6 text-center text-sm text-slate-500">

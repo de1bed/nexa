@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Building2,
   Check,
+  ChevronRight,
   Clock3,
+  IdCard,
   Loader2,
   MapPin,
   Plus,
@@ -26,6 +29,7 @@ import {
   fieldClass,
 } from "./ui";
 import { Sheet, Toggle } from "./ui-client";
+import { AddressField } from "./address-field";
 import {
   showcaseLocations,
   showcaseSettings,
@@ -497,17 +501,10 @@ export function LocationsPage() {
               onChange={(event) => setForm({ ...form, name: event.target.value })}
             />
           </Field>
-          <Field label="Dirección">
-            <input
-              required
-              className={fieldClass}
-              placeholder="Calle, número, ciudad"
-              value={form.address}
-              onChange={(event) =>
-                setForm({ ...form, address: event.target.value })
-              }
-            />
-          </Field>
+          <AddressField
+            value={form.address}
+            onChange={(address) => setForm({ ...form, address })}
+          />
           <Field label="Zona horaria">
             <select
               className={fieldClass}
@@ -608,8 +605,41 @@ export function SettingsPage() {
       <SectionTitle
         eyebrow={organization.name}
         title="Configuración"
-        description="Privacidad, retención y ventanas de acceso."
+        description="Privacidad, qué le pides al visitante y ventanas de acceso."
       />
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/app/team"
+          className="flex items-center gap-3 rounded-[22px] border border-slate-200 bg-white p-4 transition active:bg-slate-50"
+        >
+          <span className="grid size-11 place-items-center rounded-2xl bg-[#071426] text-white">
+            <Users size={19} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Equipo</span>
+            <span className="block text-sm text-slate-500">
+              Invita anfitriones y guardias
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-slate-400" />
+        </Link>
+        <Link
+          href="/app/locations"
+          className="flex items-center gap-3 rounded-[22px] border border-slate-200 bg-white p-4 transition active:bg-slate-50"
+        >
+          <span className="grid size-11 place-items-center rounded-2xl bg-[#10cfc9]/15 text-[#0d9d99]">
+            <MapPin size={19} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Ubicaciones</span>
+            <span className="block text-sm text-slate-500">
+              Sedes donde recibes visitas
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-slate-400" />
+        </Link>
+      </div>
 
       {loading ? (
         <Card>
@@ -617,6 +647,27 @@ export function SettingsPage() {
         </Card>
       ) : (
         <div className="max-w-3xl space-y-5">
+          <Card className="p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <IdCard size={18} />
+              Qué le pides al visitante
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Si la empresa no quiere guardar identificaciones, el visitante
+              solo confirma sus datos y recibe el pase.
+            </p>
+            <div className="mt-5">
+              <Toggle
+                checked={settings.requireIdentification}
+                onChange={(value) =>
+                  setSettings({ ...settings, requireIdentification: value })
+                }
+                label="Pedir foto de identificación"
+                description="Desactívalo si basta con nombre, correo y empresa. El visitante verá que es política de esta organización."
+              />
+            </div>
+          </Card>
+
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <Shield size={18} />

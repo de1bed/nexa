@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowRight, Check, Loader2, ShieldCheck } from "lucide-react";
 import { Brand } from "./brand";
 import { AccessCodeStep, accessRequestError } from "./access-code";
+import { ChoosePasswordStep } from "./choose-password";
 import { Button, Callout, Field, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { isLiveMode } from "@/lib/config";
@@ -23,6 +24,7 @@ export function SignUpForm() {
   const live = isLiveMode();
   const [form, setForm] = useState({ fullName: "", email: "" });
   const [sentTo, setSentTo] = useState("");
+  const [choosePassword, setChoosePassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -60,17 +62,28 @@ export function SignUpForm() {
     }
   }
 
+  if (choosePassword)
+    return (
+      <Shell>
+        <ChoosePasswordStep
+          title="Crea tu contraseña"
+          description="El código ya confirmó tu correo. De ahora en adelante entras con esta contraseña."
+          onSaved={() => {
+            router.push("/onboarding");
+            router.refresh();
+          }}
+        />
+      </Shell>
+    );
+
   if (sentTo)
     return (
       <Shell>
         <AccessCodeStep
           email={sentTo}
           title="Confirma tu correo"
-          description="Escribe el código de 6 dígitos para activar tu cuenta."
-          onVerified={() => {
-            router.push("/onboarding");
-            router.refresh();
-          }}
+          description="Escribe el código de 6 dígitos. Solo se pide esta vez."
+          onVerified={() => setChoosePassword(true)}
           onResend={() => sendCode(sentTo, form.fullName.trim())}
           onBack={() => {
             setSentTo("");
@@ -89,8 +102,8 @@ export function SignUpForm() {
           Registra tu empresa
         </h1>
         <p className="mt-3 text-[15px] leading-6 text-slate-500">
-          En dos minutos tendrás tu recepción digital funcionando. Sin
-          contraseñas: te enviamos un código al correo.
+          En dos minutos tendrás tu recepción digital funcionando. El código
+          confirma tu correo una vez; después entras con tu contraseña.
         </p>
       </header>
 

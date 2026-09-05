@@ -93,6 +93,7 @@ export const locationSchema = z.object({
 export const settingsSchema = z.object({
   documentRetentionDays: z.number().int().min(1).max(365),
   allowDocumentPreviewForGuards: z.boolean(),
+  requireIdentification: z.boolean(),
   earlyEntryMinutes: z.number().int().min(0).max(240),
   lateEntryMinutes: z.number().int().min(0).max(1440),
   privacyNotice: z.string().trim().min(40).max(4000),
@@ -104,6 +105,16 @@ export const signUpSchema = z.object({
 });
 
 export const accessEmailSchema = z.email("Correo inválido");
+
+export const passwordSchema = z
+  .string()
+  .min(8, "La contraseña debe tener al menos 8 caracteres")
+  .max(72, "La contraseña es demasiado larga");
+
+export const signInSchema = z.object({
+  email: z.email("Correo inválido"),
+  password: z.string().min(1, "Escribe tu contraseña"),
+});
 
 /** Código de un solo uso que Supabase envía por correo. */
 export const accessCodeSchema = z

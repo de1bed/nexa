@@ -36,6 +36,7 @@ import {
   type DocumentSide,
 } from "./visitor/document-capture";
 import { PassCard } from "./visitor/pass-card";
+import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
 import { getOCRProvider, LOW_CONFIDENCE, OCR_DISCLAIMER } from "@/lib/ocr";
 import type { OCRResult } from "@/lib/ocr";
@@ -85,6 +86,7 @@ type Invitation = {
   accessRequirements: string;
   privacyNotice: string;
   retentionDays: number;
+  requireIdentification: boolean;
   visitorName: string;
   visitorEmail: string;
   visitorPhone: string;
@@ -157,6 +159,7 @@ export function VisitorFlow({ token }: { token: string }) {
           accessRequirements: showcaseVisit.accessRequirements ?? "",
           privacyNotice: showcaseSettings.privacyNotice,
           retentionDays: showcaseSettings.documentRetentionDays,
+          requireIdentification: showcaseSettings.requireIdentification,
           visitorName: showcaseVisit.inviteeName ?? "",
           visitorEmail: showcaseVisit.inviteeEmail ?? "",
           visitorPhone: showcaseVisit.inviteePhone ?? "",
@@ -178,25 +181,26 @@ export function VisitorFlow({ token }: { token: string }) {
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("invalid");
-        const row = (await response.json()) as Record<string, string>;
+        const row = (await response.json()) as Record<string, unknown>;
         if (!active) return;
         setRemoteInvitation({
-          visitId: row.visit_id,
-          state: row.state as Invitation["state"],
-          organizationName: row.organization_name,
-          locationName: row.location_name,
-          locationAddress: row.location_address ?? "",
-          hostName: row.host_name,
-          startsAt: row.starts_at,
-          endsAt: row.ends_at,
-          purpose: row.purpose,
-          accessRequirements: row.access_requirements ?? "",
-          privacyNotice: row.privacy_notice ?? "",
+          visitId: String(row.visit_id ?? ""),
+          state: (row.state as Invitation["state"]) ?? "invalid",
+          organizationName: String(row.organization_name ?? ""),
+          locationName: String(row.location_name ?? ""),
+          locationAddress: String(row.location_address ?? ""),
+          hostName: String(row.host_name ?? ""),
+          startsAt: String(row.starts_at ?? ""),
+          endsAt: String(row.ends_at ?? ""),
+          purpose: String(row.purpose ?? ""),
+          accessRequirements: String(row.access_requirements ?? ""),
+          privacyNotice: String(row.privacy_notice ?? ""),
           retentionDays: Number(row.retention_days ?? 30),
-          visitorName: row.visitor_name ?? "",
-          visitorEmail: row.visitor_email ?? "",
-          visitorPhone: row.visitor_phone ?? "",
-          visitorCompany: row.visitor_company ?? "",
+          requireIdentification: row.require_identification !== false,
+          visitorName: String(row.visitor_name ?? ""),
+          visitorEmail: String(row.visitor_email ?? ""),
+          visitorPhone: String(row.visitor_phone ?? ""),
+          visitorCompany: String(row.visitor_company ?? ""),
         });
       } catch {
         if (active) setRemoteInvitation(invalidInvitation);
@@ -284,7 +288,8 @@ export function VisitorFlow({ token }: { token: string }) {
       setError("Necesitamos tu consentimiento para registrar la visita.");
       return;
     }
-    if (!files.front || !files.back) {
+    const needsId = invitation?.requireIdentification !== false;
+    if (needsId && (!files.front || !files.back)) {
       setError("Faltan las fotos de tu identificación.");
       go("document");
       return;
@@ -301,7 +306,7 @@ export function VisitorFlow({ token }: { token: string }) {
           ["email", value("email")],
           ["phone", value("phone")],
           ["company", value("company")],
-          ["documentType", value("documentType")],
+          ["documentType", value("documentType") || (needsId ? "INE" : "No presentada")],
           ["documentNumber", value("documentNumber")],
           ["vehiclePlate", value("vehiclePlate")],
           ["visitorNotes", value("visitorNotes")],
@@ -315,8 +320,8 @@ export function VisitorFlow({ token }: { token: string }) {
           if (ocr.expiryDate) form.set("documentExpiresAt", ocr.expiryDate);
         }
         form.set("consent", "true");
-        form.set("documentFront", files.front);
-        form.set("documentBack", files.back);
+        if (files.front) form.set("documentFront", files.front);
+        if (files.back) form.set("documentBack", files.back);
 
         const response = await fetch(
           `/api/public/invitations/${encodeURIComponent(token)}/register`,
@@ -517,7 +522,7 @@ export function VisitorFlow({ token }: { token: string }) {
               return setError("Escribe un teléfono de contacto.");
             if (value("company").trim().length < 2)
               return setError("Escribe la empresa que representas.");
-            go("document");
+            go(invitation.requireIdentification ? "document" : "extras");
           }}
           error={error}
         >
@@ -593,16 +598,21 @@ export function VisitorFlow({ token }: { token: string }) {
           <StepShell
             index={2}
             title="Tu identificación"
-            subtitle="Necesitamos las dos caras. El reverso trae los datos que leemos automáticamente."
+            subtitle={
+              invitation.requireIdentification
+                ? "Política de esta empresa: pide las dos caras. El reverso es el que leemos."
+                : "Es opcional. Si la subes, agiliza la entrada; si no, puedes continuar."
+            }
             onBack={() => go("identity")}
             onNext={() => {
-              if (!files.front)
+              if (invitation.requireIdentification && !files.front)
                 return setError("Falta la foto del frente de tu identificación.");
-              if (!files.back)
+              if (invitation.requireIdentification && !files.back)
                 return setError("Falta la foto del reverso de tu identificación.");
-              void runOcr(files.back);
+              if (files.back) return void runOcr(files.back);
+              go("extras");
             }}
-            nextLabel="Leer mi identificación"
+            nextLabel={files.back ? "Leer mi identificación" : "Continuar sin foto"}
             error={error}
           >
             <div className="mb-5">
@@ -634,8 +644,9 @@ export function VisitorFlow({ token }: { token: string }) {
             </div>
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
-              La lectura ocurre en tu propio teléfono: la imagen no se envía a
-              ningún servicio externo para analizarla.
+              {invitation.requireIdentification
+                ? "Esta empresa pide identificación para autorizar el acceso. La lectura ocurre en tu teléfono."
+                : "No es obligatorio. La lectura, si la hay, ocurre en tu teléfono."}
             </Callout>
           </StepShell>
         ))}
@@ -770,7 +781,13 @@ export function VisitorFlow({ token }: { token: string }) {
           index={4}
           title="Detalles finales"
           subtitle="Opcional, pero agiliza tu entrada."
-          onBack={() => go("review")}
+          onBack={() =>
+            go(
+              invitation.requireIdentification || files.front
+                ? "review"
+                : "identity",
+            )
+          }
           onNext={() => go("consent")}
           error={error}
         >
@@ -827,11 +844,18 @@ export function VisitorFlow({ token }: { token: string }) {
               {invitation.privacyNotice ||
                 "Los datos se utilizan únicamente para gestionar y auditar tu acceso a las instalaciones."}
             </p>
-            <p className="mt-3">
-              Tu identificación se conserva{" "}
-              <b>{invitation.retentionDays} días</b> y después se elimina de forma
-              permanente. {OCR_DISCLAIMER}
-            </p>
+            {invitation.requireIdentification ? (
+              <p className="mt-3">
+                Tu identificación se conserva{" "}
+                <b>{invitation.retentionDays} días</b> y después se elimina de
+                forma permanente. {OCR_DISCLAIMER}
+              </p>
+            ) : (
+              <p className="mt-3">
+                Esta empresa no exige foto de identificación. Solo se guardan
+                los datos que confirmaste para esta visita.
+              </p>
+            )}
           </div>
 
           <button
@@ -867,7 +891,7 @@ export function VisitorFlow({ token }: { token: string }) {
             ¡Todo listo!
           </h1>
           <p className="mt-2 text-[15px] text-slate-500">
-            Muestra este código al llegar a recepción.
+            Guárdalo ahora. Si lo pierdes, tendrás que pedírselo a tu anfitrión.
           </p>
 
           <div className="mt-7">
@@ -883,6 +907,15 @@ export function VisitorFlow({ token }: { token: string }) {
           </div>
 
           <div className="mt-6 space-y-4">
+            <SavePassButton
+              token={passToken}
+              visitorName={value("fullName")}
+              organizationName={invitation.organizationName}
+              hostName={invitation.hostName}
+              location={invitation.locationName}
+              startsAt={invitation.startsAt}
+              promptOnMount
+            />
             <WalletButtons token={passToken} available={wallet} />
 
             <Link

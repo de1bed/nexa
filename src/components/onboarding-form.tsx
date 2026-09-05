@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { AddressField } from "./address-field";
 import { Button, Field, cn, fieldClass } from "./ui";
 import { onboardingSchema } from "@/lib/schemas";
 
@@ -129,8 +130,8 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
                 Configura tu empresa
               </h1>
               <p className="mt-2.5 text-[15px] leading-6 text-slate-500">
-                Con esto queda lista tu recepción digital. Podrás invitar a tu
-                equipo enseguida.
+                Con esto queda lista tu recepción digital. En el panel verás
+                Equipo: ahí invitas anfitriones y guardias.
               </p>
 
               <div className="mt-7 space-y-4">
@@ -203,16 +204,10 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
                     }
                   />
                 </Field>
-                <Field label="Dirección">
-                  <input
-                    className={fieldClass}
-                    placeholder="Calle, número, ciudad"
-                    value={form.locationAddress}
-                    onChange={(event) =>
-                      update("locationAddress", event.target.value)
-                    }
-                  />
-                </Field>
+                <AddressField
+                  value={form.locationAddress}
+                  onChange={(value) => update("locationAddress", value)}
+                />
                 <Field label="Zona horaria">
                   <select
                     className={fieldClass}

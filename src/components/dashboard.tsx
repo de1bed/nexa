@@ -134,6 +134,22 @@ export function Dashboard() {
         </Link>
       </header>
 
+      <Link
+        href="/app/team"
+        className="mb-5 flex items-center gap-4 rounded-[22px] border border-[#10cfc9]/30 bg-[#10cfc9]/10 p-4 transition active:scale-[.99]"
+      >
+        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
+          <Users size={22} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Invita a tu equipo</span>
+          <span className="mt-0.5 block text-sm text-slate-600">
+            Anfitriones reciben visitas. Guardias escanean el QR en caseta.
+          </span>
+        </span>
+        <ArrowUpRight size={18} className="shrink-0 text-slate-400" />
+      </Link>
+
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricTile
           label="Dentro ahora"

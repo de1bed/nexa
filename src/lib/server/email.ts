@@ -171,10 +171,10 @@ export async function sendTeamInviteEmail(input: {
     html: layout({
       preheader: "Entra con tu correo para empezar a operar.",
       title: `Bienvenido a ${escapeHtml(input.organizationName)}`,
-      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>. Escribe este correo en la pantalla de acceso y te enviaremos un código de un solo uso. No hay contraseñas que recordar.`,
+      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>. Entra con este correo, confirma el código de una sola vez y elige tu contraseña. Los siguientes ingresos ya no piden código.`,
       ctaLabel: "Entrar a NEXA VISIT",
       ctaUrl: input.actionUrl,
-      footnote: "El código llega a este mismo correo y vence en una hora.",
+      footnote: "El código de confirmación vence en una hora.",
     }),
   });
 }

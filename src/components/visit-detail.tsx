@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useMemo, useState } from "react";
@@ -48,6 +49,7 @@ export function VisitDetail({ id }: { id: string }) {
   const [documents, setDocuments] = useState<
     Array<{ id: string; url: string; label: string }>
   >([]);
+  const [brokenDocs, setBrokenDocs] = useState<string[]>([]);
 
   const visit = visits.find((item) => item.id === id);
   const timeline = useMemo(
@@ -379,12 +381,21 @@ export function VisitDetail({ id }: { id: string }) {
               <figcaption className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 {document.label}
               </figcaption>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={document.url}
-                alt={`${document.label} de la identificación del visitante`}
-                className="w-full rounded-2xl border border-slate-200"
-              />
+              {brokenDocs.includes(document.id) ? (
+                <p className="rounded-2xl bg-red-50 p-3 text-sm text-red-700">
+                  No se pudo mostrar la imagen. Cierra y vuelve a abrir.
+                </p>
+              ) : (
+                <img
+                  src={document.url}
+                  alt={`${document.label} de la identificación del visitante`}
+                  className="min-h-40 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain"
+                  referrerPolicy="no-referrer"
+                  onError={() =>
+                    setBrokenDocs((current) => [...current, document.id])
+                  }
+                />
+              )}
             </figure>
           ))}
         </div>

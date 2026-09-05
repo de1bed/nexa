@@ -77,6 +77,7 @@ export const showcaseTeam: TeamMember[] = [
 export const showcaseSettings: OrganizationSettings = {
   documentRetentionDays: 30,
   allowDocumentPreviewForGuards: false,
+  requireIdentification: true,
   earlyEntryMinutes: 15,
   lateEntryMinutes: 30,
   privacyNotice:

@@ -18,7 +18,7 @@ const schema = z.object({
   email: z.email(),
   phone: z.string().trim().min(7).max(30),
   company: z.string().trim().min(2).max(120),
-  documentType: z.string().trim().min(1).max(40),
+  documentType: z.string().trim().max(40).optional(),
   documentNumber: z.string().trim().max(80).optional(),
   vehiclePlate: z.string().trim().max(20).optional(),
   visitorNotes: z.string().trim().max(500).optional(),
@@ -53,16 +53,10 @@ export async function POST(
       ),
     );
 
-    // Se exigen las dos caras: el frente identifica a la persona en recepción
-    // y el reverso es el que trae la banda legible por máquina.
     const images: Array<{ file: File; type: string }> = [];
     for (const side of SIDES) {
       const image = form.get(side.field);
-      if (!(image instanceof File) || image.size === 0)
-        return NextResponse.json(
-          { error: "Faltan las fotos de tu identificación" },
-          { status: 400 },
-        );
+      if (!(image instanceof File) || image.size === 0) continue;
       if (!ALLOWED_TYPES.includes(image.type))
         return NextResponse.json(
           { error: "Las imágenes deben ser JPG, PNG o WebP" },
@@ -113,7 +107,7 @@ export async function POST(
       email: values.email,
       phone: values.phone,
       company: values.company,
-      document_type: values.documentType,
+      document_type: values.documentType || (images.length ? "INE" : "No presentada"),
       document_number_masked: masked,
     };
 
@@ -137,9 +131,14 @@ export async function POST(
 
     const { data: settings } = await db
       .from("organization_settings")
-      .select("document_retention_days,privacy_notice_version")
+      .select("document_retention_days,privacy_notice_version,require_identification")
       .eq("organization_id", visit.organization_id)
       .maybeSingle();
+    if (settings?.require_identification !== false && images.length < 2)
+      return NextResponse.json(
+        { error: "Faltan las fotos de tu identificación" },
+        { status: 400 },
+      );
     const retentionDays = settings?.document_retention_days ?? 30;
     const retentionExpiresAt = new Date(
       Date.now() + retentionDays * 86400000,

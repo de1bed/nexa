@@ -98,6 +98,7 @@ export type TeamMember = {
 export type OrganizationSettings = {
   documentRetentionDays: number;
   allowDocumentPreviewForGuards: boolean;
+  requireIdentification: boolean;
   earlyEntryMinutes: number;
   lateEntryMinutes: number;
   privacyNotice: string;

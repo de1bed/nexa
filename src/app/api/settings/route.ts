@@ -7,7 +7,7 @@ import { settingsSchema } from "@/lib/schemas";
 export const dynamic = "force-dynamic";
 
 const columns =
-  "document_retention_days,allow_document_preview_for_guards,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version";
+  "document_retention_days,allow_document_preview_for_guards,require_identification,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version";
 
 export async function GET() {
   const guard = await requireApiContext();
@@ -27,6 +27,7 @@ export async function GET() {
         documentRetentionDays: data?.document_retention_days ?? 30,
         allowDocumentPreviewForGuards:
           data?.allow_document_preview_for_guards ?? false,
+        requireIdentification: data?.require_identification ?? true,
         earlyEntryMinutes: data?.early_entry_minutes ?? 15,
         lateEntryMinutes: data?.late_entry_minutes ?? 30,
         privacyNotice: data?.privacy_notice ?? "",
@@ -64,6 +65,7 @@ export async function PATCH(request: Request) {
       organization_id: organizationId,
       document_retention_days: input.documentRetentionDays,
       allow_document_preview_for_guards: input.allowDocumentPreviewForGuards,
+      require_identification: input.requireIdentification,
       early_entry_minutes: input.earlyEntryMinutes,
       late_entry_minutes: input.lateEntryMinutes,
       privacy_notice: input.privacyNotice,

@@ -51,7 +51,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isHost = viewer.role === "host";
   const primary = isHost ? hostNav : adminNav;
   const secondary = isHost ? [] : adminSecondary;
-  const dock = isHost ? hostNav : [...adminNav].slice(0, 4);
+  const dock = isHost
+    ? hostNav
+    : [
+        adminNav[0],
+        adminNav[1],
+        adminSecondary[0],
+      ];
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-[#071426]">

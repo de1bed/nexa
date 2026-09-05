@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Brand } from "./brand";
 import { PassCard } from "./visitor/pass-card";
+import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
 import { Callout, cn } from "./ui";
 import { LiveDuration } from "./ui-client";
@@ -185,6 +186,15 @@ export function PublicPass({ token }: { token: string }) {
       />
 
       <div className="mx-auto mt-6 max-w-sm space-y-4">
+        <SavePassButton
+          token={token}
+          visitorName={pass.visitorName}
+          organizationName={pass.organizationName}
+          hostName={pass.hostName}
+          location={pass.location}
+          startsAt={pass.startsAt}
+          promptOnMount
+        />
         <WalletButtons token={token} available={pass.wallet} />
 
         {pass.locationAddress && (

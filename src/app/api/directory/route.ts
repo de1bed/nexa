@@ -35,7 +35,7 @@ export async function GET() {
       db
         .from("organization_settings")
         .select(
-          "document_retention_days,allow_document_preview_for_guards,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version",
+          "document_retention_days,allow_document_preview_for_guards,require_identification,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version",
         )
         .eq("organization_id", organizationId)
         .maybeSingle(),
@@ -71,6 +71,7 @@ export async function GET() {
         documentRetentionDays: settings?.document_retention_days ?? 30,
         allowDocumentPreviewForGuards:
           settings?.allow_document_preview_for_guards ?? false,
+        requireIdentification: settings?.require_identification ?? true,
         earlyEntryMinutes: settings?.early_entry_minutes ?? 15,
         lateEntryMinutes: settings?.late_entry_minutes ?? 30,
         privacyNotice: settings?.privacy_notice ?? "",
