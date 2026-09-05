@@ -175,6 +175,14 @@ en **«Magic Link» y «Confirm signup»**: si una plantilla se queda con
 se quedan fuera. Detalle completo en
 [INTEGRACIONES.md](./INTEGRACIONES.md#13-plantillas-con-el-código-no-con-el-enlace).
 
+### 4.4 Límite de correos por hora
+
+Panel → **Authentication → Rate Limits** → «Emails sent per hour». Viene en **2**
+y hay que subirlo (aquí está en 30) en cuanto haya SMTP propio: con dos correos
+por hora, la tercera persona que quiera entrar recibe
+`over_email_send_rate_limit` y se queda fuera sin más explicación. Es fácil de
+confundir con una falla del correo.
+
 ---
 
 ## 5. Paso 3 — Verificaciones
@@ -486,6 +494,7 @@ Ninguna es obligatoria; los pasos están en
 2. `npx supabase link` + `npx supabase db push`.
 3. `select public.token_hash('abc');` → debe dar `ba7816bf…15ad`.
 4. `select count(*) from public.resolve_invitation('x');` → 0 filas, **sin error**.
-5. Configurar SMTP propio en el panel, o nadie confirma su cuenta.
+5. Configurar SMTP propio en el panel y subir «Emails sent per hour», o el código
+   no llega y nadie entra.
 6. Recorrer el flujo completo desde un teléfono.
 7. Corregir `docs/LIMITATIONS.md` con lo que hayas comprobado.

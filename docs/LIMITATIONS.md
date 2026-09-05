@@ -56,6 +56,14 @@ se aplicaron en orden y sin error, y se comprobó con SQL:
     el correo confirmado en el mismo acto. El usuario de prueba se borró.
   - El largo del código estaba en 8 en el proyecto y se corrigió a 6, que es lo
     que valida la interfaz.
+  - El límite de correos por hora estaba en 2, el valor que trae Supabase cuando
+    presta su propio remitente. Se subió a 30, porque con dos por hora la tercera
+    persona de un turno recibe `over_email_send_rate_limit` y se queda fuera. El
+    techo real sigue siendo el plan gratuito de Resend: 100 al día.
+  - El logotipo del correo es un recuadro de color con un carácter de visto bueno,
+    no el escudo de la marca. Los clientes de correo exigen una imagen alojada en
+    una URL pública y la aplicación aún no está desplegada; cuando lo esté,
+    `/icon` ya genera ese PNG y conviene cambiarlo.
 
 Los datos de prueba se borraron: el proyecto quedó vacío.
 

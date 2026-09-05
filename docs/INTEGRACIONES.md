@@ -87,10 +87,27 @@ tus usuarios seguirá recibiendo un enlace.
 El correo ya está escrito en
 [`supabase/templates/access-code.html`](../supabase/templates/access-code.html):
 copia ese archivo tal cual en las dos plantillas y pon como asunto «Tu código de
-acceso a NEXA VISIT». Lo que lo convierte en código es la variable
-`{{ .Token }}`; si aparece `{{ .ConfirmationURL }}` en cualquier parte del
-cuerpo, incluso dentro de un comentario de HTML, Supabase la sustituye por un
-enlace real. Por eso el archivo es HTML limpio y la explicación vive aquí.
+acceso a NEXA VISIT». Así se ve:
+
+![Correo del código de acceso](screenshots/correo-codigo.png)
+
+Lo que lo convierte en código es la variable `{{ .Token }}`; si aparece
+`{{ .ConfirmationURL }}` en cualquier parte del cuerpo, incluso dentro de un
+comentario de HTML, Supabase la sustituye por un enlace real. Por eso el archivo
+es HTML limpio y la explicación vive aquí.
+
+Dos cosas que cuestan una tarde si no se saben. La primera es que el motor de
+plantillas acepta muy poco: `{{ .Token }}` sí, pero partir el código en seis
+casillas con `{{ slice .Token 0 1 }}` no compila, y Supabase no avisa —guarda el
+texto nuevo, responde 200 y sigue enviando la última plantilla que sí pudo
+interpretar, así que parece que el cambio no se aplicó. La segunda es que el
+logotipo es un recuadro de color con un carácter dentro, no una imagen: los
+clientes de correo exigen una URL pública y bloquean `data:`, de modo que hasta
+que la aplicación esté desplegada no hay dónde alojar un PNG. Cuando lo esté,
+`https://nexavisit.vortexlabai.com/icon` ya sirve el escudo de la marca.
+
+Un cambio de plantilla tarda alrededor de un minuto en surtir efecto, porque
+Auth mantiene la anterior en memoria. Si pruebas de inmediato, verás la vieja.
 
 En desarrollo local no hace falta copiar nada, porque `supabase/config.toml`
 apunta al mismo archivo y los correos se leen en Inbucket
@@ -138,6 +155,20 @@ desde `vortexlabai.com` (el dominio verificado en Resend).
 Esas URL ya no se usan para entrar, pero sí para cualquier enlace que genere
 Supabase desde el panel, por ejemplo un acceso de emergencia si el correo
 fallara.
+
+### 1.4 Límite de correos por hora
+
+Este es el ajuste que deja un proyecto inservible sin que nadie lo note. En
+**Authentication → Rate Limits**, «Emails sent per hour» viene en **2**, que es
+lo razonable mientras Supabase presta su propio remitente y absurdo en cuanto
+tienes SMTP propio: con dos correos por hora, la tercera persona del turno se
+queda fuera. Ya está subido a **30 por hora** en este proyecto.
+
+El techo verdadero lo pone Resend, que en su plan gratuito da 100 correos al
+día; si el uso crece, ahí es donde hay que mirar primero. Al lado vive «minimum
+interval between emails», en 60 segundos: es el mismo número que espera el botón
+«Reenviar código» de la pantalla, y si cambias uno hay que cambiar el otro en
+[`src/components/access-code.tsx`](../src/components/access-code.tsx).
 
 ---
 

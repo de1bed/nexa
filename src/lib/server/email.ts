@@ -38,8 +38,10 @@ function layout(options: {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 18px 48px -28px rgba(7,20,38,.45)">
 <tr><td style="background:${brand.ink};padding:22px 28px">
-<span style="display:inline-block;width:30px;height:30px;background:${brand.accent};border-radius:9px;vertical-align:middle"></span>
-<span style="color:#ffffff;font-size:13px;font-weight:600;letter-spacing:.18em;margin-left:10px;vertical-align:middle">NEXA VISIT</span>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td width="38" height="38" align="center" valign="middle" style="width:38px;height:38px;background:${brand.accent};border-radius:11px;font-family:'Segoe UI','Segoe UI Symbol','Apple Symbols',Arial,sans-serif;font-size:20px;font-weight:700;line-height:38px;color:#043b39">&#10003;</td>
+<td valign="middle" style="padding-left:12px;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:.18em">NEXA VISIT</td>
+</tr></table>
 </td></tr>
 <tr><td style="padding:32px 28px 34px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">

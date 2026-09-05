@@ -7,11 +7,12 @@ import { createClient } from "@/lib/supabase/client";
 import { accessCodeSchema } from "@/lib/schemas";
 
 /**
- * Espera antes de habilitar el reenvío. Solo evita el doble toque: el intervalo
- * mínimo real lo fija el proyecto de Supabase y, si lo incumplimos, su propio
- * mensaje dice cuántos segundos faltan.
+ * Espera antes de habilitar el reenvío. Coincide con el intervalo mínimo del
+ * proyecto de Supabase (60 s entre códigos al mismo correo), así que el botón
+ * se enciende justo cuando el servidor acepta otro envío. Si algún día no
+ * coinciden, el mensaje de error dice cuántos segundos faltan.
  */
-const resendDelaySeconds = 30;
+const resendDelaySeconds = 60;
 
 /**
  * Traduce los errores de Supabase Auth a algo accionable. Lo que no
