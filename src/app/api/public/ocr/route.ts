@@ -45,8 +45,8 @@ export async function POST(request: Request) {
       );
 
     const images: Array<{ bytes: Uint8Array; mimeType: string }> = [];
-    if (front && front !== "invalid") images.push(front);
-    if (back && back !== "invalid") images.push(back);
+    if (front) images.push(front);
+    if (back) images.push(back);
     if (images.length === 0)
       return NextResponse.json(
         { error: "Falta la foto de la identificación" },
