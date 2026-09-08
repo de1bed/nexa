@@ -7,11 +7,14 @@ import {
   Check,
   ChevronRight,
   Clock3,
+  Copy,
   IdCard,
+  KeyRound,
   Loader2,
   MapPin,
   Plus,
   Shield,
+  Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -42,6 +45,16 @@ import {
   type OrganizationSettings,
   type TeamMember,
 } from "@/lib/domain";
+import { appUrl } from "@/lib/config";
+
+type JoinCode = {
+  id: string;
+  code: string;
+  role: MemberRole;
+  uses_remaining: number | null;
+  expires_at: string | null;
+  created_at: string;
+};
 
 async function readError(response: Response, fallback: string) {
   try {
@@ -59,14 +72,21 @@ async function readError(response: Response, fallback: string) {
 export function TeamPage() {
   const { live, viewer, reload } = useWorkspace();
   const [members, setMembers] = useState<TeamMember[]>(live ? [] : showcaseTeam);
+  const [joinCodes, setJoinCodes] = useState<JoinCode[]>([]);
   const [loading, setLoading] = useState(live);
   const [open, setOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [form, setForm] = useState({
     fullName: "",
     email: "",
     role: "host" as MemberRole,
+  });
+  const [codeForm, setCodeForm] = useState({
+    role: "host" as MemberRole,
+    usesLimit: undefined as number | undefined,
+    expiresInDays: 7 as number | undefined,
   });
 
   useEffect(() => {
@@ -75,10 +95,18 @@ export function TeamPage() {
 
     void (async () => {
       try {
-        const response = await fetch("/api/team", { cache: "no-store" });
-        if (!response.ok) throw new Error(await readError(response, "Error"));
-        const payload = (await response.json()) as { members: TeamMember[] };
-        if (active) setMembers(payload.members ?? []);
+        const [teamRes, codesRes] = await Promise.all([
+          fetch("/api/team", { cache: "no-store" }),
+          fetch("/api/join-codes", { cache: "no-store" }),
+        ]);
+        if (!teamRes.ok) throw new Error(await readError(teamRes, "Error"));
+        const teamPayload = (await teamRes.json()) as { members: TeamMember[] };
+        if (active) setMembers(teamPayload.members ?? []);
+
+        if (codesRes.ok) {
+          const codesPayload = (await codesRes.json()) as { codes: JoinCode[] };
+          if (active) setJoinCodes(codesPayload.codes ?? []);
+        }
       } catch (reason) {
         if (active)
           toast.error(
@@ -135,6 +163,55 @@ export function TeamPage() {
     }
   }
 
+  async function createJoinCode(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const response = await fetch("/api/join-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(codeForm),
+      });
+      if (!response.ok)
+        throw new Error(await readError(response, "No fue posible crear el código"));
+      const payload = (await response.json()) as { code: JoinCode };
+      setJoinCodes((current) => [payload.code, ...current]);
+      toast.success("Código creado");
+      setCodeOpen(false);
+      setCodeForm({ role: "host", usesLimit: undefined, expiresInDays: 7 });
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible crear el código",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeCode(codeId: string) {
+    try {
+      const response = await fetch("/api/join-codes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codeId }),
+      });
+      if (!response.ok)
+        throw new Error(await readError(response, "No fue posible revocar el código"));
+      setJoinCodes((current) => current.filter((c) => c.id !== codeId));
+      toast.success("Código revocado");
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible revocar",
+      );
+    }
+  }
+
+  function copyJoinLink(code: string) {
+    const url = `${appUrl()}/join?code=${code}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Enlace copiado");
+  }
+
   async function updateMember(member: TeamMember, patch: Partial<TeamMember>) {
     setBusy(true);
     try {
@@ -170,10 +247,16 @@ export function TeamPage() {
         title="Equipo"
         description="Quién puede invitar, recibir visitantes y operar la caseta."
         action={
-          <Button onClick={() => setOpen(true)}>
-            <UserPlus size={17} />
-            Invitar
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setCodeOpen(true)}>
+              <KeyRound size={17} />
+              Código
+            </Button>
+            <Button onClick={() => setOpen(true)}>
+              <UserPlus size={17} />
+              Invitar
+            </Button>
+          </div>
         }
       />
 
@@ -187,10 +270,16 @@ export function TeamPage() {
           title="Todavía estás solo"
           description="Invita a tus anfitriones y al personal de seguridad."
           action={
-            <Button variant="accent" onClick={() => setOpen(true)}>
-              <UserPlus size={18} />
-              Invitar al equipo
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => setCodeOpen(true)}>
+                <KeyRound size={18} />
+                Crear código
+              </Button>
+              <Button variant="accent" onClick={() => setOpen(true)}>
+                <UserPlus size={18} />
+                Invitar por correo
+              </Button>
+            </div>
           }
         />
       ) : (
@@ -228,6 +317,52 @@ export function TeamPage() {
         </div>
       )}
 
+      {/* Sección de códigos de invitación */}
+      {live && joinCodes.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <KeyRound size={16} />
+            Códigos de invitación activos
+          </h3>
+          <div className="space-y-2">
+            {joinCodes.map((jc) => (
+              <Card key={jc.id} className="flex items-center gap-3 p-3">
+                <code className="rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider">
+                  {jc.code}
+                </code>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{roleLabels[jc.role]}</p>
+                  <p className="text-xs text-slate-500">
+                    {jc.uses_remaining !== null
+                      ? `${jc.uses_remaining} usos restantes`
+                      : "Usos ilimitados"}
+                    {jc.expires_at &&
+                      ` · Vence ${new Date(jc.expires_at).toLocaleDateString("es-MX")}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyJoinLink(jc.code)}
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
+                  title="Copiar enlace"
+                >
+                  <Copy size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => revokeCode(jc.id)}
+                  className="rounded-lg p-2 text-red-500 transition hover:bg-red-50"
+                  title="Revocar"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sheet para invitar por correo */}
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
@@ -271,9 +406,77 @@ export function TeamPage() {
             {busy ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
             Enviar invitación
           </Button>
+          <Callout tone="neutral">
+            Si el correo no llega, crea un código de invitación y comparte el enlace manualmente.
+          </Callout>
         </form>
       </Sheet>
 
+      {/* Sheet para crear código */}
+      <Sheet
+        open={codeOpen}
+        onClose={() => setCodeOpen(false)}
+        title="Crear código de invitación"
+        description="Cualquier persona con cuenta puede usar el código para unirse a tu equipo."
+      >
+        <form onSubmit={createJoinCode} className="space-y-4">
+          <Field label="Rol asignado">
+            <select
+              className={fieldClass}
+              value={codeForm.role}
+              onChange={(e) =>
+                setCodeForm({ ...codeForm, role: e.target.value as MemberRole })
+              }
+            >
+              <option value="host">Anfitrión</option>
+              <option value="guard">Guardia</option>
+            </select>
+          </Field>
+          <Field label="Vigencia" hint="Después de este tiempo el código expira.">
+            <select
+              className={fieldClass}
+              value={codeForm.expiresInDays ?? ""}
+              onChange={(e) =>
+                setCodeForm({
+                  ...codeForm,
+                  expiresInDays: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            >
+              <option value="1">1 día</option>
+              <option value="7">7 días</option>
+              <option value="14">14 días</option>
+              <option value="30">30 días</option>
+              <option value="">Sin vencimiento</option>
+            </select>
+          </Field>
+          <Field label="Límite de usos" hint="Opcional: máximo de personas que pueden usarlo.">
+            <input
+              type="number"
+              className={fieldClass}
+              placeholder="Sin límite"
+              min={1}
+              max={100}
+              value={codeForm.usesLimit ?? ""}
+              onChange={(e) =>
+                setCodeForm({
+                  ...codeForm,
+                  usesLimit: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
+          </Field>
+          <Button type="submit" variant="accent" size="lg" block disabled={busy}>
+            {busy ? <Loader2 size={18} className="animate-spin" /> : <KeyRound size={18} />}
+            Crear código
+          </Button>
+          <p className="text-center text-xs text-slate-500">
+            Comparte el código o el enlace con quien quieras invitar
+          </p>
+        </form>
+      </Sheet>
+
+      {/* Sheet para editar miembro */}
       <Sheet
         open={Boolean(editing)}
         onClose={() => setEditing(null)}

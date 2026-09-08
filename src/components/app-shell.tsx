@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   MapPin,
   Plus,
+  ScanLine,
   Settings,
   UserRoundCheck,
   Users,
@@ -34,6 +35,7 @@ const adminSecondary = [
   { href: "/app/team", label: "Equipo", short: "Equipo", icon: Users },
   { href: "/app/locations", label: "Ubicaciones", short: "Sedes", icon: MapPin },
   { href: "/app/settings", label: "Configuración", short: "Ajustes", icon: Settings },
+  { href: "/guard/scan", label: "Vista de caseta", short: "Caseta", icon: ScanLine },
 ] satisfies NavItem[];
 
 const hostNav = [
