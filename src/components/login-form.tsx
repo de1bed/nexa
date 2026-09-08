@@ -62,9 +62,16 @@ export function LoginForm() {
   const params = useSearchParams();
   const live = isLiveMode();
 
-  const [email, setEmail] = useState("");
+  const invitedEmail = accessEmailSchema.safeParse(
+    params.get("email")?.trim().toLowerCase() ?? "",
+  );
+  const initialEmail = invitedEmail.success ? invitedEmail.data : "";
+  const fromInvite = params.get("welcome") === "1" && Boolean(initialEmail);
+
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
-  const [sentTo, setSentTo] = useState("");
+  const [sentTo, setSentTo] = useState(fromInvite ? initialEmail : "");
+  const [inviteCode, setInviteCode] = useState(fromInvite);
   const [choosePassword, setChoosePassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(
@@ -162,11 +169,20 @@ export function LoginForm() {
             <AccessCodeStep
               email={sentTo}
               title="Escribe tu código"
-              description="Solo esta vez: confirma el correo y después eliges tu contraseña."
+              description={
+                inviteCode
+                  ? "Está en el correo de invitación. Confírmalo y después eliges tu contraseña."
+                  : "Solo esta vez: confirma el correo y después eliges tu contraseña."
+              }
+              otpType={inviteCode ? "magiclink" : "email"}
               onVerified={() => setChoosePassword(true)}
-              onResend={() => sendCode(sentTo)}
+              onResend={async () => {
+                await sendCode(sentTo);
+                setInviteCode(false);
+              }}
               onBack={() => {
                 setSentTo("");
+                setInviteCode(false);
                 setError("");
               }}
             />

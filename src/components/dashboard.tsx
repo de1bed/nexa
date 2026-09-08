@@ -9,6 +9,7 @@ import {
   Clock3,
   LogIn,
   LogOut,
+  ScanLine,
   ShieldX,
   UserRoundCheck,
   Users,
@@ -126,29 +127,54 @@ export function Dashboard() {
             Esto es lo que está pasando en {organization.name}.
           </p>
         </div>
-        <Link href="/app/visits/new" className="hidden lg:block">
-          <Button>
-            Nueva invitación
-            <ArrowUpRight size={17} />
-          </Button>
-        </Link>
+        <div className="hidden gap-2 lg:flex">
+          <Link href="/guard/scan">
+            <Button variant="outline">
+              <ScanLine size={17} />
+              Abrir caseta
+            </Button>
+          </Link>
+          <Link href="/app/visits/new">
+            <Button>
+              Nueva invitación
+              <ArrowUpRight size={17} />
+            </Button>
+          </Link>
+        </div>
       </header>
 
-      <Link
-        href="/app/team"
-        className="mb-5 flex items-center gap-4 rounded-[22px] border border-[#10cfc9]/30 bg-[#10cfc9]/10 p-4 transition active:scale-[.99]"
-      >
-        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
-          <Users size={22} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold">Invita a tu equipo</span>
-          <span className="mt-0.5 block text-sm text-slate-600">
-            Anfitriones reciben visitas. Guardias escanean el QR en caseta.
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/app/team"
+          className="flex items-center gap-4 rounded-[22px] border border-[#10cfc9]/30 bg-[#10cfc9]/10 p-4 transition active:scale-[.99]"
+        >
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
+            <Users size={22} />
           </span>
-        </span>
-        <ArrowUpRight size={18} className="shrink-0 text-slate-400" />
-      </Link>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Invita a tu equipo</span>
+            <span className="mt-0.5 block text-sm text-slate-600">
+              Anfitriones y guardias entran con un correo.
+            </span>
+          </span>
+          <ArrowUpRight size={18} className="shrink-0 text-slate-400" />
+        </Link>
+        <Link
+          href="/guard/scan"
+          className="flex items-center gap-4 rounded-[22px] border border-slate-200 bg-white p-4 transition active:scale-[.99]"
+        >
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
+            <ScanLine size={22} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Abrir caseta</span>
+            <span className="mt-0.5 block text-sm text-slate-600">
+              Escanea pases y controla entradas como en recepción.
+            </span>
+          </span>
+          <ArrowUpRight size={18} className="shrink-0 text-slate-400" />
+        </Link>
+      </div>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricTile

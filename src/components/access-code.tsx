@@ -43,6 +43,7 @@ export function AccessCodeStep({
   email,
   title,
   description,
+  otpType = "email",
   onVerified,
   onResend,
   onBack,
@@ -50,6 +51,7 @@ export function AccessCodeStep({
   email: string;
   title: string;
   description: string;
+  otpType?: "email" | "magiclink";
   onVerified: () => void | Promise<void>;
   onResend: () => Promise<void>;
   onBack: () => void;
@@ -77,12 +79,20 @@ export function AccessCodeStep({
     setBusy(true);
     setError("");
     try {
-      const { data, error: authError } = await createClient().auth.verifyOtp({
+      const client = createClient();
+      let result = await client.auth.verifyOtp({
         email,
         token: parsed.data,
-        type: "email",
+        type: otpType,
       });
-      if (authError || !data.session) throw new Error("invalid");
+      if ((result.error || !result.data.session) && otpType !== "email") {
+        result = await client.auth.verifyOtp({
+          email,
+          token: parsed.data,
+          type: "email",
+        });
+      }
+      if (result.error || !result.data.session) throw new Error("invalid");
       await onVerified();
     } catch {
       setError("El código no es válido o ya venció. Pide uno nuevo.");

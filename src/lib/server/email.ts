@@ -162,19 +162,31 @@ export async function sendTeamInviteEmail(input: {
   organizationName: string;
   roleLabel: string;
   actionUrl: string;
+  otp?: string;
+  existingAccount?: boolean;
 }): Promise<DeliveryResult> {
+  const otpBlock = input.otp
+    ? `<br><br>Tu código de un solo uso:<br><br><span style="display:inline-block;font-size:32px;letter-spacing:.28em;font-weight:700;color:${brand.ink}">${escapeHtml(input.otp)}</span><br><br>Ábrelo, escríbelo y elige tu contraseña. Los siguientes ingresos ya no lo piden.`
+    : input.existingAccount
+      ? "<br><br>Entra con tu correo y contraseña de siempre. Si es la primera vez, pide un código en la pantalla de acceso."
+      : "<br><br>Entra con este correo, pide el código de una sola vez y elige tu contraseña.";
+
   return deliver({
     to: input.to,
     subject: `Te agregaron a ${input.organizationName} en NEXA VISIT`,
     logLabel: "invitación de equipo",
-    logPayload: { actionUrl: input.actionUrl },
+    logPayload: { actionUrl: input.actionUrl, existingAccount: Boolean(input.existingAccount) },
     html: layout({
-      preheader: "Entra con tu correo para empezar a operar.",
+      preheader: input.otp
+        ? "Tu código de acceso está en este correo."
+        : "Entra con tu correo para empezar a operar.",
       title: `Bienvenido a ${escapeHtml(input.organizationName)}`,
-      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>. Entra con este correo, confirma el código de una sola vez y elige tu contraseña. Los siguientes ingresos ya no piden código.`,
+      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>.${otpBlock}`,
       ctaLabel: "Entrar a NEXA VISIT",
       ctaUrl: input.actionUrl,
-      footnote: "El código de confirmación vence en una hora.",
+      footnote: input.otp
+        ? "El código vence en una hora y no debe compartirse."
+        : "Si no esperabas este acceso, ignora el correo.",
     }),
   });
 }

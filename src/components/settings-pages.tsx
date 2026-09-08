@@ -13,6 +13,7 @@ import {
   Loader2,
   MapPin,
   Plus,
+  ScanLine,
   Shield,
   Trash2,
   UserPlus,
@@ -31,7 +32,7 @@ import {
   cn,
   fieldClass,
 } from "./ui";
-import { Sheet, Toggle } from "./ui-client";
+import { Sheet, Toggle, CopyField, ShareButton } from "./ui-client";
 import { AddressField } from "./address-field";
 import {
   showcaseLocations,
@@ -99,6 +100,13 @@ export function TeamPage() {
   const [codeOpen, setCodeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
+  const [result, setResult] = useState<{
+    member: TeamMember;
+    delivery: "sent" | "development" | "failed";
+    loginUrl: string;
+    createdAccount: boolean;
+    otp?: string;
+  } | null>(null);
   const [form, setForm] = useState({
     fullName: "",
     email: "",
@@ -157,22 +165,37 @@ export function TeamPage() {
         });
         if (!response.ok)
           throw new Error(await readError(response, "No fue posible invitar"));
-        const payload = (await response.json()) as { member: TeamMember };
-        setMembers((current) => [...current, payload.member]);
+        const payload = (await response.json()) as {
+          member: TeamMember;
+          delivery: "sent" | "development" | "failed";
+          loginUrl: string;
+          createdAccount: boolean;
+          otp?: string;
+        };
+        setMembers((current) => {
+          if (current.some((item) => item.id === payload.member.id))
+            return current.map((item) =>
+              item.id === payload.member.id ? payload.member : item,
+            );
+          return [...current, payload.member];
+        });
+        setResult(payload);
       } else {
-        setMembers((current) => [
-          ...current,
-          {
-            id: crypto.randomUUID(),
-            name: form.fullName,
-            email: form.email,
-            role: form.role,
-            active: true,
-          },
-        ]);
+        const member: TeamMember = {
+          id: crypto.randomUUID(),
+          name: form.fullName,
+          email: form.email,
+          role: form.role,
+          active: true,
+        };
+        setMembers((current) => [...current, member]);
+        setResult({
+          member,
+          delivery: "development",
+          loginUrl: `${window.location.origin}/login`,
+          createdAccount: true,
+        });
       }
-      toast.success("Invitación enviada");
-      setOpen(false);
       setForm({ fullName: "", email: "", role: "host" });
       if (live) void reload();
     } catch (reason) {
@@ -268,12 +291,23 @@ export function TeamPage() {
         title="Equipo"
         description="Quién puede invitar, recibir visitantes y operar la caseta."
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Link href="/guard/scan">
+              <Button variant="outline">
+                <ScanLine size={17} />
+                Abrir caseta
+              </Button>
+            </Link>
             <Button variant="outline" onClick={() => setCodeOpen(true)}>
               <KeyRound size={17} />
               Código
             </Button>
-            <Button onClick={() => setOpen(true)}>
+            <Button
+              onClick={() => {
+                setResult(null);
+                setOpen(true);
+              }}
+            >
               <UserPlus size={17} />
               Invitar
             </Button>
@@ -296,7 +330,13 @@ export function TeamPage() {
                 <KeyRound size={18} />
                 Crear código
               </Button>
-              <Button variant="accent" onClick={() => setOpen(true)}>
+              <Button
+                variant="accent"
+                onClick={() => {
+                  setResult(null);
+                  setOpen(true);
+                }}
+              >
                 <UserPlus size={18} />
                 Invitar por correo
               </Button>
@@ -386,10 +426,87 @@ export function TeamPage() {
       {/* Sheet para invitar por correo */}
       <Sheet
         open={open}
-        onClose={() => setOpen(false)}
-        title="Invitar al equipo"
-        description="Recibirá un correo con la liga de acceso; entra pidiendo un código, sin contraseña."
+        onClose={() => {
+          setOpen(false);
+          setResult(null);
+        }}
+        title={result ? `${result.member.name} ya está en el equipo` : "Invitar al equipo"}
+        description={
+          result
+            ? result.delivery === "sent"
+              ? `Le enviamos el acceso a ${result.member.email}.`
+              : "La cuenta quedó lista. El correo no salió; comparte el enlace (y el código, si aparece)."
+            : "Recibirá un correo con la liga de acceso y, si es cuenta nueva, un código de seis dígitos."
+        }
       >
+        {result ? (
+          <div className="space-y-4">
+            {result.delivery === "sent" ? (
+              <Callout tone="success">
+                Correo enviado. Si no llega en un minuto, revisa spam o comparte
+                el enlace de abajo.
+              </Callout>
+            ) : live ? (
+              <Callout tone="warning">
+                {result.delivery === "development"
+                  ? "No hay clave de Resend, así que el correo se registró en la consola del servidor."
+                  : "El correo no se pudo entregar. Comparte el enlace para que esa persona entre."}
+              </Callout>
+            ) : (
+              <Callout tone="neutral">
+                En demostración no se envían correos. Para probar el portal de
+                guardia abre la caseta ahora, o cierra sesión y elige Guardia.
+              </Callout>
+            )}
+
+            {result.otp && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-center">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Código de acceso
+                </p>
+                <p className="mt-2 font-mono text-[28px] font-semibold tracking-[.28em] text-[#071426]">
+                  {result.otp}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Vence en una hora. Compártelo solo con {result.member.name}.
+                </p>
+              </div>
+            )}
+
+            <CopyField value={result.loginUrl} label="Enlace de acceso" />
+
+            <ShareButton
+              url={result.loginUrl}
+              title={`Acceso a ${result.member.role === "guard" ? "caseta" : "NEXA VISIT"}`}
+              text={
+                result.otp
+                  ? `Te dieron acceso como ${roleLabels[result.member.role]}. Entra con este enlace y el código ${result.otp}:`
+                  : `Te dieron acceso como ${roleLabels[result.member.role]}. Entra aquí:`
+              }
+              className="w-full"
+            >
+              Compartir por WhatsApp o correo
+            </ShareButton>
+
+            <Link href="/guard/scan" className="block">
+              <Button variant="outline" size="lg" block>
+                <ScanLine size={18} />
+                Probar la caseta ahora
+              </Button>
+            </Link>
+
+            <Button
+              variant="ghost"
+              block
+              onClick={() => {
+                setResult(null);
+                setForm({ fullName: "", email: "", role: "host" });
+              }}
+            >
+              Invitar a otra persona
+            </Button>
+          </div>
+        ) : (
         <form onSubmit={invite} className="space-y-4">
           <Field label="Nombre completo">
             <input
@@ -407,7 +524,9 @@ export function TeamPage() {
               type="email"
               className={fieldClass}
               value={form.email}
-              onChange={(event) => setForm({ ...form, email: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, email: event.target.value })
+              }
             />
           </Field>
           <Field label="Rol">
@@ -431,6 +550,7 @@ export function TeamPage() {
             Si el correo no llega, crea un código de invitación y comparte el enlace manualmente.
           </Callout>
         </form>
+        )}
       </Sheet>
 
       {/* Sheet para crear código */}

@@ -2,13 +2,35 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { createAdminClient } from "@/lib/server/supabase-admin";
-import { sendTeamInviteEmail } from "@/lib/server/email";
-import { writeAudit } from "@/lib/server/audit";
+import {
+  sendTeamInviteEmail,
+  type DeliveryResult,
+} from "@/lib/server/email";
+import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { teamInviteSchema } from "@/lib/schemas";
 import { appUrl } from "@/lib/config";
+import { maskEmail } from "@/lib/security";
 import { roleLabels, type MemberRole } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
+
+async function issueMagicLinkOtp(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+) {
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+  });
+  if (error || !data) {
+    console.error("Team invite generateLink failed", error);
+    return {};
+  }
+  return {
+    otp: data.properties?.email_otp,
+    userId: data.user?.id,
+  };
+}
 
 export async function GET() {
   const guard = await requireApiContext(["superadmin", "admin"]);
@@ -72,22 +94,41 @@ export async function POST(request: Request) {
 
     let profileId = existing?.id as string | undefined;
     const createdAccount = !profileId;
+    let emailOtp: string | undefined;
 
     if (!profileId) {
-      // Cuenta sin contraseña: quien la reciba entra pidiendo un código en
-      // /login, así que no hace falta el correo de invitación de Supabase.
+      // Cuenta sin contraseña: el código va en el correo de la aplicación
+      // (Resend), no en la plantilla de invitación de Supabase Auth.
       const { data, error } = await admin.auth.admin.createUser({
         email,
         email_confirm: true,
         user_metadata: { full_name: input.fullName },
       });
-      if (error || !data.user)
-        return NextResponse.json(
-          { error: "No fue posible crear la cuenta de esa persona" },
-          { status: 409 },
+      if (error || !data.user) {
+        const alreadyRegistered = /already|exists|registered/i.test(
+          error?.message ?? "",
         );
-      profileId = data.user.id;
+        if (!alreadyRegistered)
+          return NextResponse.json(
+            { error: "No fue posible crear la cuenta de esa persona" },
+            { status: 409 },
+          );
+      } else {
+        profileId = data.user.id;
+      }
     }
+
+    if (createdAccount) {
+      const issued = await issueMagicLinkOtp(admin, email);
+      emailOtp = issued.otp;
+      profileId ??= issued.userId;
+    }
+
+    if (!profileId)
+      return NextResponse.json(
+        { error: "No fue posible crear la cuenta de esa persona" },
+        { status: 409 },
+      );
 
     await admin
       .from("profiles")
@@ -109,19 +150,42 @@ export async function POST(request: Request) {
       );
     if (memberError) throw memberError;
 
-    await sendTeamInviteEmail({
-      to: email,
-      fullName: input.fullName,
-      organizationName,
-      roleLabel: roleLabels[input.role],
-      actionUrl: `${appUrl()}/login`,
+    const loginUrl = `${appUrl()}/login?email=${encodeURIComponent(email)}${
+      emailOtp ? "&welcome=1" : ""
+    }`;
+
+    let delivery: DeliveryResult;
+    try {
+      delivery = await sendTeamInviteEmail({
+        to: email,
+        fullName: input.fullName,
+        organizationName,
+        roleLabel: roleLabels[input.role],
+        actionUrl: loginUrl,
+        otp: emailOtp,
+        existingAccount: !createdAccount,
+      });
+    } catch (reason) {
+      console.error("Team invite email failed", reason);
+      delivery = { status: "failed" };
+    }
+
+    await writeNotification({
+      organizationId,
+      recipientMasked: maskEmail(email),
+      template: "team_invite",
+      status: delivery.status,
     }).catch(() => undefined);
 
     await writeAudit({
       organizationId,
       actorId: userId,
       eventType: "member_invited",
-      metadata: { role: input.role, existing_account: !createdAccount },
+      metadata: {
+        role: input.role,
+        existing_account: !createdAccount,
+        email_status: delivery.status,
+      },
     });
 
     return NextResponse.json(
@@ -133,6 +197,11 @@ export async function POST(request: Request) {
           role: input.role,
           active: true,
         },
+        delivery: delivery.status,
+        loginUrl,
+        createdAccount,
+        // Si el correo no salió, el admin puede compartir el código a mano.
+        otp: delivery.status === "sent" ? undefined : emailOtp,
       },
       { status: 201 },
     );
