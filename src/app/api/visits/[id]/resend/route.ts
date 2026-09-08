@@ -5,6 +5,8 @@ import { requireApiContext } from "@/lib/server/session";
 import { sendInvitationEmail, sendPassEmail } from "@/lib/server/email";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
+import { getOrIssueStaffPass } from "@/lib/server/pass-issue";
+import { createAdminClient } from "@/lib/server/supabase-admin";
 import { appUrl } from "@/lib/config";
 import { maskEmail } from "@/lib/security";
 
@@ -59,31 +61,13 @@ export async function POST(
     const recipient = visit.email || visit.inviteeEmail || "";
 
     if (input.mode === "pass") {
-      // Un pase nuevo invalida el anterior: el QR vigente es siempre uno solo.
-      const passToken = randomBytes(32).toString("base64url");
-      const hash = createHash("sha256").update(passToken).digest("hex");
-
-      await db
-        .from("qr_tokens")
-        .update({ revoked_at: new Date().toISOString() })
-        .eq("visit_id", id)
-        .is("revoked_at", null);
-
-      const { error } = await db.from("qr_tokens").insert({
-        organization_id: organizationId,
-        visit_id: id,
-        token_hash: hash,
-        token_hint: `••••${passToken.slice(-4)}`,
-        valid_from: new Date(
-          new Date(visit.startsAt).getTime() - 60 * 60000,
-        ).toISOString(),
-        expires_at: new Date(
-          new Date(visit.endsAt).getTime() + 12 * 3600000,
-        ).toISOString(),
+      const { passToken, passUrl } = await getOrIssueStaffPass({
+        visitId: id,
+        organizationId,
+        startsAt: visit.startsAt,
+        endsAt: visit.endsAt,
+        rotate: true,
       });
-      if (error) throw error;
-
-      const passUrl = `${appUrl()}/pass/${passToken}`;
       if (input.notify && recipient) {
         const delivery = await sendPassEmail({
           to: recipient,
@@ -115,8 +99,9 @@ export async function POST(
     // el visitante pueda completar o corregir sus datos.
     const invitationToken = randomBytes(32).toString("base64url");
     const hash = createHash("sha256").update(invitationToken).digest("hex");
+    const admin = createAdminClient();
 
-    const { error } = await db
+    const { error } = await admin
       .from("visit_invitations")
       .update({
         token_hash: hash,

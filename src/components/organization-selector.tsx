@@ -112,6 +112,13 @@ export function OrganizationSelector() {
                 </button>
               </Card>
             ))}
+            <Link
+              href="/onboarding"
+              className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-3.5 text-sm font-semibold text-slate-600 transition hover:border-slate-400 hover:bg-white"
+            >
+              <Plus size={18} />
+              Registrar otra empresa
+            </Link>
           </div>
         )}
       </div>

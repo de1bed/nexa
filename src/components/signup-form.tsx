@@ -29,7 +29,10 @@ export function SignUpForm() {
   const [error, setError] = useState("");
 
   async function sendCode(address: string, fullName: string) {
-    const { error: authError } = await createClient().auth.signInWithOtp({
+    const client = createClient();
+    // Si había otra sesión en este navegador, no heredar su empresa.
+    await client.auth.signOut();
+    const { error: authError } = await client.auth.signInWithOtp({
       email: address,
       // El nombre viaja como metadato: el trigger de Supabase crea el perfil.
       options: { shouldCreateUser: true, data: { full_name: fullName } },

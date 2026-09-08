@@ -19,12 +19,31 @@ export async function GET(
   _request: Request,
   ctx: RouteContext<"/api/visits/[id]/document">,
 ) {
-  const guard = await requireApiContext(["superadmin", "admin", "guard"]);
+  const guard = await requireApiContext([
+    "superadmin",
+    "admin",
+    "guard",
+    "host",
+  ]);
   if (!guard.ok)
     return NextResponse.json({ error: guard.error }, { status: guard.status });
   const { db, organizationId, userId, role } = guard.context;
 
   const { id } = await ctx.params;
+
+  if (role === "host") {
+    const { data: visit } = await db
+      .from("visits")
+      .select("host_id")
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (!visit || visit.host_id !== userId)
+      return NextResponse.json(
+        { error: "No tienes permiso para ver este documento" },
+        { status: 403 },
+      );
+  }
 
   const { data: documents } = await db
     .from("visitor_documents")

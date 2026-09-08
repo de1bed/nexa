@@ -31,6 +31,7 @@ import {
   cn,
 } from "./ui";
 import { LiveDuration, Sheet, ShareButton } from "./ui-client";
+import { StaffPassPanel } from "./staff-pass";
 import { eventLabels, formatDuration, timeInsideMs } from "@/lib/domain";
 
 const fullDate = (value: string) =>
@@ -40,10 +41,12 @@ const fullDate = (value: string) =>
   }).format(new Date(value));
 
 export function VisitDetail({ id }: { id: string }) {
-  const { visits, events, viewer, cancelVisit, resendLink, live } = useWorkspace();
+  const { visits, events, viewer, cancelVisit, resendLink, live, organization } =
+    useWorkspace();
   const [share, setShare] = useState<{ url: string; kind: "invitation" | "pass" } | null>(
     null,
   );
+  const [passNonce, setPassNonce] = useState(0);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState("");
   const [documents, setDocuments] = useState<
@@ -86,6 +89,7 @@ export function VisitDetail({ id }: { id: string }) {
       const url = await resendLink(id, kind, false);
       if (!url) throw new Error("No fue posible generar el enlace");
       setShare({ url, kind });
+      if (kind === "pass") setPassNonce((value) => value + 1);
     } catch (reason) {
       toast.error(
         reason instanceof Error ? reason.message : "No fue posible generar el enlace",
@@ -186,10 +190,24 @@ export function VisitDetail({ id }: { id: string }) {
               onClick={() => link("pass")}
             >
               <Ticket size={18} />
-              Reenviar pase QR
+              Generar pase nuevo
             </Button>
           )}
         </div>
+      )}
+
+      {["pre_registered", "approved", "checked_in", "checked_out"].includes(
+        visit.status,
+      ) && (
+        <StaffPassPanel
+          key={`${visit.id}-${passNonce}`}
+          visitId={visit.id}
+          visitorName={visit.visitorName}
+          organizationName={organization.name}
+          hostName={visit.hostName}
+          location={visit.location}
+          startsAt={visit.startsAt}
+        />
       )}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.3fr_1fr]">
@@ -245,7 +263,9 @@ export function VisitDetail({ id }: { id: string }) {
             </Callout>
           )}
 
-          {live && visit.documentCaptured && viewer.role !== "host" && (
+          {live &&
+            visit.documentCaptured &&
+            (viewer.role !== "host" || visit.hostId === viewer.id) && (
             <Button
               variant="outline"
               className="mt-5"

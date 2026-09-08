@@ -195,6 +195,7 @@ export async function POST(
       visit_id: visit.id,
       token_hash: hash,
       token_hint: `••••${qrToken.slice(-4)}`,
+      public_token: qrToken,
       valid_from: new Date(
         new Date(visit.starts_at).getTime() - 60 * 60000,
       ).toISOString(),

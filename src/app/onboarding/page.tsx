@@ -10,8 +10,11 @@ export default async function Page() {
 
   const context = await getSessionContext();
   if (!context.user) redirect("/login");
-  // Quien ya pertenece a una organización no necesita crear otra desde aquí.
-  if (context.memberships.length > 0) redirect("/app");
 
-  return <OnboardingForm defaultName={context.profile?.fullName ?? ""} />;
+  return (
+    <OnboardingForm
+      defaultName={context.profile?.fullName ?? ""}
+      hasOtherOrgs={context.memberships.length > 0}
+    />
+  );
 }

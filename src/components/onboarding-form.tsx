@@ -33,10 +33,17 @@ const timezones = [
 ];
 
 /**
- * Alta de la organización. Al terminar, la empresa queda operativa: tiene
- * administración, configuración de privacidad y su primera ubicación.
+ * Alta de la organización. Quien la crea queda como administrador, con
+ * Equipo, Configuración y el resto del panel. Al terminar hay privacidad
+ * y primera ubicación.
  */
-export function OnboardingForm({ defaultName }: { defaultName: string }) {
+export function OnboardingForm({
+  defaultName,
+  hasOtherOrgs = false,
+}: {
+  defaultName: string;
+  hasOtherOrgs?: boolean;
+}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -130,9 +137,16 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
                 Configura tu empresa
               </h1>
               <p className="mt-2.5 text-[15px] leading-6 text-slate-500">
-                Con esto queda lista tu recepción digital. En el panel verás
-                Equipo: ahí invitas anfitriones y guardias.
+                Tú quedas como administrador. Desde Equipo invitas anfitriones,
+                guardias y a otras personas de administración.
               </p>
+              {hasOtherOrgs && (
+                <p className="mt-3 rounded-2xl bg-slate-50 p-3.5 text-sm leading-6 text-slate-600">
+                  Esto crea una empresa nueva. Tus otros accesos (por ejemplo
+                  como anfitrión) se quedan igual; después puedes cambiar de
+                  espacio.
+                </p>
+              )}
 
               <div className="mt-7 space-y-4">
                 <Field label="Nombre de la empresa">
@@ -148,7 +162,7 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
                 </Field>
                 <Field
                   label="Tu nombre"
-                  hint="Aparecerá como anfitrión en las invitaciones que crees."
+                  hint="Eres quien administra esta empresa. También aparecerá en las visitas que tú invites."
                 >
                   <input
                     className={fieldClass}
