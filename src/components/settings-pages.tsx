@@ -41,8 +41,10 @@ import {
 } from "@/lib/demo-data";
 import {
   roleLabels,
+  memberStatusLabels,
   type Location,
   type MemberRole,
+  type MemberStatus,
   type OrganizationSettings,
   type TeamMember,
 } from "@/lib/domain";
@@ -103,9 +105,7 @@ export function TeamPage() {
   const [result, setResult] = useState<{
     member: TeamMember;
     delivery: "sent" | "development" | "failed";
-    loginUrl: string;
-    createdAccount: boolean;
-    otp?: string;
+    inviteUrl: string;
   } | null>(null);
   const [form, setForm] = useState({
     fullName: "",
@@ -168,9 +168,7 @@ export function TeamPage() {
         const payload = (await response.json()) as {
           member: TeamMember;
           delivery: "sent" | "development" | "failed";
-          loginUrl: string;
-          createdAccount: boolean;
-          otp?: string;
+          inviteUrl: string;
         };
         setMembers((current) => {
           if (current.some((item) => item.id === payload.member.id))
@@ -186,14 +184,16 @@ export function TeamPage() {
           name: form.fullName,
           email: form.email,
           role: form.role,
-          active: true,
+          active: false,
+          status: "invited",
+          invitedAt: new Date().toISOString(),
+          inviteDelivery: "development",
         };
         setMembers((current) => [...current, member]);
         setResult({
           member,
           delivery: "development",
-          loginUrl: `${window.location.origin}/login`,
-          createdAccount: true,
+          inviteUrl: `${window.location.origin}/invite/demo`,
         });
       }
       setForm({ fullName: "", email: "", role: "host" });
@@ -263,15 +263,26 @@ export function TeamPage() {
         const response = await fetch(`/api/team/${member.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: patch.role, active: patch.active }),
+          body: JSON.stringify({
+            role: patch.role,
+            active: patch.active,
+            status: patch.status,
+          }),
         });
         if (!response.ok)
           throw new Error(await readError(response, "No fue posible actualizar"));
       }
       setMembers((current) =>
-        current.map((item) =>
-          item.id === member.id ? { ...item, ...patch } : item,
-        ),
+        current.map((item) => {
+          if (item.id !== member.id) return item;
+          const next = { ...item, ...patch };
+          if (patch.status) {
+            next.active = patch.status === "active";
+          } else if (patch.active !== undefined) {
+            next.status = patch.active ? "active" : "suspended";
+          }
+          return next;
+        }),
       );
       toast.success("Acceso actualizado");
       setEditing(null);
@@ -282,6 +293,85 @@ export function TeamPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function resendInvite(member: TeamMember) {
+    setBusy(true);
+    try {
+      if (live) {
+        const response = await fetch(`/api/team/${member.id}/resend`, {
+          method: "POST",
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible reenviar"));
+        const payload = (await response.json()) as {
+          delivery: "sent" | "development" | "failed";
+          inviteUrl: string;
+        };
+        setMembers((current) =>
+          current.map((item) =>
+            item.id === member.id
+              ? { ...item, inviteDelivery: payload.delivery, status: "invited" }
+              : item,
+          ),
+        );
+        setEditing(null);
+        setResult({
+          member: { ...member, status: "invited", inviteDelivery: payload.delivery },
+          delivery: payload.delivery,
+          inviteUrl: payload.inviteUrl,
+        });
+        setOpen(true);
+      } else {
+        toast.success("En demostración no se reenvía correo");
+      }
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible reenviar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMember(member: TeamMember) {
+    if (
+      !window.confirm(
+        `¿Quitar a ${member.name} del equipo? Dejará de poder entrar a esta organización.`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      if (live) {
+        const response = await fetch(`/api/team/${member.id}`, {
+          method: "DELETE",
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible eliminar"));
+      }
+      setMembers((current) => current.filter((item) => item.id !== member.id));
+      toast.success("Integrante eliminado");
+      setEditing(null);
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible eliminar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function statusTone(status: MemberStatus) {
+    if (status === "active") return "bg-emerald-50 text-emerald-700";
+    if (status === "invited") return "bg-blue-50 text-blue-700";
+    return "bg-amber-50 text-amber-700";
+  }
+
+  function statusLabel(member: TeamMember) {
+    if (member.status === "invited" && member.inviteDelivery === "failed")
+      return "Invitación no enviada";
+    return memberStatusLabels[member.status];
   }
 
   return (
@@ -346,7 +436,16 @@ export function TeamPage() {
       ) : (
         <div className="space-y-2.5">
           {members.map((member) => (
-            <Card key={member.id} className="flex items-center gap-3 p-4">
+            <Card
+              key={member.id}
+              className={cn(
+                "flex items-center gap-3 p-4",
+                member.id !== viewer.id && "cursor-pointer active:bg-slate-50",
+              )}
+              onClick={() => {
+                if (member.id !== viewer.id) setEditing(member);
+              }}
+            >
               <Avatar name={member.name} size={44} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">
@@ -357,21 +456,24 @@ export function TeamPage() {
                     </span>
                   )}
                 </p>
-                <p className="truncate text-sm text-slate-500">{member.email}</p>
+                <p className="truncate text-sm text-slate-500">
+                  {roleLabels[member.role]} · {member.email}
+                </p>
               </div>
               <button
                 type="button"
                 disabled={member.id === viewer.id}
-                onClick={() => setEditing(member)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setEditing(member);
+                }}
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                  member.active
-                    ? "bg-slate-100 text-slate-700"
-                    : "bg-amber-50 text-amber-700",
+                  statusTone(member.status),
                   member.id !== viewer.id && "active:bg-slate-200",
                 )}
               >
-                {member.active ? roleLabels[member.role] : "Suspendido"}
+                {statusLabel(member)}
               </button>
             </Card>
           ))}
@@ -434,66 +536,40 @@ export function TeamPage() {
         description={
           result
             ? result.delivery === "sent"
-              ? `Le enviamos el acceso a ${result.member.email}.`
-              : "La cuenta quedó lista. El correo no salió; comparte el enlace (y el código, si aparece)."
-            : "Recibirá un correo con la liga de acceso y, si es cuenta nueva, un código de seis dígitos."
+              ? `Le enviamos a ${result.member.email} el enlace para crear su cuenta.`
+              : "La invitación quedó lista. Comparte el enlace para que cree su contraseña."
+            : "Recibirá un correo para crear su cuenta y unirse a esta organización."
         }
       >
         {result ? (
           <div className="space-y-4">
             {result.delivery === "sent" ? (
               <Callout tone="success">
-                Correo enviado. Si no llega en un minuto, revisa spam o comparte
-                el enlace de abajo.
+                Correo enviado. Al abrirlo crea su cuenta, elige contraseña y
+                queda unido a la organización.
               </Callout>
             ) : live ? (
               <Callout tone="warning">
-                {result.delivery === "development"
-                  ? "No hay clave de Resend, así que el correo se registró en la consola del servidor."
-                  : "El correo no se pudo entregar. Comparte el enlace para que esa persona entre."}
+                El correo no se entregó. Comparte el enlace para que esa persona
+                cree su cuenta igual.
               </Callout>
             ) : (
               <Callout tone="neutral">
-                En demostración no se envían correos. Para probar el portal de
-                guardia abre la caseta ahora, o cierra sesión y elige Guardia.
+                En demostración no se envían correos. Comparte el enlace o abre
+                la caseta para probar el portal de guardia.
               </Callout>
             )}
 
-            {result.otp && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Código de acceso
-                </p>
-                <p className="mt-2 font-mono text-[28px] font-semibold tracking-[.28em] text-[#071426]">
-                  {result.otp}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  Vence en una hora. Compártelo solo con {result.member.name}.
-                </p>
-              </div>
-            )}
-
-            <CopyField value={result.loginUrl} label="Enlace de acceso" />
+            <CopyField value={result.inviteUrl} label="Enlace para crear cuenta" />
 
             <ShareButton
-              url={result.loginUrl}
-              title={`Acceso a ${result.member.role === "guard" ? "caseta" : "NEXA VISIT"}`}
-              text={
-                result.otp
-                  ? `Te dieron acceso como ${roleLabels[result.member.role]}. Entra con este enlace y el código ${result.otp}:`
-                  : `Te dieron acceso como ${roleLabels[result.member.role]}. Entra aquí:`
-              }
+              url={result.inviteUrl}
+              title={`Únete a ${result.member.role === "guard" ? "caseta" : "NEXA VISIT"}`}
+              text={`${result.member.name}, te invitaron como ${roleLabels[result.member.role]}. Crea tu cuenta aquí:`}
               className="w-full"
             >
               Compartir por WhatsApp o correo
             </ShareButton>
-
-            <Link href="/guard/scan" className="block">
-              <Button variant="outline" size="lg" block>
-                <ScanLine size={18} />
-                Probar la caseta ahora
-              </Button>
-            </Link>
 
             <Button
               variant="ghost"
@@ -547,7 +623,8 @@ export function TeamPage() {
             Enviar invitación
           </Button>
           <Callout tone="neutral">
-            Si el correo no llega, crea un código de invitación y comparte el enlace manualmente.
+            Recibirá un enlace para crear su cuenta y elegir contraseña. Queda
+            unido a esta organización al terminar.
           </Callout>
         </form>
         )}
@@ -622,7 +699,7 @@ export function TeamPage() {
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         title={editing?.name ?? ""}
-        description="Información y permisos del miembro."
+        description="Cambia su rol, su estado o quítalo del equipo."
       >
         {editing && (
           <div className="space-y-5">
@@ -642,8 +719,15 @@ export function TeamPage() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Estado</p>
-                  <p className={cn("text-sm font-medium", editing.active ? "text-emerald-600" : "text-amber-600")}>
-                    {editing.active ? "Activo" : "Suspendido"}
+                  <p className={cn(
+                    "text-sm font-medium",
+                    editing.status === "active"
+                      ? "text-emerald-600"
+                      : editing.status === "invited"
+                        ? "text-blue-600"
+                        : "text-amber-600",
+                  )}>
+                    {statusLabel(editing)}
                   </p>
                 </div>
                 {editing.joinedAt && (
@@ -678,17 +762,17 @@ export function TeamPage() {
                     key={role}
                     type="button"
                     disabled={busy || editing.id === viewer.id}
-                    onClick={() => updateMember(editing, { role, active: true })}
+                    onClick={() => updateMember(editing, { role })}
                     className={cn(
                       "flex w-full items-center justify-between rounded-2xl border p-4 text-left transition",
-                      editing.role === role && editing.active
+                      editing.role === role
                         ? "border-[#10cfc9] bg-[#10cfc9]/10"
                         : "border-slate-200",
                       editing.id === viewer.id && "opacity-50 cursor-not-allowed",
                     )}
                   >
                     <span className="text-sm font-semibold">{roleLabels[role]}</span>
-                    {editing.role === role && editing.active && (
+                    {editing.role === role && (
                       <Check size={18} className="text-[#0d9d99]" />
                     )}
                   </button>
@@ -697,16 +781,47 @@ export function TeamPage() {
             </div>
 
             {editing.id !== viewer.id && (
-              <Button
-                variant={editing.active ? "outline" : "accent"}
-                size="lg"
-                block
-                disabled={busy}
-                className={editing.active ? "border-red-200 text-red-600" : ""}
-                onClick={() => updateMember(editing, { active: !editing.active })}
-              >
-                {editing.active ? "Suspender acceso" : "Reactivar acceso"}
-              </Button>
+              <div className="space-y-2">
+                {editing.status === "invited" && (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    block
+                    disabled={busy}
+                    onClick={() => void resendInvite(editing)}
+                  >
+                    Reenviar invitación
+                  </Button>
+                )}
+                {editing.status !== "invited" && (
+                  <Button
+                    variant={editing.status === "active" ? "outline" : "accent"}
+                    size="lg"
+                    block
+                    disabled={busy}
+                    className={
+                      editing.status === "active" ? "border-amber-200 text-amber-700" : ""
+                    }
+                    onClick={() =>
+                      updateMember(editing, {
+                        status: editing.status === "active" ? "suspended" : "active",
+                      })
+                    }
+                  >
+                    {editing.status === "active" ? "Suspender acceso" : "Reactivar acceso"}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  block
+                  disabled={busy}
+                  className="border-red-200 text-red-600"
+                  onClick={() => void removeMember(editing)}
+                >
+                  Eliminar del equipo
+                </Button>
+              </div>
             )}
           </div>
         )}

@@ -43,6 +43,7 @@ export const showcaseTeam: TeamMember[] = [
     email: "admin@novalogistics.demo",
     role: "admin",
     active: true,
+    status: "active",
   },
   {
     id: "host-mateo",
@@ -50,6 +51,7 @@ export const showcaseTeam: TeamMember[] = [
     email: "mateo@novalogistics.demo",
     role: "host",
     active: true,
+    status: "active",
   },
   {
     id: "host-valeria",
@@ -57,6 +59,7 @@ export const showcaseTeam: TeamMember[] = [
     email: "valeria@novalogistics.demo",
     role: "host",
     active: true,
+    status: "active",
   },
   {
     id: "demo-guard",
@@ -64,6 +67,7 @@ export const showcaseTeam: TeamMember[] = [
     email: "guardia1@novalogistics.demo",
     role: "guard",
     active: true,
+    status: "active",
   },
   {
     id: "guard-lucia",
@@ -71,6 +75,7 @@ export const showcaseTeam: TeamMember[] = [
     email: "guardia2@novalogistics.demo",
     role: "guard",
     active: true,
+    status: "active",
   },
 ];
 

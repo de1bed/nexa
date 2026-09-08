@@ -87,13 +87,24 @@ export type Location = {
   active: boolean;
 };
 
+export type MemberStatus = "invited" | "active" | "suspended";
+
 export type TeamMember = {
   id: string;
   name: string;
   email: string;
   role: MemberRole;
   active: boolean;
+  status: MemberStatus;
   joinedAt?: string;
+  invitedAt?: string;
+  inviteDelivery?: "sent" | "failed" | "development";
+};
+
+export const memberStatusLabels: Record<MemberStatus, string> = {
+  invited: "Invitación enviada",
+  active: "Miembro",
+  suspended: "Suspendido",
 };
 
 export type OrganizationSettings = {

@@ -82,6 +82,14 @@ export const teamInviteSchema = z.object({
 export const teamUpdateSchema = z.object({
   role: z.enum(["admin", "host", "guard"]).optional(),
   active: z.boolean().optional(),
+  status: z.enum(["invited", "active", "suspended"]).optional(),
+});
+
+export const teamAcceptSchema = z.object({
+  password: z
+    .string()
+    .min(8, "La contraseña debe tener al menos 8 caracteres")
+    .max(72, "La contraseña es demasiado larga"),
 });
 
 export const locationSchema = z.object({

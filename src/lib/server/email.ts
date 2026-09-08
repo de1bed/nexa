@@ -24,6 +24,7 @@ function layout(options: {
   ctaLabel?: string;
   ctaUrl?: string;
   footnote?: string;
+  footer?: string;
 }) {
   const cta =
     options.ctaLabel && options.ctaUrl
@@ -32,6 +33,9 @@ function layout(options: {
   const footnote = options.footnote
     ? `<tr><td style="padding-top:22px;color:${brand.muted};font-size:12px;line-height:20px">${escapeHtml(options.footnote)}</td></tr>`
     : "";
+  const footer =
+    options.footer ??
+    "Recibes este mensaje porque una empresa registró una visita a su nombre. Si no la esperabas, ignora el correo.";
 
   return `<!doctype html><html lang="es"><body style="margin:0;background:#f1f5f9;padding:24px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif">
 <span style="display:none;font-size:1px;color:#f1f5f9">${escapeHtml(options.preheader)}</span>
@@ -52,7 +56,7 @@ ${footnote}
 </table>
 </td></tr>
 </table>
-<p style="max-width:560px;color:${brand.muted};font-size:11px;line-height:18px;padding:16px 6px 0;text-align:center">Recibes este mensaje porque una empresa registró una visita a su nombre. Si no la esperabas, ignora el correo.</p>
+<p style="max-width:560px;color:${brand.muted};font-size:11px;line-height:18px;padding:16px 6px 0;text-align:center">${escapeHtml(footer)}</p>
 </td></tr></table></body></html>`;
 }
 
@@ -62,6 +66,7 @@ async function deliver(input: {
   html: string;
   logLabel: string;
   logPayload: Record<string, unknown>;
+  idempotencyKey?: string;
 }): Promise<DeliveryResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -72,12 +77,19 @@ async function deliver(input: {
     return { status: "development" };
   }
   const resend = new Resend(key);
-  const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? "NEXA VISIT <visitas@example.com>",
-    to: input.to,
-    subject: input.subject,
-    html: input.html,
-  });
+  const { data, error } = await resend.emails.send(
+    {
+      from:
+        process.env.RESEND_FROM_EMAIL ??
+        "NEXA VISIT <visitas@vortexlabai.com>",
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+    },
+    input.idempotencyKey
+      ? { idempotencyKey: input.idempotencyKey }
+      : undefined,
+  );
   if (error) throw error;
   return { status: "sent", id: data?.id };
 }
@@ -159,34 +171,27 @@ export async function sendHostArrivalEmail(input: {
 export async function sendTeamInviteEmail(input: {
   to: string;
   fullName: string;
+  inviterName: string;
   organizationName: string;
   roleLabel: string;
   actionUrl: string;
-  otp?: string;
-  existingAccount?: boolean;
+  idempotencyKey?: string;
 }): Promise<DeliveryResult> {
-  const otpBlock = input.otp
-    ? `<br><br>Tu código de un solo uso:<br><br><span style="display:inline-block;font-size:32px;letter-spacing:.28em;font-weight:700;color:${brand.ink}">${escapeHtml(input.otp)}</span><br><br>Ábrelo, escríbelo y elige tu contraseña. Los siguientes ingresos ya no lo piden.`
-    : input.existingAccount
-      ? "<br><br>Entra con tu correo y contraseña de siempre. Si es la primera vez, pide un código en la pantalla de acceso."
-      : "<br><br>Entra con este correo, pide el código de una sola vez y elige tu contraseña.";
-
   return deliver({
     to: input.to,
-    subject: `Te agregaron a ${input.organizationName} en NEXA VISIT`,
+    subject: `${input.inviterName} te invitó a ${input.organizationName}`,
     logLabel: "invitación de equipo",
-    logPayload: { actionUrl: input.actionUrl, existingAccount: Boolean(input.existingAccount) },
+    logPayload: { actionUrl: input.actionUrl },
+    idempotencyKey: input.idempotencyKey,
     html: layout({
-      preheader: input.otp
-        ? "Tu código de acceso está en este correo."
-        : "Entra con tu correo para empezar a operar.",
-      title: `Bienvenido a ${escapeHtml(input.organizationName)}`,
-      body: `Hola ${escapeHtml(input.fullName)}: te dieron acceso como <b>${escapeHtml(input.roleLabel)}</b>.${otpBlock}`,
-      ctaLabel: "Entrar a NEXA VISIT",
+      preheader: `Crea tu cuenta para unirte a ${input.organizationName}.`,
+      title: `${escapeHtml(input.inviterName)} te invitó`,
+      body: `Hola ${escapeHtml(input.fullName)}: <b>${escapeHtml(input.inviterName)}</b> te invitó a unirte a <b>${escapeHtml(input.organizationName)}</b> como ${escapeHtml(input.roleLabel)}.<br><br>Crea tu cuenta, elige tu contraseña y entra a operar. El correo ya está listo; solo falta tu contraseña.`,
+      ctaLabel: "Crear mi cuenta",
       ctaUrl: input.actionUrl,
-      footnote: input.otp
-        ? "El código vence en una hora y no debe compartirse."
-        : "Si no esperabas este acceso, ignora el correo.",
+      footnote: "El enlace es personal y vence en siete días.",
+      footer:
+        "Recibes este mensaje porque un administrador te invitó a su equipo en NEXA VISIT. Si no lo esperabas, ignora el correo.",
     }),
   });
 }

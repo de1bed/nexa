@@ -21,6 +21,8 @@ const publicPrefixes = [
   "/visit",
   "/pass",
   "/demo",
+  "/invite",
+  "/join",
   "/api/public",
   "/api/cron",
 ];

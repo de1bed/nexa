@@ -2,35 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { createAdminClient } from "@/lib/server/supabase-admin";
-import {
-  sendTeamInviteEmail,
-  type DeliveryResult,
-} from "@/lib/server/email";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
+import { issueTeamInvite } from "@/lib/server/team-invite";
 import { teamInviteSchema } from "@/lib/schemas";
-import { appUrl } from "@/lib/config";
 import { maskEmail } from "@/lib/security";
-import { roleLabels, type MemberRole } from "@/lib/domain";
+import type { MemberRole, MemberStatus } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
-
-async function issueMagicLinkOtp(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string,
-) {
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
-  if (error || !data) {
-    console.error("Team invite generateLink failed", error);
-    return {};
-  }
-  return {
-    otp: data.properties?.email_otp,
-    userId: data.user?.id,
-  };
-}
 
 export async function GET() {
   const guard = await requireApiContext(["superadmin", "admin"]);
@@ -41,7 +19,7 @@ export async function GET() {
   const { data, error } = await db
     .from("organization_members")
     .select(
-      "profile_id,role,active,created_at,profile:profiles!organization_members_profile_id_fkey(full_name,email)",
+      "profile_id,role,active,status,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email)",
     )
     .eq("organization_id", organizationId)
     .order("created_at");
@@ -59,13 +37,21 @@ export async function GET() {
           full_name?: string;
           email?: string;
         } | null;
+        const status = (row.status as MemberStatus) ?? (row.active ? "active" : "suspended");
         return {
           id: row.profile_id as string,
           role: row.role as MemberRole,
           active: row.active as boolean,
+          status,
           name: profile?.full_name ?? "Usuario",
           email: profile?.email ?? "",
-          joinedAt: row.created_at as string,
+          joinedAt: (row.joined_at as string | null) ?? undefined,
+          invitedAt: row.created_at as string,
+          inviteDelivery: row.invite_delivery as
+            | "sent"
+            | "failed"
+            | "development"
+            | undefined,
         };
       }),
     },
@@ -77,15 +63,14 @@ export async function POST(request: Request) {
   const guard = await requireApiContext(["superadmin", "admin"]);
   if (!guard.ok)
     return NextResponse.json({ error: guard.error }, { status: guard.status });
-  const { organizationId, organizationName, userId } = guard.context;
+  const { organizationId, organizationName, userId, displayName } =
+    guard.context;
 
   try {
     const input = teamInviteSchema.parse(await request.json());
     const admin = createAdminClient();
     const email = input.email.toLowerCase();
 
-    // Un correo que ya existe se suma a esta organización en vez de fallar:
-    // la misma persona puede trabajar en varias empresas.
     const { data: existing } = await admin
       .from("profiles")
       .select("id,full_name")
@@ -93,15 +78,25 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     let profileId = existing?.id as string | undefined;
-    const createdAccount = !profileId;
-    let emailOtp: string | undefined;
+
+    if (profileId) {
+      const { data: membership } = await admin
+        .from("organization_members")
+        .select("status,active")
+        .eq("organization_id", organizationId)
+        .eq("profile_id", profileId)
+        .maybeSingle();
+      if (membership?.status === "active")
+        return NextResponse.json(
+          { error: "Esa persona ya es miembro de la organización" },
+          { status: 409 },
+        );
+    }
 
     if (!profileId) {
-      // Cuenta sin contraseña: el código va en el correo de la aplicación
-      // (Resend), no en la plantilla de invitación de Supabase Auth.
       const { data, error } = await admin.auth.admin.createUser({
         email,
-        email_confirm: true,
+        email_confirm: false,
         user_metadata: { full_name: input.fullName },
       });
       if (error || !data.user) {
@@ -113,15 +108,15 @@ export async function POST(request: Request) {
             { error: "No fue posible crear la cuenta de esa persona" },
             { status: 409 },
           );
+        const { data: byEmail } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+        profileId = byEmail?.id as string | undefined;
       } else {
         profileId = data.user.id;
       }
-    }
-
-    if (createdAccount) {
-      const issued = await issueMagicLinkOtp(admin, email);
-      emailOtp = issued.otp;
-      profileId ??= issued.userId;
     }
 
     if (!profileId)
@@ -144,37 +139,30 @@ export async function POST(request: Request) {
           organization_id: organizationId,
           profile_id: profileId,
           role: input.role,
-          active: true,
+          status: "invited",
+          active: false,
+          invited_by: userId,
         },
         { onConflict: "organization_id,profile_id" },
       );
     if (memberError) throw memberError;
 
-    const loginUrl = `${appUrl()}/login?email=${encodeURIComponent(email)}${
-      emailOtp ? "&welcome=1" : ""
-    }`;
-
-    let delivery: DeliveryResult;
-    try {
-      delivery = await sendTeamInviteEmail({
-        to: email,
-        fullName: input.fullName,
-        organizationName,
-        roleLabel: roleLabels[input.role],
-        actionUrl: loginUrl,
-        otp: emailOtp,
-        existingAccount: !createdAccount,
-      });
-    } catch (reason) {
-      console.error("Team invite email failed", reason);
-      delivery = { status: "failed" };
-    }
+    const issued = await issueTeamInvite({
+      organizationId,
+      organizationName,
+      inviterId: userId,
+      inviterName: displayName,
+      profileId,
+      email,
+      fullName: input.fullName,
+      role: input.role,
+    });
 
     await writeNotification({
       organizationId,
       recipientMasked: maskEmail(email),
       template: "team_invite",
-      status: delivery.status,
+      status: issued.delivery.status,
     }).catch(() => undefined);
 
     await writeAudit({
@@ -183,8 +171,7 @@ export async function POST(request: Request) {
       eventType: "member_invited",
       metadata: {
         role: input.role,
-        existing_account: !createdAccount,
-        email_status: delivery.status,
+        email_status: issued.delivery.status,
       },
     });
 
@@ -195,13 +182,13 @@ export async function POST(request: Request) {
           name: input.fullName,
           email,
           role: input.role,
-          active: true,
+          active: false,
+          status: "invited",
+          invitedAt: new Date().toISOString(),
+          inviteDelivery: issued.delivery.status,
         },
-        delivery: delivery.status,
-        loginUrl,
-        createdAccount,
-        // Si el correo no salió, el admin puede compartir el código a mano.
-        otp: delivery.status === "sent" ? undefined : emailOtp,
+        delivery: issued.delivery.status,
+        inviteUrl: issued.inviteUrl,
       },
       { status: 201 },
     );
