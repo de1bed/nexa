@@ -63,7 +63,11 @@ export function ManualAccess() {
       toast.error(invalid);
       return;
     }
-    const compressed = await compressIdentityImage(file).catch(() => file);
+    const compressed = await compressIdentityImage(file).catch(() => null);
+    if (!compressed) {
+      toast.error("No pudimos leer esa foto. Tómala de nuevo o usa JPG.");
+      return;
+    }
     setDocumentFile(compressed);
     toast.success("Identificación adjuntada");
   }

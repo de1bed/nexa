@@ -101,7 +101,11 @@ export function DocumentCapture({
     setError("");
     setBusy(true);
     try {
-      const compressed = await compressIdentityImage(file).catch(() => file);
+      const compressed = await compressIdentityImage(file).catch(() => null);
+      if (!compressed) {
+        setError("No pudimos leer esa foto. Tómala de nuevo o usa JPG.");
+        return;
+      }
       onCaptured(compressed, URL.createObjectURL(compressed));
     } finally {
       setBusy(false);

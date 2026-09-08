@@ -33,9 +33,11 @@ export type OCRResult = {
   expired?: boolean;
 };
 
+export type OCRImageInput = File | Blob | Array<File | Blob>;
+
 export interface OCRProvider {
   readonly name: string;
-  extractIdentityData(image: File | Blob): Promise<OCRResult>;
+  extractIdentityData(image: OCRImageInput): Promise<OCRResult>;
 }
 
 export const LOW_CONFIDENCE = 70;

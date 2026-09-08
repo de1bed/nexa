@@ -17,6 +17,11 @@ export function SessionExit({
   async function exit() {
     if (isLiveMode()) {
       try {
+        await fetch("/api/session", { method: "DELETE" });
+      } catch {
+        // La cookie de empresa se limpia en el servidor; si falla, igual cerramos Auth.
+      }
+      try {
         await createClient().auth.signOut();
       } catch {
         // Aunque falle el cierre remoto, la sesión local debe terminar.

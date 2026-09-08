@@ -137,12 +137,30 @@ export async function prepareMrzImage(
   return blob;
 }
 
-export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const ACCEPTED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/*",
+];
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 export function validateImage(file: File) {
-  if (!ACCEPTED_IMAGE_TYPES.includes(file.type))
-    return "Usa una imagen JPG, PNG o WebP.";
+  const type = file.type.toLowerCase();
+  const allowed = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "application/octet-stream",
+    "",
+  ];
+  if (type && !allowed.includes(type) && !type.startsWith("image/"))
+    return "Usa una imagen JPG, PNG, WebP o la foto de tu teléfono.";
   if (file.size > MAX_IMAGE_BYTES) return "La imagen supera el límite de 8 MB.";
   return null;
 }

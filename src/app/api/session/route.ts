@@ -62,6 +62,6 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  (await cookies()).delete(ORG_COOKIE);
+  (await cookies()).delete({ name: ORG_COOKIE, path: "/" });
   return NextResponse.json({ ok: true });
 }

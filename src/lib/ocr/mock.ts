@@ -39,7 +39,7 @@ function buildSampleMrz() {
 export class MockOCRProvider implements OCRProvider {
   readonly name = "mock";
 
-  async extractIdentityData(image: File | Blob): Promise<OCRResult> {
+  async extractIdentityData(image: File | Blob | Array<File | Blob>): Promise<OCRResult> {
     void image;
     // Latencia parecida a la del motor real, para ver la pantalla de progreso.
     await new Promise((resolve) => setTimeout(resolve, 900));

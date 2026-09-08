@@ -17,7 +17,7 @@ import { AccessCodeStep, accessRequestError } from "./access-code";
 import { ChoosePasswordStep } from "./choose-password";
 import { Button, Callout, Field, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
-import { isLiveMode, roleHome } from "@/lib/config";
+import { destinationAfterLogin, isLiveMode, roleHome } from "@/lib/config";
 import { accessEmailSchema, signInSchema } from "@/lib/schemas";
 import { SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
 import type { MemberRole } from "@/lib/domain";
@@ -118,7 +118,7 @@ export function LoginForm() {
           "Correo o contraseña incorrectos. Si es tu primer acceso, pide un código.",
         );
       }
-      finishSignIn();
+      await finishSignIn();
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "No pudimos entrar.",
@@ -151,11 +151,35 @@ export function LoginForm() {
     }
   }
 
-  function finishSignIn() {
+  async function finishSignIn() {
     const next = params.get("next");
-    const destination =
-      next && next.startsWith("/") && !next.startsWith("//") ? next : "/app";
-    router.push(destination as Route);
+    try {
+      await createClient().auth.getSession();
+      let memberships: Array<{ role: MemberRole }> | null = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await fetch("/api/session", { cache: "no-store" });
+        if (response.ok) {
+          const payload = (await response.json()) as {
+            memberships?: Array<{ role: MemberRole }>;
+          };
+          memberships = payload.memberships ?? [];
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      if (!memberships) {
+        router.push("/app");
+        router.refresh();
+        return;
+      }
+      const destination = destinationAfterLogin({ memberships, next });
+      if (destination === "/select-organization") {
+        await fetch("/api/session", { method: "DELETE" });
+      }
+      router.push(destination as Route);
+    } catch {
+      router.push("/app");
+    }
     router.refresh();
   }
 

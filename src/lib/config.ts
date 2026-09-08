@@ -9,6 +9,8 @@
  * Conectar Supabase es, por tanto, la única acción necesaria para pasar a
  * producción: no hay que tocar código.
  */
+import { safeInternalPath } from "./security";
+
 export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
@@ -47,3 +49,29 @@ export const roleHome = {
   host: "/app/host",
   guard: "/guard/scan",
 } as const;
+
+const genericHomes = new Set([
+  "/app",
+  "/app/dashboard",
+  "/app/host",
+  "/guard",
+  "/guard/scan",
+]);
+
+/**
+ * Destino tras autenticarse. Si la cuenta tiene varias empresas, se pregunta
+ * aunque exista una cookie de la última visita (eso era lo que saltaba el
+ * selector). Un `next` concreto (visita, invitación) sí se respeta.
+ */
+export function destinationAfterLogin(options: {
+  memberships: Array<{ role: keyof typeof roleHome }>;
+  next?: string | null;
+}) {
+  const requested = safeInternalPath(options.next ?? null, "");
+  const hasSpecificNext = Boolean(requested) && !genericHomes.has(requested);
+
+  if (hasSpecificNext) return requested;
+  if (options.memberships.length === 0) return "/onboarding";
+  if (options.memberships.length > 1) return "/select-organization";
+  return roleHome[options.memberships[0].role];
+}

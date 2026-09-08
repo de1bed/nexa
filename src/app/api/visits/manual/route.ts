@@ -3,11 +3,14 @@ import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { writeAudit } from "@/lib/server/audit";
 import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
+import { createAdminClient } from "@/lib/server/supabase-admin";
+import {
+  identityFileMeta,
+  isAllowedIdentityUpload,
+} from "@/lib/identity-file";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 8 * 1024 * 1024;
 
 const schema = z.object({
   visitorName: z.string().trim().min(2).max(120),
@@ -37,14 +40,9 @@ export async function POST(request: Request) {
     const document = form.get("document");
     const hasDocument = document instanceof File && document.size > 0;
     if (hasDocument) {
-      if (!ALLOWED_TYPES.includes(document.type))
+      if (!isAllowedIdentityUpload(document))
         return NextResponse.json(
           { error: "El documento debe ser JPG, PNG o WebP" },
-          { status: 400 },
-        );
-      if (document.size > MAX_BYTES)
-        return NextResponse.json(
-          { error: "El documento supera 8 MB" },
           { status: 400 },
         );
     }
@@ -114,11 +112,12 @@ export async function POST(request: Request) {
     if (visitError || !created) throw visitError ?? new Error("visit");
 
     if (hasDocument) {
-      const extension = document.type.split("/")[1];
+      const storage = createAdminClient();
+      const { mimeType, extension } = identityFileMeta(document);
       const path = `${organizationId}/${created.id}/${crypto.randomUUID()}.${extension}`;
-      const { error: uploadError } = await db.storage
+      const { error: uploadError } = await storage.storage
         .from("visitor-documents")
-        .upload(path, document, { contentType: document.type, upsert: false });
+        .upload(path, document, { contentType: mimeType, upsert: false });
       if (uploadError) throw uploadError;
 
       const { data: settings } = await db
@@ -128,14 +127,14 @@ export async function POST(request: Request) {
         .maybeSingle();
       const retentionDays = settings?.document_retention_days ?? 30;
 
-      const { error: documentError } = await db
+      const { error: documentError } = await storage
         .from("visitor_documents")
         .insert({
           organization_id: organizationId,
           visit_id: created.id,
           visitor_id: visitor.id,
           storage_path: path,
-          mime_type: document.type,
+          mime_type: mimeType,
           size_bytes: document.size,
           document_type: "manual_capture",
           retention_expires_at: new Date(
@@ -144,7 +143,7 @@ export async function POST(request: Request) {
         });
       if (documentError) {
         // El objeto no debe quedar huérfano si falla el registro de metadatos.
-        await db.storage.from("visitor-documents").remove([path]);
+        await storage.storage.from("visitor-documents").remove([path]);
         throw documentError;
       }
     }

@@ -7,11 +7,13 @@ import { sendPassEmail } from "@/lib/server/email";
 import { appUrl } from "@/lib/config";
 import { maskDocument, maskEmail } from "@/lib/security";
 import { walletAvailability } from "@/lib/server/wallet/config";
+import {
+  identityFileMeta,
+  isAllowedIdentityUpload,
+} from "@/lib/identity-file";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 8 * 1024 * 1024;
 
 const schema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -57,14 +59,9 @@ export async function POST(
     for (const side of SIDES) {
       const image = form.get(side.field);
       if (!(image instanceof File) || image.size === 0) continue;
-      if (!ALLOWED_TYPES.includes(image.type))
+      if (!isAllowedIdentityUpload(image))
         return NextResponse.json(
           { error: "Las imágenes deben ser JPG, PNG o WebP" },
-          { status: 400 },
-        );
-      if (image.size > MAX_BYTES)
-        return NextResponse.json(
-          { error: "Alguna imagen supera 8 MB" },
           { status: 400 },
         );
       images.push({ file: image, type: side.type });
@@ -147,13 +144,13 @@ export async function POST(
     const uploaded: string[] = [];
     try {
       for (const image of images) {
-        const extension = image.file.type.split("/")[1];
+        const { mimeType, extension } = identityFileMeta(image.file);
         const path = `${visit.organization_id}/${visit.id}/${crypto.randomUUID()}.${extension}`;
 
         const { error: uploadError } = await db.storage
           .from("visitor-documents")
           .upload(path, image.file, {
-            contentType: image.file.type,
+            contentType: mimeType,
             upsert: false,
           });
         if (uploadError) throw uploadError;
@@ -166,7 +163,7 @@ export async function POST(
             visit_id: visit.id,
             visitor_id: visitorId,
             storage_path: path,
-            mime_type: image.file.type,
+            mime_type: mimeType,
             size_bytes: image.file.size,
             document_type: image.type,
             ocr_confidence: values.ocrConfidence ?? null,

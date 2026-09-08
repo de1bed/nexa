@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import type { Route } from "next";
 import {
   BarChart3,
-  Building2,
   CalendarDays,
   LayoutDashboard,
   MapPin,
@@ -18,9 +17,9 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Brand } from "./brand";
 import { SessionExit } from "./session-exit";
-import { cn, Avatar } from "./ui";
+import { WorkspaceSwitcher } from "./workspace-switcher";
+import { cn } from "./ui";
 import { useWorkspace } from "./workspace-provider";
-import { roleLabels } from "@/lib/domain";
 
 type NavItem = { href: Route; label: string; short: string; icon: LucideIcon };
 
@@ -49,7 +48,7 @@ function isActive(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { viewer, organization } = useWorkspace();
+  const { viewer } = useWorkspace();
   const isHost = viewer.role === "host";
   const primary = isHost ? hostNav : adminNav;
   const secondary = isHost ? [] : adminSecondary;
@@ -66,19 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Encabezado móvil */}
       <header className="safe-top sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-lg lg:hidden">
         <div className="flex h-15 items-center justify-between px-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#071426] text-white">
-              <Building2 size={17} />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-[15px] font-semibold leading-tight">
-                {organization.name}
-              </p>
-              <p className="text-[11px] leading-tight text-slate-500">
-                {roleLabels[viewer.role]} · {viewer.name.split(" ")[0]}
-              </p>
-            </div>
-          </div>
+          <WorkspaceSwitcher compact />
           <SessionExit compact />
         </div>
       </header>
@@ -86,14 +73,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Barra lateral de escritorio */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white p-5 lg:flex">
         <Brand />
-        <div className="mt-7 flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
-          <Avatar name={viewer.name} size={38} tone="dark" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{organization.name}</p>
-            <p className="truncate text-xs text-slate-500">
-              {roleLabels[viewer.role]}
-            </p>
-          </div>
+        <div className="mt-7">
+          <WorkspaceSwitcher />
         </div>
 
         <nav className="mt-7 flex-1 space-y-1">

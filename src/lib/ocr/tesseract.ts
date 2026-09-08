@@ -1,6 +1,10 @@
-import type { OCRField, OCRProvider, OCRResult } from "./types";
+import type { OCRField, OCRImageInput, OCRProvider, OCRResult } from "./types";
 import { isExpired, readMrz, type MrzResult } from "./mrz";
 import { prepareMrzImage } from "@/lib/image";
+
+function lastImage(image: OCRImageInput) {
+  return Array.isArray(image) ? image[image.length - 1] : image;
+}
 
 /**
  * Reconocimiento local con Tesseract, afinado para la banda MRZ del reverso.
@@ -77,7 +81,8 @@ function toFields(mrz: MrzResult): OCRField[] {
 export class TesseractOCRProvider implements OCRProvider {
   readonly name = "tesseract";
 
-  async extractIdentityData(image: File | Blob): Promise<OCRResult> {
+  async extractIdentityData(image: OCRImageInput): Promise<OCRResult> {
+    const target = lastImage(image);
     let worker: Worker | null = null;
 
     try {
@@ -87,8 +92,8 @@ export class TesseractOCRProvider implements OCRProvider {
       let rawText = "";
       let mrz: MrzResult | null = null;
 
-      if (image instanceof File) {
-        const band = await prepareMrzImage(image).catch(() => null);
+      if (target instanceof File) {
+        const band = await prepareMrzImage(target).catch(() => null);
         if (band) {
           const { data } = await worker.recognize(band);
           rawText = data.text ?? "";
@@ -99,7 +104,7 @@ export class TesseractOCRProvider implements OCRProvider {
       // Segundo intento: la imagen completa, por si el encuadre dejó la banda
       // fuera de la franja esperada.
       if (!mrz) {
-        const { data } = await worker.recognize(image as Blob);
+        const { data } = await worker.recognize(target as Blob);
         rawText = `${rawText}\n${data.text ?? ""}`.trim();
         mrz = readMrz(rawText);
       }

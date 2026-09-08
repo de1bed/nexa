@@ -39,10 +39,17 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
             <Brand dark />
           )}
           <div className="flex items-center gap-2">
-            <span className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium sm:flex">
+            <Link
+              href="/select-organization"
+              onClick={() => {
+                void fetch("/api/session", { method: "DELETE" });
+              }}
+              className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium transition hover:bg-white/15 sm:flex"
+              title="Cambiar de empresa"
+            >
               <span className="size-1.5 rounded-full bg-emerald-400" />
               {organization.name}
-            </span>
+            </Link>
             <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium">
               {inside} dentro
             </span>

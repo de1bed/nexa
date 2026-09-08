@@ -8,6 +8,7 @@ import {
   safeInternalPath,
   sha256,
 } from "../security";
+import { destinationAfterLogin } from "../config";
 
 describe("tokens", () => {
   it("hashea sin conservar el texto plano", async () => {
@@ -63,5 +64,21 @@ describe("redirecciones", () => {
     expect(safeInternalPath("https://evil.com", "/app")).toBe("/app");
     expect(safeInternalPath("/\\evil.com", "/app")).toBe("/app");
     expect(safeInternalPath(null, "/app")).toBe("/app");
+  });
+
+  it("pregunta organización cuando hay más de una membresía", () => {
+    const two = [
+      { role: "admin" as const },
+      { role: "guard" as const },
+    ];
+    expect(destinationAfterLogin({ memberships: two })).toBe(
+      "/select-organization",
+    );
+    expect(destinationAfterLogin({ memberships: two, next: "/app" })).toBe(
+      "/select-organization",
+    );
+    expect(
+      destinationAfterLogin({ memberships: two, next: "/app/visits/abc" }),
+    ).toBe("/app/visits/abc");
   });
 });

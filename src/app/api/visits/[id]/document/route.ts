@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiContext } from "@/lib/server/session";
 import { writeAudit } from "@/lib/server/audit";
+import { createAdminClient } from "@/lib/server/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,9 @@ const SIDE_LABELS: Record<string, string> = {
 
 /**
  * Entrega URLs firmadas y efímeras de la identificación.
- * El bucket es privado: la autorización real la aplica RLS sobre
- * `storage.objects`, y esta ruta añade la traza de quién la consultó.
+ * El bucket es privado. Esta ruta autoriza en la aplicación y firma
+ * la URL con el cliente de servicio, para que admin, anfitrión y
+ * guardia vean el archivo sin pelearse con RLS de Storage.
  */
 export async function GET(
   _request: Request,
@@ -59,9 +61,10 @@ export async function GET(
       { status: 404 },
     );
 
+  const storage = createAdminClient();
   const signed = await Promise.all(
     documents.map(async (document) => {
-      const { data } = await db.storage
+      const { data } = await storage.storage
         .from("visitor-documents")
         .createSignedUrl(document.storage_path, 60);
       return data?.signedUrl

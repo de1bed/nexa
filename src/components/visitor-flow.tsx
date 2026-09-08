@@ -253,7 +253,7 @@ export function VisitorFlow({ token }: { token: string }) {
   /* Lectura del documento                                               */
   /* ------------------------------------------------------------------ */
   const runOcr = useCallback(
-    async (image: File) => {
+    async (images: File | File[]) => {
       go("scanning");
       setProgress(12);
       const timer = setInterval(
@@ -262,7 +262,7 @@ export function VisitorFlow({ token }: { token: string }) {
       );
       try {
         const provider = await getOCRProvider();
-        const result = await provider.extractIdentityData(image);
+        const result = await provider.extractIdentityData(images);
         setOcr(result);
         setProgress(100);
         setTimeout(() => go("review"), 420);
@@ -615,13 +615,18 @@ export function VisitorFlow({ token }: { token: string }) {
                 return setError("Falta la foto del frente de tu identificación.");
               if (invitation.requireIdentification && !files.back)
                 return setError("Falta la foto del reverso de tu identificación.");
-              if (files.back) return void runOcr(files.back);
+              if (files.front || files.back) {
+                const sides = [files.front, files.back].filter(
+                  (file): file is File => Boolean(file),
+                );
+                return void runOcr(sides);
+              }
               go("extras");
             }}
             nextLabel={
-              files.back 
-                ? "Leer mi identificación" 
-                : invitation.requireIdentification 
+              files.front || files.back
+                ? "Leer mi identificación"
+                : invitation.requireIdentification
                   ? "Agregar fotos para continuar"
                   : "Continuar sin foto"
             }

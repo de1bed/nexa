@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MockOCRProvider } from "../ocr/mock";
+import { ocrResultFromExtraction } from "../ocr/extraction";
 import { LOW_CONFIDENCE } from "../ocr/types";
 import { parseTd1 } from "../ocr/mrz";
 import {
@@ -25,6 +26,28 @@ describe("OCR", () => {
     expect(result.expiryDate).toBe("2030-12-31");
     expect(result.expired).toBe(false);
     expect(result.rawText).toContain("INSTITUTO NACIONAL ELECTORAL");
+  });
+
+  it("prioriza el MRZ verificado sobre la lectura visual", async () => {
+    const sample = await new MockOCRProvider().extractIdentityData(
+      new File(["imagen"], "id.jpg", { type: "image/jpeg" }),
+    );
+    const result = ocrResultFromExtraction({
+      fullName: "Nombre mal leído",
+      documentNumber: "000",
+      birthDate: "2000-01-01",
+      expiryDate: "2099-01-01",
+      curp: null,
+      address: "Calle Falsa 123",
+      mrzText: sample.mrz?.lines.join("\n") ?? "",
+      rawText: "INSTITUTO NACIONAL ELECTORAL",
+    });
+
+    expect(result.mrz?.verified).toBe(true);
+    expect(result.fullName).toBe("SOFIA RIVERA SOTO");
+    expect(result.documentNumber).toBe(sample.mrz?.documentNumber);
+    expect(result.address).toBe("Calle Falsa 123");
+    expect(result.confidence).toBe(100);
   });
 
   it("marca revisión cuando la lectura no queda comprobada", () => {
