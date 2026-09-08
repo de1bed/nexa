@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Check, Download, Loader2, Share2 } from "lucide-react";
+import { Check, Download, ImageDown, Loader2, Share2 } from "lucide-react";
 import { Button } from "../ui";
 import { Sheet } from "../ui-client";
 
 /**
- * Genera una imagen del pase y la guarda en el teléfono (descarga / compartir
- * a Fotos). El QR se dibuja en un canvas: no depende de capturar el DOM.
+ * Genera una imagen del pase y la guarda (descarga / compartir a Fotos).
+ * El QR se dibuja en un canvas: no depende de capturar el DOM.
+ * Funciona tanto en móvil (share) como en computadora (descarga directa).
  */
 export function SavePassButton({
   token,
@@ -30,6 +31,10 @@ export function SavePassButton({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [prompt, setPrompt] = useState(false);
+
+  const isMobile = typeof navigator !== "undefined" 
+    ? /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    : true;
 
   useEffect(() => {
     if (!promptOnMount || typeof window === "undefined") return;
@@ -114,46 +119,80 @@ export function SavePassButton({
     }
   }
 
+  async function downloadImage() {
+    setBusy(true);
+    try {
+      const file = await renderFile();
+      downloadFile(file);
+      setSaved(true);
+      sessionStorage.setItem(`nexa-pass-saved:${token}`, "1");
+    } catch {
+      // silently fail
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
-      <Button
-        variant={saved ? "outline" : "accent"}
-        size="lg"
-        block
-        disabled={busy}
-        onClick={() => void save()}
-      >
-        {busy ? (
-          <Loader2 size={18} className="animate-spin" />
-        ) : saved ? (
-          <>
-            <Check size={18} />
-            Pase guardado
-          </>
-        ) : (
-          <>
-            <Download size={18} />
-            Guardar pase
-          </>
+      <div className="flex gap-2">
+        <Button
+          variant={saved ? "outline" : "accent"}
+          size="lg"
+          className="flex-1"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : saved ? (
+            <>
+              <Check size={18} />
+              Guardado
+            </>
+          ) : (
+            <>
+              {isMobile ? <Share2 size={18} /> : <Download size={18} />}
+              {isMobile ? "Guardar en Fotos" : "Guardar pase"}
+            </>
+          )}
+        </Button>
+        {!isMobile && (
+          <Button
+            variant="outline"
+            size="lg"
+            disabled={busy}
+            onClick={() => void downloadImage()}
+            title="Descargar como imagen PNG"
+          >
+            <ImageDown size={18} />
+          </Button>
         )}
-      </Button>
+      </div>
 
       <Sheet
         open={prompt}
         onClose={() => setPrompt(false)}
         title="Guarda este pase"
-        description="Si cierras esta pantalla y no lo tienes, tendrás que pedírselo a tu anfitrión. Guárdalo en Fotos ahora."
+        description="Si cierras esta pantalla y no lo tienes, tendrás que pedírselo a tu anfitrión. Guárdalo ahora."
       >
-        <Button variant="accent" size="lg" block disabled={busy} onClick={() => void save()}>
-          {busy ? (
-            <Loader2 size={18} className="animate-spin" />
-          ) : (
-            <>
-              <Share2 size={18} />
-              Guardar en el teléfono
-            </>
+        <div className="space-y-3">
+          <Button variant="accent" size="lg" block disabled={busy} onClick={() => void save()}>
+            {busy ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <>
+                {isMobile ? <Share2 size={18} /> : <Download size={18} />}
+                {isMobile ? "Guardar en Fotos" : "Descargar imagen"}
+              </>
+            )}
+          </Button>
+          {!isMobile && (
+            <p className="text-center text-xs text-slate-500">
+              Se descargará un archivo PNG con tu pase de acceso
+            </p>
           )}
-        </Button>
+        </div>
         <button
           type="button"
           className="mt-3 w-full py-3 text-sm font-medium text-slate-500"
