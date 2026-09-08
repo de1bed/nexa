@@ -5,8 +5,8 @@ function asList(image: File | Blob | Array<File | Blob>) {
 }
 
 /**
- * Llama al lector del servidor (Gemini vía AI Gateway) y, si no responde,
- * cae a Tesseract en el dispositivo para no bloquear al visitante.
+ * Primero Tesseract (gratis, en el teléfono). Solo si la banda no cuadra
+ * se llama a Gemini Flash Lite. Así la mayoría de INE recientes no cobran.
  */
 export class CloudOCRProvider implements OCRProvider {
   readonly name = "gemini";
@@ -15,6 +15,23 @@ export class CloudOCRProvider implements OCRProvider {
     image: File | Blob | Array<File | Blob>,
   ): Promise<OCRResult> {
     const files = asList(image);
+    const local = await this.readLocal(files.at(-1)!);
+    if (local?.mrz?.verified) return local;
+
+    const remote = await this.readRemote(files);
+    return remote ?? local ?? { rawText: "", confidence: 0, fields: [] };
+  }
+
+  private async readLocal(image: File | Blob) {
+    try {
+      const { TesseractOCRProvider } = await import("./tesseract");
+      return await new TesseractOCRProvider().extractIdentityData(image);
+    } catch {
+      return null;
+    }
+  }
+
+  private async readRemote(files: Array<File | Blob>) {
     const form = new FormData();
     if (files[0]) form.set("front", files[0]);
     if (files[1]) form.set("back", files[1]);
@@ -27,10 +44,8 @@ export class CloudOCRProvider implements OCRProvider {
       });
       if (response.ok) return (await response.json()) as OCRResult;
     } catch {
-      // Sin red o sin cupo del proveedor: el motor local sigue siendo útil.
+      // Sin cupo o sin red: nos quedamos con lo que leyó el teléfono.
     }
-
-    const { TesseractOCRProvider } = await import("./tesseract");
-    return new TesseractOCRProvider().extractIdentityData(files.at(-1)!);
+    return null;
   }
 }

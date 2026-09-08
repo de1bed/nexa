@@ -6,7 +6,7 @@ import {
 } from "@/lib/ocr/extraction";
 import type { OCRResult } from "@/lib/ocr/types";
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash";
+const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
 
 export function visionOcrConfigured() {
   return (
@@ -26,6 +26,9 @@ export async function extractIdentityFromImages(
   const model = process.env.OCR_MODEL?.trim() || DEFAULT_MODEL;
   const { output } = await generateText({
     model,
+    providerOptions: {
+      google: { thinkingConfig: { thinkingBudget: 0 } },
+    },
     instructions:
       "Eres un lector de identificaciones mexicanas (INE/IFE, pasaporte). " +
       "Extrae solo lo que se ve. No inventes folios, CURP ni fechas. " +

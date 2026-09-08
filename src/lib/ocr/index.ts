@@ -3,8 +3,8 @@ import { MockOCRProvider } from "./mock";
 import { isLiveMode } from "@/lib/config";
 
 /**
- * En producción se lee con Gemini (AI Gateway) y, si falla, Tesseract.
- * El mock solo vive en la vitrina o si se fuerza explícitamente.
+ * En producción: Tesseract primero (gratis). Gemini Flash Lite solo si
+ * la banda no se pudo comprobar. El mock es solo vitrina.
  */
 export async function getOCRProvider(): Promise<OCRProvider> {
   const forced = process.env.NEXT_PUBLIC_OCR_PROVIDER;
