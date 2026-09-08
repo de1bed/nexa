@@ -43,6 +43,7 @@ export async function GET() {
           active: row.active as boolean,
           name: profile?.full_name ?? "Usuario",
           email: profile?.email ?? "",
+          joinedAt: row.created_at as string,
         };
       }),
     },

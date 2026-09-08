@@ -490,12 +490,18 @@ export function VisitorFlow({ token }: { token: string }) {
             )}
           </div>
 
-          <div className="mt-7 space-y-3">
-            <Button variant="accent" size="lg" block onClick={() => go("identity")}>
+          <div className="mt-7 space-y-4">
+            <Button 
+              variant="accent" 
+              size="lg" 
+              block 
+              onClick={() => go("identity")}
+              className="min-h-[52px] text-base"
+            >
               Comenzar mi registro
               <ArrowRight size={19} />
             </Button>
-            <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
+            <p className="flex items-center justify-center gap-1.5 pb-2 text-xs text-slate-400">
               <LockKeyhole size={13} />
               Enlace personal · vence después de la visita
             </p>
@@ -612,7 +618,14 @@ export function VisitorFlow({ token }: { token: string }) {
               if (files.back) return void runOcr(files.back);
               go("extras");
             }}
-            nextLabel={files.back ? "Leer mi identificación" : "Continuar sin foto"}
+            nextLabel={
+              files.back 
+                ? "Leer mi identificación" 
+                : invitation.requireIdentification 
+                  ? "Agregar fotos para continuar"
+                  : "Continuar sin foto"
+            }
+            nextDisabled={invitation.requireIdentification && (!files.front || !files.back)}
             error={error}
           >
             <div className="mb-5">
@@ -716,21 +729,6 @@ export function VisitorFlow({ token }: { token: string }) {
             </button>
           </div>
 
-          {/* La banda del reverso trae dígitos de control: cuando cuadran, los
-              datos no son una conjetura del OCR sino una lectura comprobada. */}
-          {ocr?.mrz?.verified && (
-            <Callout tone="success" icon={BadgeCheck} className="mb-4">
-              <b>Lectura verificada.</b> Los datos coinciden con los dígitos de
-              control de tu credencial.
-              {ocr.expiryDate && (
-                <>
-                  {" "}
-                  Vigencia hasta {formatIsoDate(ocr.expiryDate)}.
-                </>
-              )}
-            </Callout>
-          )}
-
           {ocr?.expired && (
             <Callout tone="warning" icon={AlertTriangle} className="mb-4">
               Tu identificación aparece como <b>vencida</b>. Puedes continuar,
@@ -738,10 +736,12 @@ export function VisitorFlow({ token }: { token: string }) {
             </Callout>
           )}
 
-          {ocr && !ocr.mrz && (
-            <Callout tone="neutral" icon={AlertTriangle} className="mb-4">
-              No pudimos leer la banda del reverso. Revisa o escribe tus datos a
-              mano.
+          {ocr && (
+            <Callout tone="neutral" icon={FileCheck2} className="mb-4">
+              Extrajimos el texto de la imagen. Confirma que los datos son correctos.
+              {ocr.expiryDate && (
+                <> Vigencia detectada: {formatIsoDate(ocr.expiryDate)}.</>
+              )}
             </Callout>
           )}
 
@@ -956,9 +956,9 @@ function Frame({
   progress?: number;
 }) {
   return (
-    <main className="min-h-screen bg-[#f4f7fb]">
-      <header className="safe-top sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
-        <div className="mx-auto flex h-15 max-w-2xl items-center justify-between px-5">
+    <main className="flex min-h-[100dvh] flex-col bg-[#f4f7fb]">
+      <header className="safe-top sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
+        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-5">
           <Brand href="#" />
           <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
             <LockKeyhole size={13} />
@@ -975,7 +975,7 @@ function Frame({
         )}
       </header>
 
-      <div className="safe-bottom mx-auto max-w-2xl px-4 py-7 sm:px-6 sm:py-12">
+      <div className="safe-bottom mx-auto w-full max-w-2xl flex-1 px-4 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-10">
         <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(7,20,38,.04),0_18px_48px_-30px_rgba(7,20,38,.4)] sm:p-8">
           {children}
         </div>
@@ -1029,11 +1029,11 @@ function StepShell({
         </div>
       )}
 
-      <div className="mt-7 flex items-center gap-3">
+      <div className="mt-7 flex items-center gap-3 pb-2">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex h-13 items-center gap-1.5 rounded-2xl px-3 text-sm font-medium text-slate-500 active:bg-slate-100"
+          className="inline-flex h-13 min-h-[48px] items-center gap-1.5 rounded-2xl px-4 text-sm font-medium text-slate-500 active:bg-slate-100"
         >
           <ArrowLeft size={18} />
           Atrás
@@ -1044,7 +1044,7 @@ function StepShell({
             size="lg"
             onClick={onNext}
             disabled={nextDisabled}
-            className="flex-1"
+            className="min-h-[48px] flex-1"
           >
             {busy && <Loader2 size={18} className="animate-spin" />}
             {nextLabel}

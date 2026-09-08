@@ -56,9 +56,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const dock = isHost
     ? hostNav
     : [
-        adminNav[0],
-        adminNav[1],
-        adminSecondary[0],
+        adminNav[0],  // Resumen
+        adminNav[1],  // Visitas
+        { href: "/guard/scan" as Route, label: "Caseta", short: "Caseta", icon: ScanLine },
       ];
 
   return (

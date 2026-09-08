@@ -57,7 +57,7 @@ export function SavePassButton({
     });
 
     const width = 720;
-    const height = 980;
+    const height = 1040;
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -82,17 +82,26 @@ export function SavePassButton({
     ctx.fill();
     ctx.drawImage(image, qrX, 168, qrSize, qrSize);
 
+    // Código textual para entrada manual
+    const textCode = `${token.slice(0, 4).toUpperCase()}-${token.slice(4, 8).toUpperCase()}-${token.slice(8, 12).toUpperCase()}`;
+    ctx.fillStyle = "#64748b";
+    ctx.font = "600 24px ui-monospace, monospace";
+    ctx.fillText(textCode, width / 2, 620);
+    ctx.fillStyle = "#475569";
+    ctx.font = "14px system-ui, sans-serif";
+    ctx.fillText("Código para entrada manual", width / 2, 648);
+
     ctx.fillStyle = "#ffffff";
     ctx.font = "600 36px system-ui, sans-serif";
-    ctx.fillText(visitorName, width / 2, 660);
+    ctx.fillText(visitorName, width / 2, 700);
     ctx.fillStyle = "#94a3b8";
     ctx.font = "22px system-ui, sans-serif";
-    ctx.fillText(hostName, width / 2, 704);
-    ctx.fillText(location, width / 2, 740);
-    ctx.fillText(when, width / 2, 776);
+    ctx.fillText(hostName, width / 2, 744);
+    ctx.fillText(location, width / 2, 780);
+    ctx.fillText(when, width / 2, 816);
     ctx.fillStyle = "#10cfc9";
     ctx.font = "600 16px system-ui, sans-serif";
-    ctx.fillText("Guárdalo. Lo vas a necesitar en recepción.", width / 2, 860);
+    ctx.fillText("Guárdalo. Lo vas a necesitar en recepción.", width / 2, 890);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(

@@ -93,6 +93,7 @@ export type TeamMember = {
   email: string;
   role: MemberRole;
   active: boolean;
+  joinedAt?: string;
 };
 
 export type OrganizationSettings = {

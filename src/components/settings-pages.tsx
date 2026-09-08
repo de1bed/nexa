@@ -65,6 +65,27 @@ async function readError(response: Response, fallback: string) {
   }
 }
 
+function formatTimeSince(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 1) return "Hoy";
+  if (diffDays === 1) return "1 día";
+  if (diffDays < 7) return `${diffDays} días`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return weeks === 1 ? "1 semana" : `${weeks} semanas`;
+  }
+  if (diffDays < 365) {
+    const months = Math.floor(diffDays / 30);
+    return months === 1 ? "1 mes" : `${months} meses`;
+  }
+  const years = Math.floor(diffDays / 365);
+  return years === 1 ? "1 año" : `${years} años`;
+}
+
 /* ========================================================================== */
 /* Equipo                                                                     */
 /* ========================================================================== */
@@ -476,44 +497,97 @@ export function TeamPage() {
         </form>
       </Sheet>
 
-      {/* Sheet para editar miembro */}
+      {/* Sheet para ver/editar miembro */}
       <Sheet
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         title={editing?.name ?? ""}
-        description="Cambia su rol o suspende su acceso."
+        description="Información y permisos del miembro."
       >
         {editing && (
-          <div className="space-y-3">
-            {(["admin", "host", "guard"] as MemberRole[]).map((role) => (
-              <button
-                key={role}
-                type="button"
+          <div className="space-y-5">
+            {/* Información del miembro */}
+            <div className="rounded-2xl bg-slate-50 p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Avatar name={editing.name} size={48} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold truncate">{editing.name}</p>
+                  <p className="text-sm text-slate-500 truncate">{editing.email}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                <div>
+                  <p className="text-xs text-slate-400">Rol actual</p>
+                  <p className="text-sm font-medium">{roleLabels[editing.role]}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Estado</p>
+                  <p className={cn("text-sm font-medium", editing.active ? "text-emerald-600" : "text-amber-600")}>
+                    {editing.active ? "Activo" : "Suspendido"}
+                  </p>
+                </div>
+                {editing.joinedAt && (
+                  <>
+                    <div>
+                      <p className="text-xs text-slate-400">Miembro desde</p>
+                      <p className="text-sm font-medium">
+                        {new Date(editing.joinedAt).toLocaleDateString("es-MX", { 
+                          year: "numeric", 
+                          month: "short", 
+                          day: "numeric" 
+                        })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Antigüedad</p>
+                      <p className="text-sm font-medium">
+                        {formatTimeSince(editing.joinedAt)}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Cambiar rol */}
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">Cambiar rol</p>
+              <div className="space-y-2">
+                {(["admin", "host", "guard"] as MemberRole[]).map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    disabled={busy || editing.id === viewer.id}
+                    onClick={() => updateMember(editing, { role, active: true })}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-2xl border p-4 text-left transition",
+                      editing.role === role && editing.active
+                        ? "border-[#10cfc9] bg-[#10cfc9]/10"
+                        : "border-slate-200",
+                      editing.id === viewer.id && "opacity-50 cursor-not-allowed",
+                    )}
+                  >
+                    <span className="text-sm font-semibold">{roleLabels[role]}</span>
+                    {editing.role === role && editing.active && (
+                      <Check size={18} className="text-[#0d9d99]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {editing.id !== viewer.id && (
+              <Button
+                variant={editing.active ? "outline" : "accent"}
+                size="lg"
+                block
                 disabled={busy}
-                onClick={() => updateMember(editing, { role, active: true })}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-2xl border p-4 text-left transition",
-                  editing.role === role && editing.active
-                    ? "border-[#10cfc9] bg-[#10cfc9]/10"
-                    : "border-slate-200",
-                )}
+                className={editing.active ? "border-red-200 text-red-600" : ""}
+                onClick={() => updateMember(editing, { active: !editing.active })}
               >
-                <span className="text-sm font-semibold">{roleLabels[role]}</span>
-                {editing.role === role && editing.active && (
-                  <Check size={18} className="text-[#0d9d99]" />
-                )}
-              </button>
-            ))}
-            <Button
-              variant={editing.active ? "outline" : "accent"}
-              size="lg"
-              block
-              disabled={busy}
-              className={editing.active ? "border-red-200 text-red-600" : ""}
-              onClick={() => updateMember(editing, { active: !editing.active })}
-            >
-              {editing.active ? "Suspender acceso" : "Reactivar acceso"}
-            </Button>
+                {editing.active ? "Suspender acceso" : "Reactivar acceso"}
+              </Button>
+            )}
           </div>
         )}
       </Sheet>

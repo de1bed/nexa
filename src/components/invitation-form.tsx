@@ -81,6 +81,16 @@ function todayPlus(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function formatDateSpanish(dateString: string): string {
+  const date = new Date(dateString + "T12:00:00");
+  return date.toLocaleDateString("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 const durations = [30, 60, 90, 120];
 
 function addMinutes(time: string, minutes: number) {
@@ -303,21 +313,23 @@ export function InvitationForm() {
                 Todos son opcionales: el visitante los confirma o corrige.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                update("visitorName", "");
-                update("email", "");
-                update("phone", "");
-                update("company", "");
-                update("sendEmail", false);
-                update("sendWhatsApp", false);
-              }}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600"
-            >
-              <Wand2 size={15} />
-              Que llene todo
-            </button>
+            {(form.visitorName || form.email || form.phone || form.company) && (
+              <button
+                type="button"
+                onClick={() => {
+                  update("visitorName", "");
+                  update("email", "");
+                  update("phone", "");
+                  update("company", "");
+                  update("sendEmail", false);
+                  update("sendWhatsApp", false);
+                }}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+              >
+                <Wand2 size={15} />
+                Limpiar campos
+              </button>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -403,7 +415,11 @@ export function InvitationForm() {
             )}
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Fecha" error={errors.date}>
+              <Field 
+                label="Fecha" 
+                error={errors.date}
+                hint={form.date ? formatDateSpanish(form.date) : undefined}
+              >
                 <input
                   type="date"
                   className={fieldClass}

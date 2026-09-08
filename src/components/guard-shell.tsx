@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
-import { History, PenLine, ScanLine, Users } from "lucide-react";
+import { ArrowLeft, History, PenLine, ScanLine, Users } from "lucide-react";
 import { Brand } from "./brand";
 import { SessionExit } from "./session-exit";
 import { cn } from "./ui";
@@ -21,12 +21,23 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { visits, organization, viewer } = useWorkspace();
   const inside = visits.filter((visit) => visit.status === "checked_in").length;
+  const isAdmin = viewer.role === "admin" || viewer.role === "superadmin";
 
   return (
     <div className="dark-panel min-h-screen text-white">
       <header className="safe-top sticky top-0 z-30 border-b border-white/10 bg-[#071426]/85 backdrop-blur-lg">
         <div className="mx-auto flex h-15 max-w-3xl items-center justify-between px-4">
-          <Brand dark />
+          {isAdmin ? (
+            <Link 
+              href="/app/dashboard"
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+            >
+              <ArrowLeft size={18} />
+              <span className="hidden sm:inline">Volver al panel</span>
+            </Link>
+          ) : (
+            <Brand dark />
+          )}
           <div className="flex items-center gap-2">
             <span className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium sm:flex">
               <span className="size-1.5 rounded-full bg-emerald-400" />
@@ -35,7 +46,7 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
             <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium">
               {inside} dentro
             </span>
-            <SessionExit dark compact />
+            {!isAdmin && <SessionExit dark compact />}
           </div>
         </div>
       </header>

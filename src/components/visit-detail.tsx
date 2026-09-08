@@ -173,7 +173,9 @@ export function VisitDetail({ id }: { id: string }) {
           >
             <Link2 size={18} />
             {visit.status === "invited"
-              ? "Compartir enlace de registro"
+              ? timeline.some((e) => e.type === "invitation_resent")
+                ? "Volver a compartir enlace"
+                : "Compartir enlace de registro"
               : "Nuevo enlace de registro"}
           </Button>
           {visit.status !== "invited" && (
