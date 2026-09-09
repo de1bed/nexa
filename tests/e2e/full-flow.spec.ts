@@ -41,7 +41,7 @@ test("anfitrión → visitante → guardia → administración", async ({ page }
   await page.getByLabel("Empresa").fill("QA Labs");
   await page.getByRole("button", { name: /^Continuar/ }).click();
 
-  // La credencial se captura por ambas caras: el reverso es el que se lee.
+  // La credencial se captura por ambas caras; no se lee ni se extrae texto.
   await expect(
     page.getByRole("heading", { name: "Tu identificación" }),
   ).toBeVisible();
@@ -55,14 +55,11 @@ test("anfitrión → visitante → guardia → administración", async ({ page }
     });
   }
 
-  await page.getByRole("button", { name: /Leer mi identificación/ }).click();
+  await page.getByRole("button", { name: /^Continuar/ }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Revisa lo que leímos" }),
-  ).toBeVisible({ timeout: 15000 });
-  // El proveedor reproducible entrega una banda MRZ con dígitos de control
-  // correctos, así que la interfaz debe mostrarla como verificada.
-  await expect(page.getByText("Lectura verificada")).toBeVisible();
+    page.getByRole("heading", { name: "Confirma tus datos" }),
+  ).toBeVisible();
   await page.getByLabel("Nombre completo").fill(visitorName);
   await page.getByRole("button", { name: /^Continuar/ }).click();
 

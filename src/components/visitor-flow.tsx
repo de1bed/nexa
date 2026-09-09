@@ -38,10 +38,8 @@ import {
 import { PassCard } from "./visitor/pass-card";
 import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
-import { getOCRProvider, LOW_CONFIDENCE, OCR_DISCLAIMER } from "@/lib/ocr";
-import type { OCRResult } from "@/lib/ocr";
 import { isLiveMode } from "@/lib/config";
-import { documentTypes, formatIsoDate } from "@/lib/domain";
+import { documentTypes } from "@/lib/domain";
 import { randomToken } from "@/lib/security";
 import { showcaseOrganization, showcaseSettings } from "@/lib/demo-data";
 import {
@@ -55,7 +53,6 @@ type Step =
   | "welcome"
   | "identity"
   | "document"
-  | "scanning"
   | "review"
   | "extras"
   | "consent"
@@ -122,18 +119,16 @@ export function VisitorFlow({ token }: { token: string }) {
 
   /**
    * Solo se guarda lo que el visitante escribe. Lo que ya se conoce (datos
-   * adelantados por el anfitrión, campos leídos del documento) se combina al
+   * adelantados por el anfitrión) se combina al
    * renderizar, así nunca se pisa una corrección hecha a mano.
    */
   const [edits, setEdits] = useState<Partial<Record<FormField, string>>>({});
-  /** Una credencial tiene dos caras: el frente identifica, el reverso se lee. */
+  /** Una credencial tiene dos caras; se guardan para la caseta, sin leerlas. */
   const [files, setFiles] = useState<Partial<Record<DocumentSide, File>>>({});
   const [previews, setPreviews] = useState<Partial<Record<DocumentSide, string>>>(
     {},
   );
   const [capturing, setCapturing] = useState<DocumentSide | null>(null);
-  const [ocr, setOcr] = useState<OCRResult | null>(null);
-  const [progress, setProgress] = useState(0);
   const [consent, setConsent] = useState(false);
   const [passToken, setPassToken] = useState("");
   const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
@@ -214,14 +209,14 @@ export function VisitorFlow({ token }: { token: string }) {
     };
   }, [live, token]);
 
-  /* Valor efectivo de cada campo: edición > dato adelantado > lectura OCR. */
+  /* Valor efectivo de cada campo: edición > dato adelantado por el anfitrión. */
   const value = useCallback(
     (name: FormField): string => {
       const edited = edits[name];
       if (edited !== undefined) return edited;
       switch (name) {
         case "fullName":
-          return invitation?.visitorName || ocr?.fullName || "";
+          return invitation?.visitorName || "";
         case "email":
           return invitation?.visitorEmail || "";
         case "phone":
@@ -230,13 +225,11 @@ export function VisitorFlow({ token }: { token: string }) {
           return invitation?.visitorCompany || "";
         case "documentType":
           return documentTypes[0];
-        case "documentNumber":
-          return ocr?.documentNumber || "";
         default:
           return "";
       }
     },
-    [edits, invitation, ocr],
+    [edits, invitation],
   );
 
   const set = useCallback((name: FormField, next: string) => {
@@ -248,37 +241,6 @@ export function VisitorFlow({ token }: { token: string }) {
     setStep(next);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
-
-  /* ------------------------------------------------------------------ */
-  /* Lectura del documento                                               */
-  /* ------------------------------------------------------------------ */
-  const runOcr = useCallback(
-    async (images: File | File[]) => {
-      go("scanning");
-      setProgress(12);
-      const timer = setInterval(
-        () => setProgress((current) => Math.min(90, current + 9)),
-        160,
-      );
-      try {
-        const provider = await getOCRProvider();
-        const result = await provider.extractIdentityData(images);
-        setOcr(result);
-        setProgress(100);
-        setTimeout(() => go("review"), 420);
-      } catch {
-        setOcr(null);
-        setProgress(100);
-        setError(
-          "No pudimos leer la imagen automáticamente. Puedes escribir tus datos a mano.",
-        );
-        setTimeout(() => go("review"), 300);
-      } finally {
-        clearInterval(timer);
-      }
-    },
-    [go],
-  );
 
   /* ------------------------------------------------------------------ */
   /* Envío                                                               */
@@ -314,11 +276,6 @@ export function VisitorFlow({ token }: { token: string }) {
         fields.forEach(([key, fieldValue]) => {
           if (fieldValue) form.set(key, fieldValue);
         });
-        if (ocr) {
-          form.set("ocrConfidence", String(Math.round(ocr.confidence)));
-          form.set("ocrVerified", ocr.mrz?.verified ? "true" : "false");
-          if (ocr.expiryDate) form.set("documentExpiresAt", ocr.expiryDate);
-        }
         form.set("consent", "true");
         if (files.front) form.set("documentFront", files.front);
         if (files.back) form.set("documentBack", files.back);
@@ -606,7 +563,7 @@ export function VisitorFlow({ token }: { token: string }) {
             title="Tu identificación"
             subtitle={
               invitation.requireIdentification
-                ? "Política de esta empresa: pide las dos caras. El reverso es el que leemos."
+                ? "Política de esta empresa: pide foto de las dos caras."
                 : "Es opcional. Si la subes, agiliza la entrada; si no, puedes continuar."
             }
             onBack={() => go("identity")}
@@ -616,19 +573,15 @@ export function VisitorFlow({ token }: { token: string }) {
               if (invitation.requireIdentification && !files.back)
                 return setError("Falta la foto del reverso de tu identificación.");
               if (files.front || files.back) {
-                const sides = [files.front, files.back].filter(
-                  (file): file is File => Boolean(file),
-                );
-                return void runOcr(sides);
+                go("review");
+                return;
               }
               go("extras");
             }}
             nextLabel={
-              files.front || files.back
-                ? "Leer mi identificación"
-                : invitation.requireIdentification
-                  ? "Agregar fotos para continuar"
-                  : "Continuar sin foto"
+              invitation.requireIdentification && (!files.front || !files.back)
+                ? "Agregar fotos para continuar"
+                : "Continuar"
             }
             nextDisabled={invitation.requireIdentification && (!files.front || !files.back)}
             error={error}
@@ -663,39 +616,17 @@ export function VisitorFlow({ token }: { token: string }) {
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
               {invitation.requireIdentification
-                ? "Esta empresa pide identificación para autorizar el acceso. La lectura ocurre en tu teléfono."
-                : "No es obligatorio. La lectura, si la hay, ocurre en tu teléfono."}
+                ? "Esta empresa pide identificación para autorizar el acceso. Las fotos se guardan de forma privada."
+                : "No es obligatorio. Si las subes, se guardan de forma privada."}
             </Callout>
           </StepShell>
         ))}
 
-      {step === "scanning" && (
-        <div className="animate-rise py-14 text-center">
-          <div className="relative mx-auto grid size-28 place-items-center">
-            <span className="animate-pulse-ring absolute inset-0 rounded-full border-2 border-[#10cfc9]" />
-            <span className="grid size-24 place-items-center rounded-full bg-[#10cfc9]/12 text-[#0d9d99]">
-              <ScanFace size={40} />
-            </span>
-          </div>
-          <h2 className="mt-7 text-xl font-semibold">Leyendo tu identificación</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Extraemos el texto en tu propio dispositivo.
-          </p>
-          <div className="mx-auto mt-6 h-2 max-w-[220px] overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-[#10cfc9] transition-all duration-200"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs font-medium text-slate-400">{progress}%</p>
-        </div>
-      )}
-
       {step === "review" && (
         <StepShell
           index={3}
-          title="Revisa lo que leímos"
-          subtitle="Corrige cualquier dato. Tú tienes la última palabra."
+          title="Confirma tus datos"
+          subtitle="Escribe el folio si lo tienes a la mano. El guardia verá las fotos."
           onBack={() => go("document")}
           onNext={() => {
             if (!value("fullName").trim())
@@ -719,9 +650,7 @@ export function VisitorFlow({ token }: { token: string }) {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Identificación capturada</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                {ocr
-                  ? `Confianza de lectura ${Math.round(ocr.confidence)}%`
-                  : "Captura manual"}
+                Frente y reverso listos para caseta
               </p>
             </div>
             <button
@@ -734,27 +663,8 @@ export function VisitorFlow({ token }: { token: string }) {
             </button>
           </div>
 
-          {ocr?.expired && (
-            <Callout tone="warning" icon={AlertTriangle} className="mb-4">
-              Tu identificación aparece como <b>vencida</b>. Puedes continuar,
-              pero es posible que en recepción te pidan otra.
-            </Callout>
-          )}
-
-          {ocr && (
-            <Callout tone="neutral" icon={FileCheck2} className="mb-4">
-              Extrajimos el texto de la imagen. Confirma que los datos son correctos.
-              {ocr.expiryDate && (
-                <> Vigencia detectada: {formatIsoDate(ocr.expiryDate)}.</>
-              )}
-            </Callout>
-          )}
-
           <div className="space-y-4">
-            <Field
-              label="Nombre completo"
-              warning={hasLowConfidence(ocr, "fullName")}
-            >
+            <Field label="Nombre completo">
               <input
                 className={fieldClass}
                 value={value("fullName")}
@@ -765,7 +675,6 @@ export function VisitorFlow({ token }: { token: string }) {
               label="Número o folio"
               optional
               hint="Solo guardamos los últimos cuatro dígitos."
-              warning={hasLowConfidence(ocr, "documentNumber")}
             >
               <input
                 className={fieldClass}
@@ -774,10 +683,6 @@ export function VisitorFlow({ token }: { token: string }) {
               />
             </Field>
           </div>
-
-          <Callout tone="info" icon={ShieldCheck} className="mt-5">
-            {OCR_DISCLAIMER}
-          </Callout>
         </StepShell>
       )}
 
@@ -853,7 +758,7 @@ export function VisitorFlow({ token }: { token: string }) {
               <p className="mt-3">
                 Tu identificación se conserva{" "}
                 <b>{invitation.retentionDays} días</b> y después se elimina de
-                forma permanente. {OCR_DISCLAIMER}
+                forma permanente.
               </p>
             ) : (
               <p className="mt-3">
@@ -938,14 +843,6 @@ export function VisitorFlow({ token }: { token: string }) {
         </div>
       )}
     </Frame>
-  );
-}
-
-function hasLowConfidence(ocr: OCRResult | null, field: string) {
-  return Boolean(
-    ocr?.fields.some(
-      (item) => item.name === field && item.confidence < LOW_CONFIDENCE,
-    ),
   );
 }
 
@@ -1072,7 +969,7 @@ function SideSlot({
   onPick: () => void;
 }) {
   const label = side === "front" ? "Frente" : "Reverso";
-  const hint = side === "front" ? "Con tu foto" : "Con las líneas de datos";
+  const hint = side === "front" ? "Con tu foto" : "El otro lado de la credencial";
 
   return (
     <button

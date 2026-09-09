@@ -19,7 +19,7 @@ const copy: Record<DocumentSide, { title: string; hint: string }> = {
   },
   back: {
     title: "Reverso de tu identificación",
-    hint: "El lado con las líneas de letras y números",
+    hint: "El otro lado de la credencial",
   },
 };
 
@@ -156,7 +156,7 @@ export function DocumentCapture({
             <span className="absolute -bottom-1 -left-1 size-9 rounded-bl-2xl border-b-4 border-l-4 border-[#10cfc9]" />
             <span className="absolute -bottom-1 -right-1 size-9 rounded-br-2xl border-b-4 border-r-4 border-[#10cfc9]" />
 
-            {/* En el reverso se resalta la franja donde vive la banda MRZ. */}
+            {/* En el reverso se marca la parte inferior de la credencial. */}
             {side === "back" && (
               <span className="absolute inset-x-3 bottom-2 h-[38%] rounded-lg border-2 border-dashed border-[#10cfc9]/70" />
             )}
@@ -201,7 +201,7 @@ export function DocumentCapture({
 
         <p className="absolute inset-x-0 bottom-3 text-center text-[11px] font-medium text-white/80">
           {side === "back"
-            ? "Encuadra las líneas de letras y números"
+            ? "Encuadra el reverso completo, sin recortes"
             : "Coloca la credencial dentro del marco, sin reflejos"}
         </p>
       </div>
