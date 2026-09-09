@@ -207,6 +207,7 @@ export function VisitDetail({ id }: { id: string }) {
           hostName={visit.hostName}
           location={visit.location}
           startsAt={visit.startsAt}
+          endsAt={visit.endsAt}
         />
       )}
 

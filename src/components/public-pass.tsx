@@ -18,6 +18,7 @@ import { WalletButtons } from "./visitor/wallet-buttons";
 import { Callout, cn } from "./ui";
 import { LiveDuration } from "./ui-client";
 import { isLiveMode } from "@/lib/config";
+import { passValidityWindow } from "@/lib/pass-window";
 import {
   getShowcaseServerSnapshot,
   getShowcaseSnapshot,
@@ -36,6 +37,8 @@ type Pass = {
   location: string;
   locationAddress: string;
   startsAt: string;
+  endsAt?: string;
+  expiresAt?: string;
   checkedInAt?: string | null;
   checkedOutAt?: string | null;
   purpose: string;
@@ -102,6 +105,12 @@ export function PublicPass({ token }: { token: string }) {
       location: showcaseVisit.location,
       locationAddress: showcaseVisit.locationAddress ?? "",
       startsAt: showcaseVisit.startsAt,
+      endsAt: showcaseVisit.endsAt,
+      expiresAt: passValidityWindow({
+        startsAt: showcaseVisit.startsAt,
+        endsAt: showcaseVisit.endsAt,
+        issuedAt: showcaseVisit.startsAt,
+      }).expires_at,
       checkedInAt: showcaseVisit.checkedInAt,
       checkedOutAt: showcaseVisit.checkedOutAt,
       purpose: showcaseVisit.purpose,
@@ -182,6 +191,7 @@ export function PublicPass({ token }: { token: string }) {
         hostName={pass.hostName}
         location={pass.location}
         startsAt={pass.startsAt}
+        expiresAt={pass.expiresAt}
         accessRequirements={pass.accessRequirements || undefined}
       />
 

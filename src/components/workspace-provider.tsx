@@ -80,10 +80,11 @@ type WorkspaceValue = Directory & {
   live: boolean;
   loading: boolean;
   error?: string;
+  syncedAt?: string;
   viewer: Viewer;
   visits: Visit[];
   events: WorkspaceState["events"];
-  reload: () => Promise<void>;
+  reload: (silent?: boolean) => Promise<void>;
   createInvitation: (
     draft: InvitationDraft,
   ) => Promise<{ visit: Visit; invitationUrl: string }>;
@@ -173,25 +174,26 @@ export function WorkspaceProvider({
   });
   const [loading, setLoading] = useState(live);
   const [error, setError] = useState<string>();
+  const [syncedAt, setSyncedAt] = useState<string>();
 
   const state = live ? remoteState : showcaseState;
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (silent = false) => {
     if (!live) return;
-    setLoading(true);
-    setError(undefined);
+    if (!silent) setError(undefined);
     try {
       const result = await fetchWorkspace();
       setRemoteState(result.state);
       if (result.directory) setDirectory(result.directory);
+      setSyncedAt(new Date().toISOString());
+      setError(undefined);
     } catch (reason) {
+      if (silent) return;
       setError(
         reason instanceof Error
           ? reason.message
           : "No fue posible sincronizar la información",
       );
-    } finally {
-      setLoading(false);
     }
   }, [live]);
 
@@ -206,6 +208,7 @@ export function WorkspaceProvider({
         if (!active) return;
         setRemoteState(result.state);
         if (result.directory) setDirectory(result.directory);
+        setSyncedAt(new Date().toISOString());
       } catch (reason) {
         if (!active) return;
         setError(
@@ -222,6 +225,22 @@ export function WorkspaceProvider({
       active = false;
     };
   }, [live]);
+
+  useEffect(() => {
+    if (!live) return;
+
+    const tick = () => {
+      if (document.visibilityState === "hidden") return;
+      void reload(true);
+    };
+
+    const id = window.setInterval(tick, 20000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [live, reload]);
 
   const createInvitation = useCallback<WorkspaceValue["createInvitation"]>(
     async (draft) => {
@@ -501,6 +520,7 @@ export function WorkspaceProvider({
       live,
       loading,
       error,
+      syncedAt,
       viewer,
       ...directory,
       visits: state.visits,
@@ -516,6 +536,7 @@ export function WorkspaceProvider({
       live,
       loading,
       error,
+      syncedAt,
       viewer,
       directory,
       state,

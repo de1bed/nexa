@@ -77,6 +77,7 @@ export function InsideList() {
                   <p className="truncate font-semibold">{visit.visitorName}</p>
                   <p className="truncate text-sm text-slate-500">
                     {visit.company || "Sin empresa"} · {visit.hostName}
+                    {visit.location ? ` · ${visit.location}` : ""}
                   </p>
                 </div>
               </div>

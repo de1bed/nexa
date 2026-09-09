@@ -63,7 +63,7 @@ insert into public.visit_invitations(organization_id,visit_id,token_hash,token_h
 select '20000000-0000-0000-0000-000000000001',id,public.token_hash(case when id='50000000-0000-0000-0000-000000000001' then 'nexa-demo-invitation-2026' else 'seed-invite-'||id end),'••••'||right(id::text,4),ends_at+interval '1 day',now()
 from public.visits where status in ('invited','pre_registered','approved');
 insert into public.qr_tokens(organization_id,visit_id,token_hash,token_hint,valid_from,expires_at)
-select organization_id,id,public.token_hash(case when id='50000000-0000-0000-0000-000000000003' then 'nexa-demo-pass-2026' else 'seed-pass-'||id end),'••••'||right(id::text,4),starts_at-interval '15 min',ends_at+interval '30 min'
+select organization_id,id,public.token_hash(case when id='50000000-0000-0000-0000-000000000003' then 'nexa-demo-pass-2026' else 'seed-pass-'||id end),'••••'||right(id::text,4),now(),ends_at+interval '24 hours'
 from public.visits where status in ('pre_registered','approved','checked_in','checked_out');
 insert into public.access_events(organization_id,visit_id,location_id,actor_id,event_type,occurred_at)
 select organization_id,id,location_id,'10000000-0000-0000-0000-000000000004',case when status='checked_out' then 'check_out'::public.access_event_type else 'check_in'::public.access_event_type end,coalesce(checked_out_at,checked_in_at)

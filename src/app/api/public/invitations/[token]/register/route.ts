@@ -11,6 +11,7 @@ import {
   identityFileMeta,
   isAllowedIdentityUpload,
 } from "@/lib/identity-file";
+import { passValidityWindow } from "@/lib/pass-window";
 
 export const dynamic = "force-dynamic";
 
@@ -193,12 +194,10 @@ export async function POST(
       token_hash: hash,
       token_hint: `••••${qrToken.slice(-4)}`,
       public_token: qrToken,
-      valid_from: new Date(
-        new Date(visit.starts_at).getTime() - 60 * 60000,
-      ).toISOString(),
-      expires_at: new Date(
-        new Date(visit.ends_at).getTime() + 12 * 3600000,
-      ).toISOString(),
+      ...passValidityWindow({
+        startsAt: String(visit.starts_at),
+        endsAt: String(visit.ends_at),
+      }),
     });
     if (tokenError) throw tokenError;
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "./supabase-admin";
+import { healQrWindow } from "./pass-issue";
 
 /**
  * Resolución de un pase a partir de su token público.
@@ -71,12 +72,35 @@ export async function resolvePassByToken(
   const visit = row.visit;
   if (!visit) return null;
 
+  let validFrom = row.valid_from;
+  let expiresAt = row.expires_at;
+  const open =
+    !row.revoked_at &&
+    visit.status !== "cancelled" &&
+    visit.status !== "checked_out" &&
+    visit.status !== "denied";
+  if (open) {
+    try {
+      const healed = await healQrWindow({
+        visitId: visit.id,
+        startsAt: visit.starts_at,
+        endsAt: visit.ends_at,
+        validFrom,
+        expiresAt,
+      });
+      validFrom = healed.validFrom;
+      expiresAt = healed.expiresAt;
+    } catch {
+      // Si no se pudo alargar el pase, se muestra con la ventana que ya tenía.
+    }
+  }
+
   const state: PassState =
     row.revoked_at || visit.status === "cancelled"
       ? "revoked"
       : visit.status === "checked_out"
         ? "used"
-        : new Date(row.expires_at) < new Date()
+        : new Date(expiresAt) < new Date()
           ? "expired"
           : "valid";
 
@@ -95,7 +119,7 @@ export async function resolvePassByToken(
     checkedOutAt: visit.checked_out_at,
     purpose: visit.purpose,
     accessRequirements: visit.access_requirements ?? "",
-    validFrom: row.valid_from,
-    expiresAt: row.expires_at,
+    validFrom,
+    expiresAt,
   };
 }

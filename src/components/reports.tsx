@@ -22,14 +22,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useWorkspace } from "./workspace-provider";
+import { useMyVisits, useWorkspace } from "./workspace-provider";
 import { Button, Card, EmptyState, Field, MetricTile, fieldClass } from "./ui";
-import { Sheet } from "./ui-client";
+import { LiveDuration, Sheet, useNow } from "./ui-client";
 import { safeCsvCell } from "@/lib/security";
 import {
+  formatDateTimeMx,
   formatDuration,
   statusLabels,
   timeInsideMs,
+  type Visit,
   type VisitStatus,
 } from "@/lib/domain";
 
@@ -43,8 +45,26 @@ function isoDay(offsetDays: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function downloadCsv(filename: string, lines: string[][]) {
+  const content = lines.map((row) => row.map(safeCsvCell).join(",")).join("\r\n");
+  const blob = new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function stayLabel(visit: Visit) {
+  if (!visit.checkedInAt) return "—";
+  return formatDuration(timeInsideMs(visit));
+}
+
 export function Reports() {
-  const { visits, organization } = useWorkspace();
+  const { organization, viewer, syncedAt, live } = useWorkspace();
+  const visits = useMyVisits();
+  const hostView = viewer.role === "host";
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
     from: isoDay(-30),
@@ -67,21 +87,42 @@ export function Reports() {
     [visits],
   );
 
-  const rows = useMemo(
+  const scoped = useMemo(
     () =>
       visits.filter((visit) => {
+        return (
+          (filters.location === "all" || visit.location === filters.location) &&
+          (filters.host === "all" || visit.hostName === filters.host) &&
+          (filters.company === "all" || visit.company === filters.company)
+        );
+      }),
+    [visits, filters.location, filters.host, filters.company],
+  );
+
+  const insideNow = useMemo(
+    () =>
+      scoped
+        .filter((visit) => visit.status === "checked_in")
+        .sort(
+          (a, b) =>
+            new Date(a.checkedInAt ?? a.startsAt).getTime() -
+            new Date(b.checkedInAt ?? b.startsAt).getTime(),
+        ),
+    [scoped],
+  );
+
+  const rows = useMemo(
+    () =>
+      scoped.filter((visit) => {
         const day = visit.startsAt.slice(0, 10);
         return (
           day >= filters.from &&
           day <= filters.to &&
-          (filters.location === "all" || visit.location === filters.location) &&
-          (filters.host === "all" || visit.hostName === filters.host) &&
-          (filters.company === "all" || visit.company === filters.company) &&
           (filters.purpose === "all" || visit.purpose === filters.purpose) &&
           (filters.status === "all" || visit.status === filters.status)
         );
       }),
-    [visits, filters],
+    [scoped, filters.from, filters.to, filters.purpose, filters.status],
   );
 
   const stats = useMemo(() => {
@@ -94,7 +135,7 @@ export function Reports() {
         completed.length
       : 0;
 
-    const count = (key: (visit: (typeof rows)[number]) => string) =>
+    const count = (key: (visit: Visit) => string) =>
       Object.entries(
         rows.reduce<Record<string, number>>((acc, visit) => {
           const value = key(visit) || "Sin dato";
@@ -132,45 +173,80 @@ export function Reports() {
     };
   }, [rows, period]);
 
+  const clock = useNow();
+  const generatedAt = formatDateTimeMx(
+    syncedAt ?? (clock ? new Date(clock).toISOString() : undefined),
+  );
+  const periodLabel = `${filters.from} a ${filters.to}`;
+
   function exportCsv() {
-    const content = [
+    const header = [
+      ["Organización", organization.name],
+      ["Tipo de reporte", hostView ? "Bitácora del anfitrión" : "Bitácora de control de visitas"],
+      ["Generado", generatedAt],
+      ["Periodo", periodLabel],
+      ["Personas dentro ahora", String(insideNow.length)],
+      ["Visitas en el periodo", String(rows.length)],
+      [],
+      ["PERSONAS DENTRO AHORA"],
       [
         "Visitante",
         "Empresa",
         "Anfitrión",
         "Ubicación",
-        "Programada",
+        "Motivo",
+        "Entrada",
+        "Tiempo dentro",
+        "Identificación",
+      ],
+      ...insideNow.map((visit) => [
+        visit.visitorName,
+        visit.company || "Sin empresa",
+        visit.hostName,
+        visit.location,
+        visit.purpose,
+        formatDateTimeMx(visit.checkedInAt),
+        stayLabel(visit),
+        visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
+      ]),
+      [],
+      ["BITÁCORA DEL PERIODO"],
+      [
+        "Visitante",
+        "Empresa",
+        "Anfitrión",
+        "Ubicación",
+        "Motivo",
+        "Programada inicio",
+        "Programada fin",
         "Entrada",
         "Salida",
-        "Motivo",
+        "Estancia",
         "Estado",
-        "Duración (min)",
+        "Identificación",
+        "Placas",
       ],
       ...rows.map((visit) => [
         visit.visitorName,
-        visit.company,
+        visit.company || "Sin empresa",
         visit.hostName,
         visit.location,
-        visit.startsAt,
-        visit.checkedInAt ?? "",
-        visit.checkedOutAt ?? "",
         visit.purpose,
+        formatDateTimeMx(visit.startsAt),
+        formatDateTimeMx(visit.endsAt),
+        formatDateTimeMx(visit.checkedInAt),
+        formatDateTimeMx(visit.checkedOutAt),
+        stayLabel(visit),
         statusLabels[visit.status],
-        visit.checkedInAt && visit.checkedOutAt
-          ? Math.round(timeInsideMs(visit) / 60000)
-          : "",
+        visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
+        visit.vehiclePlate || "",
       ]),
-    ]
-      .map((row) => row.map(safeCsvCell).join(","))
-      .join("\r\n");
+    ];
 
-    const blob = new Blob([`﻿${content}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `nexa-reporte-${filters.from}-a-${filters.to}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(
+      `nexa-bitacora-${organization.name.replace(/\s+/g, "-").toLowerCase()}-${filters.from}-a-${filters.to}.csv`,
+      header,
+    );
   }
 
   const activeFilters = [
@@ -185,12 +261,16 @@ export function Reports() {
     <>
       <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[13px] font-semibold text-[#0d9d99]">Analítica</p>
+          <p className="text-[13px] font-semibold text-[#0d9d99]">
+            Control de acceso
+          </p>
           <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
-            Reportes
+            {hostView ? "Mis reportes" : "Reportes de auditoría"}
           </h1>
-          <p className="mt-1.5 text-[15px] text-slate-500">
-            {rows.length} visitas entre {filters.from} y {filters.to}
+          <p className="mt-1.5 max-w-2xl text-[15px] text-slate-500">
+            Bitácora de {organization.name}
+            {hostView ? " · solo tus visitas" : ""}. Personas dentro en este
+            momento, independiente del periodo.
           </p>
         </div>
         <div className="no-print flex gap-2">
@@ -200,10 +280,40 @@ export function Reports() {
           </Button>
           <Button size="sm" onClick={exportCsv}>
             <Download size={16} />
-            CSV
+            Exportar CSV
           </Button>
         </div>
       </header>
+
+      <Card className="mb-5 border-[#10cfc9]/30 bg-white p-5 print:border print:border-slate-300">
+        <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-[#0d9d99]">
+          NEXA VISIT
+        </p>
+        <h2 className="mt-1 text-xl font-semibold">{organization.name}</h2>
+        <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-slate-400">Documento</dt>
+            <dd className="font-medium">Bitácora de visitas</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Periodo</dt>
+            <dd className="font-medium">{periodLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Generado</dt>
+            <dd className="font-medium">{generatedAt}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Responsable</dt>
+            <dd className="font-medium">{viewer.name}</dd>
+          </div>
+        </dl>
+        {live && (
+          <p className="mt-3 text-xs text-slate-400">
+            Esta vista se actualiza sola cada 20 segundos.
+          </p>
+        )}
+      </Card>
 
       <div className="no-print mb-5 flex flex-wrap gap-2">
         <Button
@@ -233,7 +343,7 @@ export function Reports() {
       </div>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricTile label="Visitas" value={rows.length} icon={BarChart3} tone="info" />
+        <MetricTile label="Visitas del periodo" value={rows.length} icon={BarChart3} tone="info" />
         <MetricTile
           label="Entradas registradas"
           value={stats.entered.length}
@@ -242,7 +352,7 @@ export function Reports() {
         />
         <MetricTile
           label="Dentro ahora"
-          value={rows.filter((visit) => visit.status === "checked_in").length}
+          value={insideNow.length}
           icon={Users}
           tone="accent"
         />
@@ -254,16 +364,55 @@ export function Reports() {
         />
       </section>
 
-      {rows.length === 0 ? (
-        <div className="mt-6">
+      <section className="mt-6">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Personas dentro ahora</h2>
+            <p className="text-sm text-slate-500">
+              Aforo en vivo. No depende del rango de fechas.
+            </p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+            {insideNow.length} presente{insideNow.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {insideNow.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="Nadie está dentro"
+            description="Cuando caseta registre una entrada, la persona aparecerá aquí al instante."
+          />
+        ) : (
+          <AuditTable
+            visits={insideNow}
+            mode="inside"
+          />
+        )}
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">Bitácora del periodo</h2>
+          <p className="text-sm text-slate-500">
+            {rows.length} visita{rows.length === 1 ? "" : "s"} entre {filters.from} y{" "}
+            {filters.to}
+          </p>
+        </div>
+
+        {rows.length === 0 ? (
           <EmptyState
             icon={BarChart3}
             title="Sin datos en este rango"
             description="Amplía el periodo o quita algunos filtros."
           />
-        </div>
-      ) : (
-        <section className="mt-5 grid gap-5 xl:grid-cols-2">
+        ) : (
+          <AuditTable visits={rows} mode="log" />
+        )}
+      </section>
+
+      {rows.length > 0 && (
+        <section className="no-print mt-8 grid gap-5 xl:grid-cols-2">
           <ChartCard
             title={`Visitas por periodo (${period === "daily" ? "día" : period === "weekly" ? "semana" : "mes"})`}
           >
@@ -326,12 +475,9 @@ export function Reports() {
         </section>
       )}
 
-      <p className="mt-6 text-center text-xs text-slate-400">
-        Datos de {organization.name} · generado el{" "}
-        {new Intl.DateTimeFormat("es-MX", {
-          dateStyle: "long",
-          timeStyle: "short",
-        }).format(new Date())}
+      <p className="mt-8 text-center text-xs text-slate-400">
+        {organization.name} · generado {generatedAt} · para uso en auditorías de
+        control de acceso
       </p>
 
       <Sheet
@@ -369,12 +515,14 @@ export function Reports() {
             options={options.locations}
             onChange={(value) => setFilters({ ...filters, location: value })}
           />
-          <SelectFilter
-            label="Anfitrión"
-            value={filters.host}
-            options={options.hosts}
-            onChange={(value) => setFilters({ ...filters, host: value })}
-          />
+          {!hostView && (
+            <SelectFilter
+              label="Anfitrión"
+              value={filters.host}
+              options={options.hosts}
+              onChange={(value) => setFilters({ ...filters, host: value })}
+            />
+          )}
           <SelectFilter
             label="Empresa"
             value={filters.company}
@@ -448,6 +596,82 @@ export function Reports() {
         </div>
       </Sheet>
     </>
+  );
+}
+
+function AuditTable({
+  visits,
+  mode,
+}: {
+  visits: Visit[];
+  mode: "inside" | "log";
+}) {
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Visitante</th>
+              <th className="px-4 py-3 font-semibold">Empresa</th>
+              <th className="px-4 py-3 font-semibold">Anfitrión</th>
+              <th className="px-4 py-3 font-semibold">Ubicación</th>
+              {mode === "log" && (
+                <th className="px-4 py-3 font-semibold">Programada</th>
+              )}
+              <th className="px-4 py-3 font-semibold">Entrada</th>
+              {mode === "log" && (
+                <th className="px-4 py-3 font-semibold">Salida</th>
+              )}
+              <th className="px-4 py-3 font-semibold">Estancia</th>
+              {mode === "log" && (
+                <th className="px-4 py-3 font-semibold">Estado</th>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {visits.map((visit) => (
+              <tr key={visit.id} className="align-top">
+                <td className="px-4 py-3">
+                  <p className="font-semibold">{visit.visitorName}</p>
+                  <p className="text-xs text-slate-400">{visit.purpose}</p>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  {visit.company || "Sin empresa"}
+                </td>
+                <td className="px-4 py-3">{visit.hostName}</td>
+                <td className="px-4 py-3">{visit.location}</td>
+                {mode === "log" && (
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                    {formatDateTimeMx(visit.startsAt)}
+                  </td>
+                )}
+                <td className="whitespace-nowrap px-4 py-3">
+                  {formatDateTimeMx(visit.checkedInAt) || "—"}
+                </td>
+                {mode === "log" && (
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {formatDateTimeMx(visit.checkedOutAt) || "—"}
+                  </td>
+                )}
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-800">
+                  {mode === "inside" && visit.checkedInAt ? (
+                    <LiveDuration since={visit.checkedInAt} />
+                  ) : (
+                    stayLabel(visit)
+                  )}
+                </td>
+                {mode === "log" && (
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {statusLabels[visit.status]}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

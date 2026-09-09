@@ -245,5 +245,10 @@ textarea {
   }
   body {
     background: #ffffff;
+    color: #071426;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
   }
 }

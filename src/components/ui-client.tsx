@@ -56,6 +56,29 @@ export function LiveDuration({
   );
 }
 
+/** Cuenta atrás hasta un instante. Sirve para mostrar cuánto le queda al QR. */
+export function RemainingUntil({
+  until,
+  className,
+  expiredLabel = "Vencido",
+}: {
+  until?: string;
+  className?: string;
+  expiredLabel?: string;
+}) {
+  const now = useSyncExternalStore(subscribeClock, getClock, getServerClock);
+
+  if (!until) return null;
+  const end = new Date(until).getTime();
+  if (!now) return <span className={className}>—</span>;
+  const left = end - now;
+  return (
+    <span className={className}>
+      {left <= 0 ? expiredLabel : formatDuration(left)}
+    </span>
+  );
+}
+
 /** Hoja inferior: el patrón de diálogo natural en móvil. */
 export function Sheet({
   open,

@@ -40,6 +40,7 @@ import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
 import { isLiveMode } from "@/lib/config";
 import { documentTypes } from "@/lib/domain";
+import { passValidityWindow } from "@/lib/pass-window";
 import { randomToken } from "@/lib/security";
 import { showcaseOrganization, showcaseSettings } from "@/lib/demo-data";
 import {
@@ -812,6 +813,12 @@ export function VisitorFlow({ token }: { token: string }) {
               hostName={invitation.hostName}
               location={invitation.locationName}
               startsAt={invitation.startsAt}
+              expiresAt={
+                passValidityWindow({
+                  startsAt: invitation.startsAt,
+                  endsAt: invitation.endsAt,
+                }).expires_at
+              }
               accessRequirements={invitation.accessRequirements || undefined}
             />
           </div>

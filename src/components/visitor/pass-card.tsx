@@ -3,8 +3,10 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { CalendarClock, MapPin, ShieldCheck, UserRound } from "lucide-react";
+import { CalendarClock, Hourglass, MapPin, ShieldCheck, UserRound } from "lucide-react";
 import { cn } from "../ui";
+import { RemainingUntil } from "../ui-client";
+import { formatDateTimeMx } from "@/lib/domain";
 
 /**
  * Tarjeta del pase. El QR codifica únicamente un token aleatorio: no lleva
@@ -17,6 +19,7 @@ export function PassCard({
   hostName,
   location,
   startsAt,
+  expiresAt,
   state = "valid",
   accessRequirements,
 }: {
@@ -26,6 +29,7 @@ export function PassCard({
   hostName: string;
   location: string;
   startsAt: string;
+  expiresAt?: string;
   state?: "valid" | "used" | "expired" | "revoked";
   accessRequirements?: string;
 }) {
@@ -54,6 +58,8 @@ export function PassCard({
   }).format(new Date(startsAt));
 
   const inactive = state !== "valid";
+  const visitStart = new Date(startsAt).getTime();
+  const showEarlyNote = !inactive && Number.isFinite(visitStart);
 
   return (
     <div className="animate-pop mx-auto w-full max-w-sm overflow-hidden rounded-[28px] bg-white shadow-[0_28px_70px_-32px_rgba(7,20,38,.5)] ring-1 ring-slate-200">
@@ -118,13 +124,39 @@ export function PassCard({
       <div className="space-y-3.5 px-6 pb-7">
         <Row icon={UserRound} label="Anfitrión" value={hostName} />
         <Row icon={MapPin} label="Ubicación" value={location} />
-        <Row icon={CalendarClock} label="Horario" value={dateLabel} />
+        <Row icon={CalendarClock} label="Horario de la visita" value={dateLabel} />
+        {expiresAt && (
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-teal-50 text-[#0d9d99]">
+              <Hourglass size={17} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                El QR vale hasta
+              </p>
+              <p className="mt-0.5 text-sm font-medium leading-5 text-[#071426]">
+                {formatDateTimeMx(expiresAt)}
+              </p>
+              {!inactive && (
+                <p className="mt-0.5 text-xs font-semibold text-[#0d9d99]">
+                  Quedan <RemainingUntil until={expiresAt} />
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         {accessRequirements && (
           <Row
             icon={ShieldCheck}
             label="Requisitos de acceso"
             value={accessRequirements}
           />
+        )}
+        {showEarlyNote && (
+          <p className="rounded-2xl bg-slate-50 px-3.5 py-3 text-[12px] leading-5 text-slate-500">
+            El código ya está activo. Si llegas antes del horario, en caseta
+            pueden pedirte esperar.
+          </p>
         )}
       </div>
     </div>

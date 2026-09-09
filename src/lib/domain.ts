@@ -191,6 +191,19 @@ export function formatDuration(ms: number) {
   return `${hours} h ${minutes} min`;
 }
 
+const dateTimeMx = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/** Fecha y hora locales para bitácoras, CSV y pases. */
+export function formatDateTimeMx(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return dateTimeMx.format(date);
+}
+
 /** Estado de la ventana de acceso de una visita respecto a un instante dado. */
 export function accessWindow(
   visit: Pick<Visit, "startsAt" | "endsAt">,

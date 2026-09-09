@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
+  BarChart3,
   BellRing,
   CalendarDays,
   Clock3,
@@ -123,6 +124,13 @@ export function HostDashboard() {
         <p className="mt-1.5 text-[15px] text-slate-500">
           Comparte un enlace y tu visitante se registra solo.
         </p>
+        <Link
+          href="/app/reports"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600"
+        >
+          <BarChart3 size={16} />
+          Abrir mis reportes
+        </Link>
       </header>
 
       <Link href="/app/visits/new" className="block">
@@ -142,39 +150,54 @@ export function HostDashboard() {
 
       {groups.inside.length > 0 && (
         <section className="mt-5 rounded-[26px] border border-emerald-200 bg-emerald-50 p-5">
-          <div className="flex items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
-              <BellRing size={20} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-emerald-950">
-                {groups.inside.length === 1
-                  ? "Tu visitante ya llegó"
-                  : "Tus visitantes ya llegaron"}
-              </h2>
-              <div className="mt-3 space-y-2">
-                {groups.inside.map((visit) => (
-                  <div
-                    key={visit.id}
-                    className="flex items-center gap-3 rounded-2xl bg-white p-3"
-                  >
-                    <Avatar name={visit.visitorName} size={38} tone="accent" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">
-                        {visit.visitorName}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {visit.company}
-                      </p>
-                    </div>
-                    <LiveDuration
-                      since={visit.checkedInAt}
-                      className="shrink-0 text-xs font-medium text-emerald-700"
-                    />
-                  </div>
-                ))}
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <BellRing size={20} />
+              </span>
+              <div>
+                <h2 className="font-semibold text-emerald-950">
+                  {groups.inside.length === 1
+                    ? "Tu visitante ya está dentro"
+                    : `${groups.inside.length} visitantes dentro ahora`}
+                </h2>
+                <p className="text-sm text-emerald-800/80">
+                  Aforo de tus invitados, actualizado en vivo.
+                </p>
               </div>
             </div>
+            <Link
+              href="/app/people-on-site"
+              className="shrink-0 text-sm font-medium text-emerald-800"
+            >
+              Ver todos
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {groups.inside.map((visit) => (
+              <Link
+                key={visit.id}
+                href={`/app/visits/${visit.id}`}
+                className="flex items-center gap-3 rounded-2xl bg-white p-3"
+              >
+                <Avatar name={visit.visitorName} size={38} tone="accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {visit.visitorName}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {visit.company || "Sin empresa"} · {visit.location}
+                    {visit.checkedInAt
+                      ? ` · desde ${dateLabel(visit.checkedInAt)}`
+                      : ""}
+                  </p>
+                </div>
+                <LiveDuration
+                  since={visit.checkedInAt}
+                  className="shrink-0 text-xs font-medium text-emerald-700"
+                />
+              </Link>
+            ))}
           </div>
         </section>
       )}

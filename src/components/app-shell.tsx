@@ -40,6 +40,8 @@ const adminSecondary = [
 const hostNav = [
   { href: "/app/host", label: "Mi resumen", short: "Inicio", icon: LayoutDashboard },
   { href: "/app/visits", label: "Mis visitas", short: "Visitas", icon: CalendarDays },
+  { href: "/app/people-on-site", label: "Quién está dentro", short: "Dentro", icon: UserRoundCheck },
+  { href: "/app/reports", label: "Mis reportes", short: "Reportes", icon: BarChart3 },
 ] satisfies NavItem[];
 
 function isActive(pathname: string, href: string) {
@@ -53,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const primary = isHost ? hostNav : adminNav;
   const secondary = isHost ? [] : adminSecondary;
   const dock = isHost
-    ? hostNav
+    ? [hostNav[0], hostNav[1], hostNav[2]]
     : [
         adminNav[0],  // Resumen
         adminNav[1],  // Visitas
@@ -63,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-[#071426]">
       {/* Encabezado móvil */}
-      <header className="safe-top sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-lg lg:hidden">
+      <header className="safe-top no-print sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-lg lg:hidden">
         <div className="flex h-15 items-center justify-between px-4">
           <WorkspaceSwitcher compact />
           <SessionExit compact />
@@ -71,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Barra lateral de escritorio */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white p-5 lg:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white p-5 lg:flex">
         <Brand />
         <div className="mt-7">
           <WorkspaceSwitcher />
@@ -100,8 +102,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SessionExit />
       </aside>
 
-      <main className="pb-dock lg:pb-0 lg:pl-64">
-        <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+      <main className="pb-dock print:p-0 lg:pb-0 lg:pl-64 print:pl-0">
+        <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10 lg:py-10 print:max-w-none print:px-0 print:py-0">
           {children}
         </div>
       </main>
@@ -110,12 +112,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Link
         href="/app/visits/new"
         aria-label="Nueva invitación"
-        className="fixed bottom-[calc(78px+env(safe-area-inset-bottom))] right-4 z-30 grid size-14 place-items-center rounded-2xl bg-[#10cfc9] text-[#043b39] shadow-[0_18px_38px_-14px_#10cfc9] transition active:scale-95 lg:hidden"
+        className="no-print fixed bottom-[calc(78px+env(safe-area-inset-bottom))] right-4 z-30 grid size-14 place-items-center rounded-2xl bg-[#10cfc9] text-[#043b39] shadow-[0_18px_38px_-14px_#10cfc9] transition active:scale-95 lg:hidden"
       >
         <Plus size={26} />
       </Link>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-lg lg:hidden">
+      <nav className="safe-bottom no-print fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-lg lg:hidden">
         <div
           className="mx-auto grid max-w-lg"
           style={{ gridTemplateColumns: `repeat(${dock.length + 1}, minmax(0, 1fr))` }}
