@@ -46,13 +46,18 @@ test("anfitrión → visitante → guardia → administración", async ({ page }
     page.getByRole("heading", { name: "Tu identificación" }),
   ).toBeVisible();
 
+  const jpeg = Buffer.from(
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI/8AACwgAAQABAwERAAIhEBEx/9oACAEBAAE/ANhQ/9k=",
+    "base64",
+  );
   for (const side of ["Frente", "Reverso"]) {
     await page.getByRole("button", { name: new RegExp(`^${side}`) }).click();
     await page.locator('input[type="file"]').setInputFiles({
       name: `identificacion-${side.toLowerCase()}.jpg`,
       mimeType: "image/jpeg",
-      buffer: Buffer.from(`imagen-de-prueba-${side}`),
+      buffer: jpeg,
     });
+    await expect(page.getByRole("button", { name: /^Frente/ })).toBeVisible();
   }
 
   await page.getByRole("button", { name: /^Continuar/ }).click();

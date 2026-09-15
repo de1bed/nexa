@@ -25,6 +25,7 @@ import {
   LockKeyhole,
   MapPin,
   Pencil,
+  Plus,
   ScanFace,
   ShieldCheck,
   Sparkles,
@@ -33,6 +34,7 @@ import { Brand } from "./brand";
 import { Button, Callout, Field, cn, fieldClass } from "./ui";
 import {
   DocumentCapture,
+  PhotoCapture,
   type DocumentSide,
 } from "./visitor/document-capture";
 import { PassCard } from "./visitor/pass-card";
@@ -49,17 +51,22 @@ import {
   patchShowcaseVisit,
   subscribeShowcase,
 } from "@/lib/showcase-store";
+import {
+  documentFlags,
+  extrasShowsNotes,
+  extrasShowsVehicle,
+  firstRegistrationStep,
+  parseVisitorFlow,
+  registrationPath,
+  resolvedVisitorName,
+  stepAfter,
+  stepBefore,
+  validateRegistration,
+  type RegistrationStep,
+  type VisitorFlowConfig,
+} from "@/lib/visitor-flow";
 
-type Step =
-  | "welcome"
-  | "identity"
-  | "document"
-  | "review"
-  | "extras"
-  | "consent"
-  | "done";
-
-const flow: Step[] = ["identity", "document", "review", "extras", "consent", "done"];
+type Step = RegistrationStep;
 
 type FormField =
   | "fullName"
@@ -85,21 +92,29 @@ type Invitation = {
   privacyNotice: string;
   retentionDays: number;
   requireIdentification: boolean;
+  visitorFlow: VisitorFlowConfig;
   visitorName: string;
   visitorEmail: string;
   visitorPhone: string;
   visitorCompany: string;
 };
 
+type CaptureTarget =
+  | { kind: "id"; side: DocumentSide }
+  | { kind: "vehicle" }
+  | { kind: "attachment" };
+
+type PhotoItem = { file: File; preview: string };
+
 const invalidInvitation = {
   visitId: "",
   state: "invalid",
+  visitorFlow: parseVisitorFlow(undefined, true),
 } as Invitation;
 
 export function VisitorFlow({ token }: { token: string }) {
   const live = isLiveMode();
 
-  /* Vitrina: la invitación se deriva del store compartido, sin estado propio. */
   const showcaseState = useSyncExternalStore(
     subscribeShowcase,
     getShowcaseSnapshot,
@@ -118,18 +133,14 @@ export function VisitorFlow({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Solo se guarda lo que el visitante escribe. Lo que ya se conoce (datos
-   * adelantados por el anfitrión) se combina al
-   * renderizar, así nunca se pisa una corrección hecha a mano.
-   */
   const [edits, setEdits] = useState<Partial<Record<FormField, string>>>({});
-  /** Una credencial tiene dos caras; se guardan para la caseta, sin leerlas. */
   const [files, setFiles] = useState<Partial<Record<DocumentSide, File>>>({});
-  const [previews, setPreviews] = useState<Partial<Record<DocumentSide, string>>>(
-    {},
-  );
-  const [capturing, setCapturing] = useState<DocumentSide | null>(null);
+  const [previews, setPreviews] = useState<
+    Partial<Record<DocumentSide, string>>
+  >({});
+  const [vehiclePhotos, setVehiclePhotos] = useState<PhotoItem[]>([]);
+  const [attachmentPhotos, setAttachmentPhotos] = useState<PhotoItem[]>([]);
+  const [capturing, setCapturing] = useState<CaptureTarget | null>(null);
   const [consent, setConsent] = useState(false);
   const [passToken, setPassToken] = useState("");
   const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
@@ -137,35 +148,42 @@ export function VisitorFlow({ token }: { token: string }) {
   const invitation: Invitation | null = useMemo(() => {
     if (live) return remoteInvitation;
     if (!showcaseVisit) return invalidInvitation;
+    const visitorFlow = parseVisitorFlow(
+      showcaseSettings.visitorFlow,
+      showcaseSettings.requireIdentification,
+    );
     return {
-          visitId: showcaseVisit.id,
-          state:
-            showcaseVisit.status === "cancelled"
-              ? "cancelled"
-              : showcaseVisit.qrToken
-                ? "completed"
-                : "active",
-          organizationName: showcaseOrganization.name,
-          locationName: showcaseVisit.location,
-          locationAddress: showcaseVisit.locationAddress ?? "",
-          hostName: showcaseVisit.hostName,
-          startsAt: showcaseVisit.startsAt,
-          endsAt: showcaseVisit.endsAt,
-          purpose: showcaseVisit.purpose,
-          accessRequirements: showcaseVisit.accessRequirements ?? "",
-          privacyNotice: showcaseSettings.privacyNotice,
-          retentionDays: showcaseSettings.documentRetentionDays,
-          requireIdentification: showcaseSettings.requireIdentification,
-          visitorName: showcaseVisit.inviteeName ?? "",
-          visitorEmail: showcaseVisit.inviteeEmail ?? "",
-          visitorPhone: showcaseVisit.inviteePhone ?? "",
+      visitId: showcaseVisit.id,
+      state:
+        showcaseVisit.status === "cancelled"
+          ? "cancelled"
+          : showcaseVisit.qrToken
+            ? "completed"
+            : "active",
+      organizationName: showcaseOrganization.name,
+      locationName: showcaseVisit.location,
+      locationAddress: showcaseVisit.locationAddress ?? "",
+      hostName: showcaseVisit.hostName,
+      startsAt: showcaseVisit.startsAt,
+      endsAt: showcaseVisit.endsAt,
+      purpose: showcaseVisit.purpose,
+      accessRequirements: showcaseVisit.accessRequirements ?? "",
+      privacyNotice: showcaseSettings.privacyNotice,
+      retentionDays: showcaseSettings.documentRetentionDays,
+      requireIdentification: visitorFlow.identification === "required",
+      visitorFlow,
+      visitorName: showcaseVisit.inviteeName ?? "",
+      visitorEmail: showcaseVisit.inviteeEmail ?? "",
+      visitorPhone: showcaseVisit.inviteePhone ?? "",
       visitorCompany: showcaseVisit.inviteeCompany ?? "",
     };
   }, [live, remoteInvitation, showcaseVisit]);
 
-  /* ------------------------------------------------------------------ */
-  /* Carga (solo en modo real)                                           */
-  /* ------------------------------------------------------------------ */
+  const flow = invitation?.visitorFlow ?? parseVisitorFlow(undefined, true);
+  const hasIdentityPhotos = Boolean(files.front || files.back);
+  const path = registrationPath(flow, hasIdentityPhotos);
+  const totalSteps = Math.max(1, path.length);
+
   useEffect(() => {
     if (!live) return;
     let active = true;
@@ -179,6 +197,10 @@ export function VisitorFlow({ token }: { token: string }) {
         if (!response.ok) throw new Error("invalid");
         const row = (await response.json()) as Record<string, unknown>;
         if (!active) return;
+        const visitorFlow = parseVisitorFlow(
+          row.visitor_flow,
+          row.require_identification !== false,
+        );
         setRemoteInvitation({
           visitId: String(row.visit_id ?? ""),
           state: (row.state as Invitation["state"]) ?? "invalid",
@@ -192,7 +214,8 @@ export function VisitorFlow({ token }: { token: string }) {
           accessRequirements: String(row.access_requirements ?? ""),
           privacyNotice: String(row.privacy_notice ?? ""),
           retentionDays: Number(row.retention_days ?? 30),
-          requireIdentification: row.require_identification !== false,
+          requireIdentification: visitorFlow.identification === "required",
+          visitorFlow,
           visitorName: String(row.visitor_name ?? ""),
           visitorEmail: String(row.visitor_email ?? ""),
           visitorPhone: String(row.visitor_phone ?? ""),
@@ -210,7 +233,6 @@ export function VisitorFlow({ token }: { token: string }) {
     };
   }, [live, token]);
 
-  /* Valor efectivo de cada campo: edición > dato adelantado por el anfitrión. */
   const value = useCallback(
     (name: FormField): string => {
       const edited = edits[name];
@@ -239,22 +261,57 @@ export function VisitorFlow({ token }: { token: string }) {
 
   const go = useCallback((next: Step) => {
     setError("");
+    setCapturing(null);
     setStep(next);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  /* ------------------------------------------------------------------ */
-  /* Envío                                                               */
-  /* ------------------------------------------------------------------ */
-  async function submit() {
-    if (!consent) {
-      setError("Necesitamos tu consentimiento para registrar la visita.");
+  const stepIndex = path.indexOf(step) + 1;
+
+  function advance(from: Step) {
+    const next = stepAfter(from, flow, hasIdentityPhotos);
+    if (next === "done") {
+      void submit();
       return;
     }
-    const needsId = invitation?.requireIdentification !== false;
-    if (needsId && (!files.front || !files.back)) {
-      setError("Faltan las fotos de tu identificación.");
-      go("document");
+    go(next);
+  }
+
+  function back(from: Step) {
+    go(stepBefore(from, flow, hasIdentityPhotos));
+  }
+
+  async function submit() {
+    const fullName = resolvedVisitorName(
+      value("fullName"),
+      invitation?.visitorName,
+      flow.identity,
+    );
+    const problem = validateRegistration(
+      {
+        fullName: value("fullName"),
+        email: value("email"),
+        phone: value("phone"),
+        company: value("company"),
+        vehiclePlate: value("vehiclePlate"),
+        visitorNotes: value("visitorNotes"),
+        consent,
+        identityPhotos: Number(Boolean(files.front)) + Number(Boolean(files.back)),
+        vehiclePhotos: vehiclePhotos.length,
+        attachmentPhotos: attachmentPhotos.length,
+        invitedName: invitation?.visitorName,
+      },
+      flow,
+    );
+    if (problem) {
+      setError(problem);
+      if (problem.includes("identificación")) go("document");
+      else if (problem.includes("placas") || problem.includes("vehículo"))
+        go(flow.vehicle === "required" ? "vehicle" : "extras");
+      else if (problem.includes("anexo")) go("attachments");
+      else if (problem.includes("nota")) go("extras");
+      else if (problem.includes("consentimiento")) go("consent");
+      else if (flow.identity !== "off") go("identity");
       return;
     }
 
@@ -262,14 +319,24 @@ export function VisitorFlow({ token }: { token: string }) {
     setError("");
 
     try {
+      const flags = documentFlags([
+        files.front ? "identity_front" : null,
+        files.back ? "identity_back" : null,
+        ...vehiclePhotos.map(() => "vehicle_plate"),
+        ...attachmentPhotos.map(() => "attachment"),
+      ]);
       if (live) {
         const form = new FormData();
         const fields: Array<[string, string]> = [
-          ["fullName", value("fullName")],
+          ["fullName", fullName],
           ["email", value("email")],
           ["phone", value("phone")],
           ["company", value("company")],
-          ["documentType", value("documentType") || (needsId ? "INE" : "No presentada")],
+          [
+            "documentType",
+            value("documentType") ||
+              (files.front || files.back ? "INE" : "No presentada"),
+          ],
           ["documentNumber", value("documentNumber")],
           ["vehiclePlate", value("vehiclePlate")],
           ["visitorNotes", value("visitorNotes")],
@@ -277,9 +344,15 @@ export function VisitorFlow({ token }: { token: string }) {
         fields.forEach(([key, fieldValue]) => {
           if (fieldValue) form.set(key, fieldValue);
         });
-        form.set("consent", "true");
+        form.set("consent", consent ? "true" : "false");
         if (files.front) form.set("documentFront", files.front);
         if (files.back) form.set("documentBack", files.back);
+        vehiclePhotos.forEach((photo) =>
+          form.append("vehiclePlatePhoto", photo.file),
+        );
+        attachmentPhotos.forEach((photo) =>
+          form.append("attachment", photo.file),
+        );
 
         const response = await fetch(
           `/api/public/invitations/${encodeURIComponent(token)}/register`,
@@ -291,7 +364,9 @@ export function VisitorFlow({ token }: { token: string }) {
           error?: string;
         };
         if (!response.ok || !payload.qrToken)
-          throw new Error(payload.error ?? "No fue posible completar tu registro");
+          throw new Error(
+            payload.error ?? "No fue posible completar tu registro",
+          );
 
         setPassToken(payload.qrToken);
         setWallet(payload.wallet);
@@ -302,7 +377,7 @@ export function VisitorFlow({ token }: { token: string }) {
         patchShowcaseVisit(
           invitation!.visitId,
           {
-            visitorName: value("fullName"),
+            visitorName: fullName,
             email: value("email"),
             phone: value("phone"),
             company: value("company"),
@@ -313,11 +388,11 @@ export function VisitorFlow({ token }: { token: string }) {
             vehiclePlate: value("vehiclePlate") || undefined,
             visitorNotes: value("visitorNotes") || undefined,
             status: "pre_registered",
-            documentCaptured: true,
-            consentedAt: new Date().toISOString(),
+            ...flags,
+            consentedAt: consent ? new Date().toISOString() : undefined,
             qrToken: generated,
           },
-          { type: "pre_registered", actor: value("fullName") },
+          { type: "pre_registered", actor: fullName },
         );
         setPassToken(generated);
       }
@@ -333,12 +408,12 @@ export function VisitorFlow({ token }: { token: string }) {
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Estados de portada                                                  */
-  /* ------------------------------------------------------------------ */
-  const stepIndex = flow.indexOf(step);
   const progressValue =
-    step === "welcome" ? 0 : ((Math.max(0, stepIndex) + 1) / flow.length) * 100;
+    step === "welcome" || step === "done"
+      ? step === "done"
+        ? 100
+        : 0
+      : (Math.max(1, stepIndex) / totalSteps) * 100;
 
   const dateLabel = useMemo(
     () =>
@@ -350,6 +425,13 @@ export function VisitorFlow({ token }: { token: string }) {
         : "",
     [invitation],
   );
+
+  const extrasTitle =
+    extrasShowsVehicle(flow) && extrasShowsNotes(flow)
+      ? "Detalles finales"
+      : extrasShowsVehicle(flow)
+        ? "Tu vehículo"
+        : "Notas para recepción";
 
   if (loading)
     return (
@@ -409,7 +491,25 @@ export function VisitorFlow({ token }: { token: string }) {
       </Frame>
     );
 
-  /* ------------------------------------------------------------------ */
+  const captureCopy =
+    capturing?.kind === "vehicle"
+      ? {
+          title: "Foto de las placas",
+          hint: "Encuadra la placa completa, sin recortes",
+          footer: "Evita reflejos y toma la placa de frente",
+          guide: "wide" as const,
+          prefix: "placa",
+        }
+      : capturing?.kind === "attachment"
+        ? {
+            title: "Foto de anexo",
+            hint: "Documento, equipo o lo que te pidan en recepción",
+            footer: "Asegúrate de que se lea con claridad",
+            guide: "square" as const,
+            prefix: "anexo",
+          }
+        : null;
+
   return (
     <Frame progress={progressValue}>
       <div ref={topRef} className="scroll-mt-24" />
@@ -449,11 +549,15 @@ export function VisitorFlow({ token }: { token: string }) {
           </div>
 
           <div className="mt-7 space-y-4">
-            <Button 
-              variant="accent" 
-              size="lg" 
-              block 
-              onClick={() => go("identity")}
+            <Button
+              variant="accent"
+              size="lg"
+              block
+              onClick={() => {
+                const first = firstRegistrationStep(flow);
+                if (first === "done") void submit();
+                else go(first);
+              }}
               className="min-h-[52px] text-base"
             >
               Comenzar mi registro
@@ -469,29 +573,41 @@ export function VisitorFlow({ token }: { token: string }) {
 
       {step === "identity" && (
         <StepShell
-          index={1}
+          index={stepIndex}
+          total={totalSteps}
           title="Tus datos"
           subtitle={
             invitation.visitorName || invitation.visitorEmail
               ? "Tu anfitrión adelantó algunos datos. Confírmalos o corrígelos."
               : "Necesitamos lo mínimo para identificarte en recepción."
           }
-          onBack={() => go("welcome")}
+          onBack={() => back("identity")}
           onNext={() => {
-            if (value("fullName").trim().length < 2)
-              return setError("Escribe tu nombre completo.");
-            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value("email")))
-              return setError("Escribe un correo válido.");
-            if (value("phone").trim().length < 7)
-              return setError("Escribe un teléfono de contacto.");
-            if (value("company").trim().length < 2)
-              return setError("Escribe la empresa que representas.");
-            go(invitation.requireIdentification ? "document" : "extras");
+            const problem = validateRegistration(
+              {
+                fullName: value("fullName"),
+                email: value("email"),
+                phone: value("phone"),
+                company: value("company"),
+                vehiclePlate: value("vehiclePlate"),
+                visitorNotes: value("visitorNotes"),
+                consent: true,
+                identityPhotos: 2,
+                vehiclePhotos: 1,
+                attachmentPhotos: 1,
+              },
+              { ...flow, identification: "off", vehicle: "off", notes: "off", attachments: "off", consent: "off" },
+            );
+            if (problem) return setError(problem);
+            advance("identity");
           }}
           error={error}
         >
           <div className="space-y-4">
-            <Field label="Nombre completo">
+            <Field
+              label="Nombre completo"
+              optional={flow.identity !== "required"}
+            >
               <input
                 className={fieldClass}
                 autoComplete="name"
@@ -500,7 +616,11 @@ export function VisitorFlow({ token }: { token: string }) {
                 onChange={(event) => set("fullName", event.target.value)}
               />
             </Field>
-            <Field label="Correo" hint="Ahí te enviaremos tu pase de acceso.">
+            <Field
+              label="Correo"
+              optional={flow.identity !== "required"}
+              hint="Ahí te enviaremos tu pase de acceso."
+            >
               <input
                 className={fieldClass}
                 type="email"
@@ -512,7 +632,7 @@ export function VisitorFlow({ token }: { token: string }) {
               />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Teléfono">
+              <Field label="Teléfono" optional={flow.identity !== "required"}>
                 <input
                   className={fieldClass}
                   type="tel"
@@ -523,7 +643,7 @@ export function VisitorFlow({ token }: { token: string }) {
                   onChange={(event) => set("phone", event.target.value)}
                 />
               </Field>
-              <Field label="Empresa">
+              <Field label="Empresa" optional={flow.identity !== "required"}>
                 <input
                   className={fieldClass}
                   autoComplete="organization"
@@ -538,9 +658,11 @@ export function VisitorFlow({ token }: { token: string }) {
       )}
 
       {step === "document" &&
-        (capturing ? (
+        (capturing?.kind === "id" ? (
           <div className="animate-rise">
-            <p className="text-[13px] font-semibold text-[#0d9d99]">Paso 2 de 5</p>
+            <p className="text-[13px] font-semibold text-[#0d9d99]">
+              Paso {stepIndex} de {totalSteps}
+            </p>
             <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
               Tu identificación
             </h1>
@@ -549,42 +671,41 @@ export function VisitorFlow({ token }: { token: string }) {
             </p>
 
             <DocumentCapture
-              side={capturing}
+              side={capturing.side}
               onCancel={() => setCapturing(null)}
               onCaptured={(captured, url) => {
-                setFiles((current) => ({ ...current, [capturing]: captured }));
-                setPreviews((current) => ({ ...current, [capturing]: url }));
+                setFiles((current) => ({ ...current, [capturing.side]: captured }));
+                setPreviews((current) => ({ ...current, [capturing.side]: url }));
                 setCapturing(null);
               }}
             />
           </div>
         ) : (
           <StepShell
-            index={2}
+            index={stepIndex}
+            total={totalSteps}
             title="Tu identificación"
             subtitle={
-              invitation.requireIdentification
+              flow.identification === "required"
                 ? "Política de esta empresa: pide foto de las dos caras."
                 : "Es opcional. Si la subes, agiliza la entrada; si no, puedes continuar."
             }
-            onBack={() => go("identity")}
+            onBack={() => back("document")}
             onNext={() => {
-              if (invitation.requireIdentification && !files.front)
+              if (flow.identification === "required" && !files.front)
                 return setError("Falta la foto del frente de tu identificación.");
-              if (invitation.requireIdentification && !files.back)
+              if (flow.identification === "required" && !files.back)
                 return setError("Falta la foto del reverso de tu identificación.");
-              if (files.front || files.back) {
-                go("review");
-                return;
-              }
-              go("extras");
+              advance("document");
             }}
             nextLabel={
-              invitation.requireIdentification && (!files.front || !files.back)
+              flow.identification === "required" && (!files.front || !files.back)
                 ? "Agregar fotos para continuar"
                 : "Continuar"
             }
-            nextDisabled={invitation.requireIdentification && (!files.front || !files.back)}
+            nextDisabled={
+              flow.identification === "required" && (!files.front || !files.back)
+            }
             error={error}
           >
             <div className="mb-5">
@@ -609,14 +730,14 @@ export function VisitorFlow({ token }: { token: string }) {
                   preview={previews[side]}
                   onPick={() => {
                     setError("");
-                    setCapturing(side);
+                    setCapturing({ kind: "id", side });
                   }}
                 />
               ))}
             </div>
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
-              {invitation.requireIdentification
+              {flow.identification === "required"
                 ? "Esta empresa pide identificación para autorizar el acceso. Las fotos se guardan de forma privada."
                 : "No es obligatorio. Si las subes, se guardan de forma privada."}
             </Callout>
@@ -625,14 +746,15 @@ export function VisitorFlow({ token }: { token: string }) {
 
       {step === "review" && (
         <StepShell
-          index={3}
+          index={stepIndex}
+          total={totalSteps}
           title="Confirma tus datos"
           subtitle="Escribe el folio si lo tienes a la mano. El guardia verá las fotos."
-          onBack={() => go("document")}
+          onBack={() => back("review")}
           onNext={() => {
-            if (!value("fullName").trim())
+            if (flow.identity === "required" && !value("fullName").trim())
               return setError("El nombre no puede quedar vacío.");
-            go("extras");
+            advance("review");
           }}
           error={error}
         >
@@ -687,63 +809,193 @@ export function VisitorFlow({ token }: { token: string }) {
         </StepShell>
       )}
 
-      {step === "extras" && (
-        <StepShell
-          index={4}
-          title="Detalles finales"
-          subtitle="Opcional, pero agiliza tu entrada."
-          onBack={() =>
-            go(
-              invitation.requireIdentification || files.front
-                ? "review"
-                : "identity",
-            )
-          }
-          onNext={() => go("consent")}
-          error={error}
-        >
-          <div className="space-y-4">
-            <Field label="Placas del vehículo" optional>
-              <input
-                className={fieldClass}
-                placeholder="ABC-1234"
-                value={value("vehiclePlate")}
-                onChange={(event) =>
-                  set("vehiclePlate", event.target.value.toUpperCase())
-                }
-              />
-            </Field>
-            <Field label="Notas para recepción" optional>
-              <textarea
-                rows={3}
-                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-[16px] outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
-                placeholder="Traigo equipo, llego con un acompañante…"
-                value={value("visitorNotes")}
-                onChange={(event) => set("visitorNotes", event.target.value)}
-              />
-            </Field>
-          </div>
+      {step === "vehicle" &&
+        (capturing?.kind === "vehicle" && captureCopy ? (
+          <CaptureScreen
+            index={stepIndex}
+            total={totalSteps}
+            heading="Tu vehículo"
+            copy={captureCopy}
+            onCancel={() => setCapturing(null)}
+            onCaptured={(file, preview) => {
+              setVehiclePhotos((current) => [...current, { file, preview }]);
+              setCapturing(null);
+            }}
+          />
+        ) : (
+          <StepShell
+            index={stepIndex}
+            total={totalSteps}
+            title="Tu vehículo"
+            subtitle="Fotografía las placas y escribe el número, como con tu identificación."
+            onBack={() => back("vehicle")}
+            onNext={() => {
+              if (!value("vehiclePlate").trim())
+                return setError("Escribe las placas del vehículo.");
+              if (vehiclePhotos.length < 1)
+                return setError("Falta al menos una foto de las placas.");
+              advance("vehicle");
+            }}
+            nextDisabled={
+              !value("vehiclePlate").trim() || vehiclePhotos.length < 1
+            }
+            error={error}
+          >
+            <VehicleFields
+              plate={value("vehiclePlate")}
+              onPlate={(next) => set("vehiclePlate", next.toUpperCase())}
+              photos={vehiclePhotos}
+              required
+              onAdd={() => {
+                setError("");
+                setCapturing({ kind: "vehicle" });
+              }}
+              onRemove={(index) =>
+                setVehiclePhotos((current) =>
+                  current.filter((_, item) => item !== index),
+                )
+              }
+            />
+          </StepShell>
+        ))}
 
-          <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">
-              Tu visita
-            </p>
-            <p className="mt-1.5 font-semibold">{invitation.hostName}</p>
-            <p className="mt-1 text-sm text-slate-500">{dateLabel}</p>
-            <p className="text-sm text-slate-500">{invitation.locationName}</p>
-          </div>
-        </StepShell>
-      )}
+      {step === "extras" &&
+        (capturing?.kind === "vehicle" && captureCopy ? (
+          <CaptureScreen
+            index={stepIndex}
+            total={totalSteps}
+            heading={extrasTitle}
+            copy={captureCopy}
+            onCancel={() => setCapturing(null)}
+            onCaptured={(file, preview) => {
+              setVehiclePhotos((current) => [...current, { file, preview }]);
+              setCapturing(null);
+            }}
+          />
+        ) : (
+          <StepShell
+            index={stepIndex}
+            total={totalSteps}
+            title={extrasTitle}
+            subtitle={
+              flow.notes === "required" || flow.vehicle === "required"
+                ? "Completa lo que esta empresa pide para agilizar tu entrada."
+                : "Opcional, pero agiliza tu entrada."
+            }
+            onBack={() => back("extras")}
+            onNext={() => {
+              if (flow.notes === "required" && !value("visitorNotes").trim())
+                return setError("Escribe una nota para recepción.");
+              advance("extras");
+            }}
+            error={error}
+          >
+            <div className="space-y-4">
+              {extrasShowsVehicle(flow) && (
+                <VehicleFields
+                  plate={value("vehiclePlate")}
+                  onPlate={(next) => set("vehiclePlate", next.toUpperCase())}
+                  photos={vehiclePhotos}
+                  required={false}
+                  onAdd={() => {
+                    setError("");
+                    setCapturing({ kind: "vehicle" });
+                  }}
+                  onRemove={(index) =>
+                    setVehiclePhotos((current) =>
+                      current.filter((_, item) => item !== index),
+                    )
+                  }
+                />
+              )}
+              {extrasShowsNotes(flow) && (
+                <Field
+                  label="Notas para recepción"
+                  optional={flow.notes !== "required"}
+                >
+                  <textarea
+                    rows={3}
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-[16px] outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
+                    placeholder="Traigo equipo, llego con un acompañante…"
+                    value={value("visitorNotes")}
+                    onChange={(event) => set("visitorNotes", event.target.value)}
+                  />
+                </Field>
+              )}
+            </div>
+
+            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Tu visita
+              </p>
+              <p className="mt-1.5 font-semibold">{invitation.hostName}</p>
+              <p className="mt-1 text-sm text-slate-500">{dateLabel}</p>
+              <p className="text-sm text-slate-500">{invitation.locationName}</p>
+            </div>
+          </StepShell>
+        ))}
+
+      {step === "attachments" &&
+        (capturing?.kind === "attachment" && captureCopy ? (
+          <CaptureScreen
+            index={stepIndex}
+            total={totalSteps}
+            heading="Anexos"
+            copy={captureCopy}
+            onCancel={() => setCapturing(null)}
+            onCaptured={(file, preview) => {
+              setAttachmentPhotos((current) => [...current, { file, preview }]);
+              setCapturing(null);
+            }}
+          />
+        ) : (
+          <StepShell
+            index={stepIndex}
+            total={totalSteps}
+            title="Anexos"
+            subtitle={
+              flow.attachments === "required"
+                ? "Esta empresa pide al menos una foto adicional."
+                : "Puedes agregar fotos de lo que te pidan en recepción."
+            }
+            onBack={() => back("attachments")}
+            onNext={() => {
+              if (flow.attachments === "required" && attachmentPhotos.length < 1)
+                return setError("Agrega al menos una foto de anexo.");
+              advance("attachments");
+            }}
+            nextDisabled={
+              flow.attachments === "required" && attachmentPhotos.length < 1
+            }
+            error={error}
+          >
+            <PhotoList
+              photos={attachmentPhotos}
+              addLabel="Agregar foto"
+              emptyHint="Toca para fotografiar un anexo"
+              onAdd={() => {
+                setError("");
+                setCapturing({ kind: "attachment" });
+              }}
+              onRemove={(index) =>
+                setAttachmentPhotos((current) =>
+                  current.filter((_, item) => item !== index),
+                )
+              }
+            />
+          </StepShell>
+        ))}
 
       {step === "consent" && (
         <StepShell
-          index={5}
+          index={stepIndex}
+          total={totalSteps}
           title="Privacidad"
           subtitle="Lee cómo se usará tu información antes de continuar."
-          onBack={() => go("extras")}
+          onBack={() => back("consent")}
           onNext={submit}
           nextLabel={submitting ? "Generando tu pase…" : "Aceptar y generar pase"}
-          nextDisabled={!consent || submitting}
+          nextDisabled={(flow.consent === "required" && !consent) || submitting}
           busy={submitting}
           error={error}
         >
@@ -755,7 +1007,7 @@ export function VisitorFlow({ token }: { token: string }) {
               {invitation.privacyNotice ||
                 "Los datos se utilizan únicamente para gestionar y auditar tu acceso a las instalaciones."}
             </p>
-            {invitation.requireIdentification ? (
+            {flow.identification !== "off" ? (
               <p className="mt-3">
                 Tu identificación se conserva{" "}
                 <b>{invitation.retentionDays} días</b> y después se elimina de
@@ -774,13 +1026,17 @@ export function VisitorFlow({ token }: { token: string }) {
             onClick={() => setConsent(!consent)}
             className={cn(
               "mt-4 flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition",
-              consent ? "border-[#10cfc9] bg-[#10cfc9]/10" : "border-slate-200 bg-white",
+              consent
+                ? "border-[#10cfc9] bg-[#10cfc9]/10"
+                : "border-slate-200 bg-white",
             )}
           >
             <span
               className={cn(
                 "mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg border-2 transition",
-                consent ? "border-[#0d9d99] bg-[#10cfc9] text-white" : "border-slate-300",
+                consent
+                  ? "border-[#0d9d99] bg-[#10cfc9] text-white"
+                  : "border-slate-300",
               )}
             >
               {consent && <Check size={15} strokeWidth={3} />}
@@ -808,7 +1064,11 @@ export function VisitorFlow({ token }: { token: string }) {
           <div className="mt-7">
             <PassCard
               token={passToken}
-              visitorName={value("fullName")}
+              visitorName={resolvedVisitorName(
+                value("fullName"),
+                invitation.visitorName,
+                flow.identity,
+              )}
               organizationName={invitation.organizationName}
               hostName={invitation.hostName}
               location={invitation.locationName}
@@ -826,7 +1086,11 @@ export function VisitorFlow({ token }: { token: string }) {
           <div className="mt-6 space-y-4">
             <SavePassButton
               token={passToken}
-              visitorName={value("fullName")}
+              visitorName={resolvedVisitorName(
+                value("fullName"),
+                invitation.visitorName,
+                flow.identity,
+              )}
               organizationName={invitation.organizationName}
               hostName={invitation.hostName}
               location={invitation.locationName}
@@ -852,10 +1116,6 @@ export function VisitorFlow({ token }: { token: string }) {
     </Frame>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Presentación                                                                */
-/* -------------------------------------------------------------------------- */
 
 function Frame({
   children,
@@ -895,6 +1155,7 @@ function Frame({
 
 function StepShell({
   index,
+  total,
   title,
   subtitle,
   children,
@@ -907,6 +1168,7 @@ function StepShell({
   error,
 }: {
   index: number;
+  total: number;
   title: string;
   subtitle: string;
   children: React.ReactNode;
@@ -920,7 +1182,9 @@ function StepShell({
 }) {
   return (
     <div className="animate-rise">
-      <p className="text-[13px] font-semibold text-[#0d9d99]">Paso {index} de 5</p>
+      <p className="text-[13px] font-semibold text-[#0d9d99]">
+        Paso {Math.max(1, index)} de {total}
+      </p>
       <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
         {title}
       </h1>
@@ -965,7 +1229,144 @@ function StepShell({
   );
 }
 
-/** Casilla de una de las dos caras: vacía invita a capturar, llena deja repetir. */
+function CaptureScreen({
+  index,
+  total,
+  heading,
+  copy,
+  onCancel,
+  onCaptured,
+}: {
+  index: number;
+  total: number;
+  heading: string;
+  copy: {
+    title: string;
+    hint: string;
+    footer: string;
+    guide: "wide" | "square";
+    prefix: string;
+  };
+  onCancel: () => void;
+  onCaptured: (file: File, preview: string) => void;
+}) {
+  return (
+    <div className="animate-rise">
+      <p className="text-[13px] font-semibold text-[#0d9d99]">
+        Paso {index} de {total}
+      </p>
+      <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
+        {heading}
+      </h1>
+      <p className="mb-6 mt-2 text-[15px] leading-6 text-slate-500">
+        Encuadra y toma la foto.
+      </p>
+      <PhotoCapture
+        title={copy.title}
+        hint={copy.hint}
+        footer={copy.footer}
+        guide={copy.guide}
+        filePrefix={copy.prefix}
+        onCancel={onCancel}
+        onCaptured={onCaptured}
+      />
+    </div>
+  );
+}
+
+function VehicleFields({
+  plate,
+  onPlate,
+  photos,
+  required,
+  onAdd,
+  onRemove,
+}: {
+  plate: string;
+  onPlate: (value: string) => void;
+  photos: PhotoItem[];
+  required: boolean;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Field label="Placas del vehículo" optional={!required}>
+        <input
+          className={fieldClass}
+          placeholder="ABC-1234"
+          value={plate}
+          onChange={(event) => onPlate(event.target.value)}
+        />
+      </Field>
+      <PhotoList
+        photos={photos}
+        addLabel="Fotografiar placas"
+        emptyHint="Como con la INE: cámara o galería"
+        onAdd={onAdd}
+        onRemove={onRemove}
+      />
+    </div>
+  );
+}
+
+function PhotoList({
+  photos,
+  addLabel,
+  emptyHint,
+  onAdd,
+  onRemove,
+}: {
+  photos: PhotoItem[];
+  addLabel: string;
+  emptyHint: string;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {photos.map((photo, index) => (
+        <div
+          key={`${photo.preview}-${index}`}
+          className="flex items-center gap-3 rounded-2xl border border-[#10cfc9] bg-[#10cfc9]/[.07] p-3"
+        >
+          <img
+            src={photo.preview}
+            alt=""
+            className="size-16 shrink-0 overflow-hidden rounded-xl bg-white object-cover text-[0px]"
+          />
+          <span className="min-w-0 flex-1 text-sm font-semibold">
+            Foto {index + 1}
+            <span className="mt-0.5 block text-xs font-normal text-slate-500">
+              Lista para caseta
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"
+          >
+            Quitar
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-white p-3 text-left transition active:scale-[.99]"
+      >
+        <span className="grid size-16 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-400">
+          <Plus size={24} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="font-semibold">{addLabel}</span>
+          <span className="mt-0.5 block text-xs text-slate-500">{emptyHint}</span>
+        </span>
+      </button>
+    </div>
+  );
+}
+
 function SideSlot({
   side,
   preview,

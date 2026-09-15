@@ -48,6 +48,14 @@ import {
   type OrganizationSettings,
   type TeamMember,
 } from "@/lib/domain";
+import {
+  defaultVisitorFlow,
+  parseVisitorFlow,
+  visitorFlowKeys,
+  visitorFlowStepMeta,
+  type StepPolicy,
+  type VisitorFlowKey,
+} from "@/lib/visitor-flow";
 import { appUrl } from "@/lib/config";
 
 type JoinCode = {
@@ -1071,7 +1079,14 @@ export function SettingsPage() {
         const payload = (await response.json()) as {
           settings: OrganizationSettings;
         };
-        if (active) setSettings(payload.settings);
+        if (active)
+          setSettings({
+            ...payload.settings,
+            visitorFlow: parseVisitorFlow(
+              payload.settings.visitorFlow,
+              payload.settings.requireIdentification,
+            ),
+          });
       } catch (reason) {
         if (active)
           toast.error(
@@ -1096,7 +1111,13 @@ export function SettingsPage() {
         const response = await fetch("/api/settings", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(settings),
+          body: JSON.stringify({
+            ...settings,
+            visitorFlow: parseVisitorFlow(
+              settings.visitorFlow,
+              settings.requireIdentification,
+            ),
+          }),
         });
         if (!response.ok)
           throw new Error(await readError(response, "No fue posible guardar"));
@@ -1165,18 +1186,35 @@ export function SettingsPage() {
               Qué le pides al visitante
             </h2>
             <p className="mt-1.5 text-sm text-slate-500">
-              Si la empresa no quiere guardar identificaciones, el visitante
-              solo confirma sus datos y recibe el pase.
+              Cada paso se puede apagar, dejar opcional u obligar. Si no
+              cambias nada, el visitante ve el mismo recorrido de siempre.
             </p>
-            <div className="mt-5">
-              <Toggle
-                checked={settings.requireIdentification}
-                onChange={(value) =>
-                  setSettings({ ...settings, requireIdentification: value })
-                }
-                label="Pedir foto de identificación"
-                description="Desactívalo si basta con nombre, correo y empresa. El visitante verá que es política de esta organización."
-              />
+            <div className="mt-5 space-y-4">
+              {visitorFlowKeys.map((key) => (
+                <StepPolicyRow
+                  key={key}
+                  step={key}
+                  value={
+                    settings.visitorFlow?.[key] ?? defaultVisitorFlow[key]
+                  }
+                  onChange={(policy) =>
+                    setSettings({
+                      ...settings,
+                      visitorFlow: {
+                        ...parseVisitorFlow(
+                          settings.visitorFlow,
+                          settings.requireIdentification,
+                        ),
+                        [key]: policy,
+                      },
+                      requireIdentification:
+                        key === "identification"
+                          ? policy === "required"
+                          : settings.requireIdentification,
+                    })
+                  }
+                />
+              ))}
             </div>
           </Card>
 
@@ -1323,5 +1361,46 @@ export function SettingsPage() {
         </div>
       )}
     </>
+  );
+}
+
+function StepPolicyRow({
+  step,
+  value,
+  onChange,
+}: {
+  step: VisitorFlowKey;
+  value: StepPolicy;
+  onChange: (value: StepPolicy) => void;
+}) {
+  const meta = visitorFlowStepMeta[step];
+  const options: Array<{ id: StepPolicy; label: string }> = [
+    { id: "off", label: "No pedir" },
+    { id: "optional", label: "Opcional" },
+    { id: "required", label: "Obligatorio" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 p-4">
+      <p className="text-sm font-semibold">{meta.label}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{meta.description}</p>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onChange(option.id)}
+            className={cn(
+              "h-10 rounded-xl border text-xs font-semibold transition",
+              value === option.id
+                ? "border-[#10cfc9] bg-[#10cfc9]/12 text-[#0d9d99]"
+                : "border-slate-200 bg-white text-slate-600",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

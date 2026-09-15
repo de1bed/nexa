@@ -4,6 +4,8 @@
  * sea idéntica en modo vitrina y contra Supabase.
  */
 
+import type { VisitorFlowConfig } from "./visitor-flow";
+
 export const visitStatuses = [
   "draft",
   "invited",
@@ -48,6 +50,9 @@ export type Visit = {
   invitationToken?: string;
   qrToken?: string;
   documentCaptured: boolean;
+  identityCaptured?: boolean;
+  vehiclePhotosCaptured?: boolean;
+  attachmentsCaptured?: boolean;
   consentedAt?: string;
   denialReason?: string;
   /** Datos que el anfitrión adelantó; el visitante los confirma o corrige. */
@@ -111,6 +116,7 @@ export type OrganizationSettings = {
   documentRetentionDays: number;
   allowDocumentPreviewForGuards: boolean;
   requireIdentification: boolean;
+  visitorFlow: VisitorFlowConfig;
   earlyEntryMinutes: number;
   lateEntryMinutes: number;
   privacyNotice: string;

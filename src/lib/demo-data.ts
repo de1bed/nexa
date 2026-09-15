@@ -7,6 +7,7 @@ import type {
   VisitStatus,
   WorkspaceState,
 } from "./domain";
+import { defaultVisitorFlow } from "./visitor-flow";
 
 /**
  * Datos de vitrina: permiten recorrer los cuatro portales sin credenciales.
@@ -83,6 +84,7 @@ export const showcaseSettings: OrganizationSettings = {
   documentRetentionDays: 30,
   allowDocumentPreviewForGuards: false,
   requireIdentification: true,
+  visitorFlow: defaultVisitorFlow,
   earlyEntryMinutes: 15,
   lateEntryMinutes: 30,
   privacyNotice:
@@ -166,6 +168,9 @@ export const showcaseVisits: Visit[] = Array.from({ length: 26 }, (_, index) => 
     status: inside ? "checked_in" : status,
     origin: "host_invitation",
     documentCaptured: status !== "invited",
+    identityCaptured: status !== "invited",
+    vehiclePhotosCaptured: false,
+    attachmentsCaptured: false,
     documentType: status !== "invited" ? "INE / IFE" : undefined,
     documentMasked: status !== "invited" ? "•••• 4829" : undefined,
     consentedAt: status !== "invited" ? at(offset - 1, 12) : undefined,

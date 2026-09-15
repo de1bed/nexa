@@ -1,5 +1,6 @@
 import "server-only";
 import type { AccessEvent, AccessEventType, Visit } from "@/lib/domain";
+import { documentFlags } from "@/lib/visitor-flow";
 
 /**
  * Proyección única de `visits` hacia el contrato de dominio.
@@ -13,7 +14,7 @@ export const visitSelect =
   "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
   "host:profiles!visits_host_id_fkey(full_name,email)," +
   "location:locations(name,address)," +
-  "documents:visitor_documents(id,deleted_at)," +
+  "documents:visitor_documents(id,deleted_at,document_type)," +
   "invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company,completed_at,revoked_at)";
 
 export const eventSelect =
@@ -46,8 +47,16 @@ export function mapVisit(row: Row): Visit {
     invitee_company?: string;
   }>(row.invitation);
   const documents = Array.isArray(row.documents)
-    ? (row.documents as Array<{ deleted_at?: string | null }>)
+    ? (row.documents as Array<{
+        deleted_at?: string | null;
+        document_type?: string | null;
+      }>)
     : [];
+  const flags = documentFlags(
+    documents
+      .filter((document) => !document.deleted_at)
+      .map((document) => document.document_type),
+  );
 
   return {
     id: String(row.id),
@@ -78,7 +87,7 @@ export function mapVisit(row: Row): Visit {
     vehiclePlate: (row.vehicle_plate as string) ?? undefined,
     documentType: visitor?.document_type ?? undefined,
     documentMasked: visitor?.document_number_masked ?? undefined,
-    documentCaptured: documents.some((document) => !document.deleted_at),
+    ...flags,
     consentedAt: (row.consented_at as string) ?? undefined,
     denialReason: (row.denial_reason as string) ?? undefined,
     inviteeName: invitation?.invitee_name ?? undefined,

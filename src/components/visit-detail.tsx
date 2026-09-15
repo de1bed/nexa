@@ -11,6 +11,7 @@ import {
   Car,
   Eye,
   FileWarning,
+  Images,
   Link2,
   MapPin,
   QrCode,
@@ -50,8 +51,11 @@ export function VisitDetail({ id }: { id: string }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState("");
   const [documents, setDocuments] = useState<
-    Array<{ id: string; url: string; label: string }>
+    Array<{ id: string; url: string; label: string; kind?: string }>
   >([]);
+  const [documentFilter, setDocumentFilter] = useState<
+    "identification" | "vehicle" | "attachment" | "all"
+  >("all");
   const [brokenDocs, setBrokenDocs] = useState<string[]>([]);
 
   const visit = visits.find((item) => item.id === id);
@@ -99,16 +103,24 @@ export function VisitDetail({ id }: { id: string }) {
     }
   }
 
-  async function viewDocument() {
+  async function viewDocument(
+    filter: "identification" | "vehicle" | "attachment" | "all" = "all",
+  ) {
     setBusy("document");
     try {
       const response = await fetch(`/api/visits/${id}/document`);
       const payload = (await response.json()) as {
-        documents?: Array<{ id: string; url: string; label: string }>;
+        documents?: Array<{
+          id: string;
+          url: string;
+          label: string;
+          kind?: string;
+        }>;
         error?: string;
       };
       if (!response.ok || !payload.documents?.length)
         throw new Error(payload.error ?? "No fue posible abrir el documento");
+      setDocumentFilter(filter);
       setDocuments(payload.documents);
     } catch (reason) {
       toast.error(
@@ -232,14 +244,20 @@ export function VisitDetail({ id }: { id: string }) {
               <Detail icon={Car} label="Placas" value={visit.vehiclePlate} />
             )}
             <Detail
-              icon={visit.documentCaptured ? BadgeCheck : FileWarning}
+              icon={(visit.identityCaptured ?? visit.documentCaptured) ? BadgeCheck : FileWarning}
               label="Identificación"
               value={
-                visit.documentCaptured
+                (visit.identityCaptured ?? visit.documentCaptured)
                   ? `${visit.documentType ?? "Documento"} ${visit.documentMasked ?? ""}`.trim()
                   : "No capturada"
               }
             />
+            {visit.vehiclePhotosCaptured && (
+              <Detail icon={Car} label="Fotos de placas" value="Capturadas" />
+            )}
+            {visit.attachmentsCaptured && (
+              <Detail icon={Images} label="Anexos" value="Capturados" />
+            )}
           </div>
 
           {visit.notes && (
@@ -265,17 +283,59 @@ export function VisitDetail({ id }: { id: string }) {
           )}
 
           {live &&
-            visit.documentCaptured &&
-            (viewer.role !== "host" || visit.hostId === viewer.id) && (
-            <Button
-              variant="outline"
-              className="mt-5"
-              disabled={busy === "document"}
-              onClick={viewDocument}
-            >
-              <Eye size={17} />
-              Ver identificación
-            </Button>
+            (viewer.role !== "host" || visit.hostId === viewer.id) &&
+            (visit.identityCaptured ||
+              visit.vehiclePhotosCaptured ||
+              visit.attachmentsCaptured ||
+              visit.documentCaptured) && (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {(visit.identityCaptured ??
+                (!visit.vehiclePhotosCaptured &&
+                  !visit.attachmentsCaptured &&
+                  visit.documentCaptured)) && (
+                <Button
+                  variant="outline"
+                  disabled={busy === "document"}
+                  onClick={() => viewDocument("identification")}
+                >
+                  <Eye size={17} />
+                  Ver identificación
+                </Button>
+              )}
+              {visit.vehiclePhotosCaptured && (
+                <Button
+                  variant="outline"
+                  disabled={busy === "document"}
+                  onClick={() => viewDocument("vehicle")}
+                >
+                  <Eye size={17} />
+                  Ver placas
+                </Button>
+              )}
+              {visit.attachmentsCaptured && (
+                <Button
+                  variant="outline"
+                  disabled={busy === "document"}
+                  onClick={() => viewDocument("attachment")}
+                >
+                  <Eye size={17} />
+                  Ver anexos
+                </Button>
+              )}
+              {!visit.identityCaptured &&
+                !visit.vehiclePhotosCaptured &&
+                !visit.attachmentsCaptured &&
+                visit.documentCaptured && (
+                  <Button
+                    variant="outline"
+                    disabled={busy === "document"}
+                    onClick={() => viewDocument("all")}
+                  >
+                    <Eye size={17} />
+                    Ver documentos
+                  </Button>
+                )}
+            </div>
           )}
 
           {canManage && isOpen && (
@@ -394,12 +454,28 @@ export function VisitDetail({ id }: { id: string }) {
 
       <Sheet
         open={documents.length > 0}
-        onClose={() => setDocuments([])}
-        title="Identificación"
+        onClose={() => {
+          setDocuments([]);
+          setDocumentFilter("all");
+        }}
+        title={
+          documentFilter === "vehicle"
+            ? "Placas"
+            : documentFilter === "attachment"
+              ? "Anexos"
+              : documentFilter === "identification"
+                ? "Identificación"
+                : "Documentos"
+        }
         description="Enlaces temporales de 60 segundos. La consulta queda auditada."
       >
         <div className="space-y-4">
-          {documents.map((document) => (
+          {documents
+            .filter(
+              (document) =>
+                documentFilter === "all" || document.kind === documentFilter,
+            )
+            .map((document) => (
             <figure key={document.id}>
               <figcaption className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 {document.label}
@@ -411,7 +487,7 @@ export function VisitDetail({ id }: { id: string }) {
               ) : (
                 <img
                   src={document.url}
-                  alt={`${document.label} de la identificación del visitante`}
+                  alt={`${document.label} del visitante`}
                   className="min-h-40 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain"
                   referrerPolicy="no-referrer"
                   onError={() =>

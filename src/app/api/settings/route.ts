@@ -3,11 +3,42 @@ import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { writeAudit } from "@/lib/server/audit";
 import { settingsSchema } from "@/lib/schemas";
+import {
+  parseVisitorFlow,
+  requireIdentificationFromFlow,
+} from "@/lib/visitor-flow";
 
 export const dynamic = "force-dynamic";
 
 const columns =
-  "document_retention_days,allow_document_preview_for_guards,require_identification,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version";
+  "document_retention_days,allow_document_preview_for_guards,require_identification,visitor_flow,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version";
+
+function serializeSettings(data: {
+  document_retention_days?: number | null;
+  allow_document_preview_for_guards?: boolean | null;
+  require_identification?: boolean | null;
+  visitor_flow?: unknown;
+  early_entry_minutes?: number | null;
+  late_entry_minutes?: number | null;
+  privacy_notice?: string | null;
+  privacy_notice_version?: string | null;
+} | null) {
+  const visitorFlow = parseVisitorFlow(
+    data?.visitor_flow,
+    data?.require_identification !== false,
+  );
+  return {
+    documentRetentionDays: data?.document_retention_days ?? 30,
+    allowDocumentPreviewForGuards:
+      data?.allow_document_preview_for_guards ?? false,
+    requireIdentification: requireIdentificationFromFlow(visitorFlow),
+    visitorFlow,
+    earlyEntryMinutes: data?.early_entry_minutes ?? 15,
+    lateEntryMinutes: data?.late_entry_minutes ?? 30,
+    privacyNotice: data?.privacy_notice ?? "",
+    privacyNoticeVersion: data?.privacy_notice_version ?? "mvp-1",
+  };
+}
 
 export async function GET() {
   const guard = await requireApiContext();
@@ -22,18 +53,7 @@ export async function GET() {
     .maybeSingle();
 
   return NextResponse.json(
-    {
-      settings: {
-        documentRetentionDays: data?.document_retention_days ?? 30,
-        allowDocumentPreviewForGuards:
-          data?.allow_document_preview_for_guards ?? false,
-        requireIdentification: data?.require_identification ?? true,
-        earlyEntryMinutes: data?.early_entry_minutes ?? 15,
-        lateEntryMinutes: data?.late_entry_minutes ?? 30,
-        privacyNotice: data?.privacy_notice ?? "",
-        privacyNoticeVersion: data?.privacy_notice_version ?? "mvp-1",
-      },
-    },
+    { settings: serializeSettings(data) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -46,6 +66,8 @@ export async function PATCH(request: Request) {
 
   try {
     const input = settingsSchema.parse(await request.json());
+    const visitorFlow = parseVisitorFlow(input.visitorFlow);
+    const requireIdentification = requireIdentificationFromFlow(visitorFlow);
 
     const { data: current } = await db
       .from("organization_settings")
@@ -65,7 +87,8 @@ export async function PATCH(request: Request) {
       organization_id: organizationId,
       document_retention_days: input.documentRetentionDays,
       allow_document_preview_for_guards: input.allowDocumentPreviewForGuards,
-      require_identification: input.requireIdentification,
+      require_identification: requireIdentification,
+      visitor_flow: visitorFlow,
       early_entry_minutes: input.earlyEntryMinutes,
       late_entry_minutes: input.lateEntryMinutes,
       privacy_notice: input.privacyNotice,
@@ -87,6 +110,7 @@ export async function PATCH(request: Request) {
       metadata: {
         document_retention_days: input.documentRetentionDays,
         guard_preview: input.allowDocumentPreviewForGuards,
+        visitor_flow: visitorFlow,
         privacy_notice_version: version,
       },
     });

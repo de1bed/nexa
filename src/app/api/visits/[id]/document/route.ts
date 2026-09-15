@@ -2,14 +2,9 @@ import { NextResponse } from "next/server";
 import { requireApiContext } from "@/lib/server/session";
 import { writeAudit } from "@/lib/server/audit";
 import { createAdminClient } from "@/lib/server/supabase-admin";
+import { documentKind, documentSideLabels } from "@/lib/visitor-flow";
 
 export const dynamic = "force-dynamic";
-
-const SIDE_LABELS: Record<string, string> = {
-  identity_front: "Frente",
-  identity_back: "Reverso",
-  manual_capture: "Captura en caseta",
-};
 
 /**
  * Entrega URLs firmadas y efímeras de la identificación.
@@ -57,7 +52,7 @@ export async function GET(
 
   if (!documents?.length)
     return NextResponse.json(
-      { error: "Esta visita no tiene identificación registrada" },
+      { error: "Esta visita no tiene documentos registrados" },
       { status: 404 },
     );
 
@@ -72,10 +67,11 @@ export async function GET(
             id: document.id,
             url: data.signedUrl,
             mimeType: document.mime_type,
+            kind: documentKind(document.document_type as string),
             label:
-              SIDE_LABELS[document.document_type as string] ??
+              documentSideLabels[document.document_type as string] ??
               (document.document_type as string) ??
-              "Identificación",
+              "Documento",
             retentionExpiresAt: document.retention_expires_at,
           }
         : null;

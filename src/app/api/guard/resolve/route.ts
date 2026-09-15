@@ -76,6 +76,9 @@ export async function POST(request: Request) {
       visitorNotes: row.visitor_notes || undefined,
       accessRequirements: row.access_requirements || undefined,
       documentCaptured: row.document_captured,
+      identityCaptured: Boolean(row.document_captured),
+      vehiclePhotosCaptured: false,
+      attachmentsCaptured: false,
     };
 
     return NextResponse.json(

@@ -122,7 +122,7 @@ export function createManualVisit(
     | "location"
     | "purpose"
   > &
-    Partial<Pick<Visit, "phone" | "locationId" | "documentCaptured">>,
+    Partial<Pick<Visit, "phone" | "locationId" | "documentCaptured" | "identityCaptured">>,
   at = new Date(),
 ): Visit {
   return {
@@ -134,6 +134,9 @@ export function createManualVisit(
     status: "checked_in",
     origin: "guard_manual",
     documentCaptured: input.documentCaptured ?? false,
+    identityCaptured: input.identityCaptured ?? false,
+    vehiclePhotosCaptured: false,
+    attachmentsCaptured: false,
     consentedAt: at.toISOString(),
   };
 }

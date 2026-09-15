@@ -294,6 +294,9 @@ export function WorkspaceProvider({
         notes: draft.notes,
         accessRequirements: draft.accessRequirements,
         documentCaptured: false,
+        identityCaptured: false,
+        vehiclePhotosCaptured: false,
+        attachmentsCaptured: false,
         invitationToken: token,
         inviteeName: draft.visitorName || undefined,
         inviteeEmail: draft.email || undefined,
@@ -372,6 +375,9 @@ export function WorkspaceProvider({
         status: "checked_in",
         origin: "guard_manual",
         documentCaptured: Boolean(draft.documentFile),
+        identityCaptured: Boolean(draft.documentFile),
+        vehiclePhotosCaptured: false,
+        attachmentsCaptured: false,
         consentedAt: now.toISOString(),
       };
 

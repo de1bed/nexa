@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { rateLimit, requestOrigin } from "@/lib/server/rate-limit";
-import { sendPassEmail } from "@/lib/server/email";
+import { sendPassEmail, type DeliveryResult } from "@/lib/server/email";
 import { appUrl } from "@/lib/config";
 import { maskDocument, maskEmail } from "@/lib/security";
 import { walletAvailability } from "@/lib/server/wallet/config";
@@ -12,15 +12,19 @@ import {
   isAllowedIdentityUpload,
 } from "@/lib/identity-file";
 import { passValidityWindow } from "@/lib/pass-window";
+import {
+  parseVisitorFlow,
+  resolvedVisitorName,
+  validateRegistration,
+} from "@/lib/visitor-flow";
 
 export const dynamic = "force-dynamic";
 
-
 const schema = z.object({
-  fullName: z.string().trim().min(2).max(120),
-  email: z.email(),
-  phone: z.string().trim().min(7).max(30),
-  company: z.string().trim().min(2).max(120),
+  fullName: z.string().trim().max(120).optional().default(""),
+  email: z.string().trim().max(254).optional().default(""),
+  phone: z.string().trim().max(30).optional().default(""),
+  company: z.string().trim().max(120).optional().default(""),
   documentType: z.string().trim().max(40).optional(),
   documentNumber: z.string().trim().max(80).optional(),
   vehiclePlate: z.string().trim().max(20).optional(),
@@ -28,13 +32,19 @@ const schema = z.object({
   ocrConfidence: z.coerce.number().min(0).max(100).optional(),
   ocrVerified: z.enum(["true", "false"]).optional(),
   documentExpiresAt: z.string().max(20).optional(),
-  consent: z.literal("true"),
+  consent: z.enum(["true", "false"]).optional(),
 });
 
-const SIDES = [
+const IDENTITY_SIDES = [
   { field: "documentFront", type: "identity_front" },
   { field: "documentBack", type: "identity_back" },
 ] as const;
+
+function collectFiles(form: FormData, field: string) {
+  return form
+    .getAll(field)
+    .filter((value): value is File => value instanceof File && value.size > 0);
+}
 
 export async function POST(
   request: Request,
@@ -56,16 +66,28 @@ export async function POST(
       ),
     );
 
-    const images: Array<{ file: File; type: string }> = [];
-    for (const side of SIDES) {
+    const identityImages: Array<{ file: File; type: string }> = [];
+    for (const side of IDENTITY_SIDES) {
       const image = form.get(side.field);
       if (!(image instanceof File) || image.size === 0) continue;
-      if (!isAllowedIdentityUpload(image))
+      identityImages.push({ file: image, type: side.type });
+    }
+
+    const vehicleImages = collectFiles(form, "vehiclePlatePhoto").map(
+      (file) => ({ file, type: "vehicle_plate" }),
+    );
+    const attachmentImages = collectFiles(form, "attachment").map((file) => ({
+      file,
+      type: "attachment",
+    }));
+    const images = [...identityImages, ...vehicleImages, ...attachmentImages];
+
+    for (const image of images) {
+      if (!isAllowedIdentityUpload(image.file))
         return NextResponse.json(
           { error: "Las imágenes deben ser JPG, PNG o WebP" },
           { status: 400 },
         );
-      images.push({ file: image, type: side.type });
     }
 
     const db = createAdminClient();
@@ -76,7 +98,9 @@ export async function POST(
       state: string;
       visit_id: string;
       organization_name: string;
-      retention_days: number;
+      visitor_name: string;
+      visitor_flow: unknown;
+      require_identification: boolean;
     };
     if (!resolved || resolved.state !== "active")
       return NextResponse.json(
@@ -95,17 +119,56 @@ export async function POST(
         { status: 404 },
       );
 
+    const { data: settings } = await db
+      .from("organization_settings")
+      .select(
+        "document_retention_days,privacy_notice_version,require_identification,visitor_flow",
+      )
+      .eq("organization_id", visit.organization_id)
+      .maybeSingle();
+
+    const flow = parseVisitorFlow(
+      settings?.visitor_flow ?? resolved.visitor_flow,
+      settings?.require_identification !== false,
+    );
+
+    const problem = validateRegistration(
+      {
+        fullName: values.fullName,
+        email: values.email,
+        phone: values.phone,
+        company: values.company,
+        vehiclePlate: values.vehiclePlate ?? "",
+        visitorNotes: values.visitorNotes ?? "",
+        consent: values.consent === "true",
+        identityPhotos: identityImages.length,
+        vehiclePhotos: vehicleImages.length,
+        attachmentPhotos: attachmentImages.length,
+        invitedName: resolved.visitor_name,
+      },
+      flow,
+    );
+    if (problem)
+      return NextResponse.json({ error: problem }, { status: 400 });
+
+    const fullName = resolvedVisitorName(
+      values.fullName,
+      resolved.visitor_name,
+      flow.identity,
+    );
     const masked = values.documentNumber
       ? maskDocument(values.documentNumber)
       : null;
 
     const visitorPayload = {
       organization_id: visit.organization_id,
-      full_name: values.fullName,
-      email: values.email,
-      phone: values.phone,
-      company: values.company,
-      document_type: values.documentType || (images.length ? "INE" : "No presentada"),
+      full_name: fullName,
+      email: values.email || null,
+      phone: values.phone || null,
+      company: values.company || null,
+      document_type:
+        values.documentType ||
+        (identityImages.length ? "INE" : "No presentada"),
       document_number_masked: masked,
     };
 
@@ -127,16 +190,6 @@ export async function POST(
       visitorId = created.id;
     }
 
-    const { data: settings } = await db
-      .from("organization_settings")
-      .select("document_retention_days,privacy_notice_version,require_identification")
-      .eq("organization_id", visit.organization_id)
-      .maybeSingle();
-    if (settings?.require_identification !== false && images.length < 2)
-      return NextResponse.json(
-        { error: "Faltan las fotos de tu identificación" },
-        { status: 400 },
-      );
     const retentionDays = settings?.document_retention_days ?? 30;
     const retentionExpiresAt = new Date(
       Date.now() + retentionDays * 86400000,
@@ -173,13 +226,11 @@ export async function POST(
         if (documentError) throw documentError;
       }
     } catch (uploadError) {
-      // Ningún archivo debe quedar huérfano si falla a mitad del proceso.
       if (uploaded.length)
         await db.storage.from("visitor-documents").remove(uploaded);
       throw uploadError;
     }
 
-    // Si el visitante rehace su registro, el pase anterior deja de servir.
     await db
       .from("qr_tokens")
       .update({ revoked_at: new Date().toISOString() })
@@ -201,15 +252,16 @@ export async function POST(
     });
     if (tokenError) throw tokenError;
 
+    const consented = values.consent === "true";
     await db
       .from("visits")
       .update({
         visitor_id: visitorId,
-        visitor_company: values.company,
+        visitor_company: values.company || null,
         vehicle_plate: values.vehiclePlate || null,
         visitor_notes: values.visitorNotes || null,
         status: "pre_registered",
-        consented_at: new Date().toISOString(),
+        consented_at: consented ? new Date().toISOString() : null,
         privacy_notice_version: settings?.privacy_notice_version ?? "mvp-1",
       })
       .eq("id", visit.id);
@@ -226,6 +278,9 @@ export async function POST(
         event_type: "document_uploaded",
         metadata: {
           sides: images.length,
+          identity: identityImages.length,
+          vehicle: vehicleImages.length,
+          attachments: attachmentImages.length,
           retention_days: retentionDays,
           document_type: values.documentType,
         },
@@ -235,7 +290,7 @@ export async function POST(
         visit_id: visit.id,
         event_type: "pre_registration_completed",
         metadata: {
-          document_captured: true,
+          document_captured: identityImages.length > 0,
           ocr_confidence: values.ocrConfidence ?? null,
           ocr_verified: values.ocrVerified === "true",
           document_expires_at: values.documentExpiresAt ?? null,
@@ -250,25 +305,28 @@ export async function POST(
     ]);
 
     const passUrl = `${appUrl()}/pass/${qrToken}`;
-    const delivery = await sendPassEmail({
-      to: values.email,
-      visitorName: values.fullName,
-      organizationName: resolved.organization_name,
-      dateLabel: new Intl.DateTimeFormat("es-MX", {
-        dateStyle: "full",
-        timeStyle: "short",
-      }).format(new Date(visit.starts_at)),
-      passUrl,
-    }).catch(() => ({ status: "failed" as const }));
+    let delivery: DeliveryResult = { status: "development" };
+    if (values.email) {
+      delivery = await sendPassEmail({
+        to: values.email,
+        visitorName: fullName,
+        organizationName: resolved.organization_name,
+        dateLabel: new Intl.DateTimeFormat("es-MX", {
+          dateStyle: "full",
+          timeStyle: "short",
+        }).format(new Date(visit.starts_at)),
+        passUrl,
+      }).catch(() => ({ status: "failed" as const }));
 
-    await db.from("notification_logs").insert({
-      organization_id: visit.organization_id,
-      visit_id: visit.id,
-      channel: "email",
-      recipient_masked: maskEmail(values.email),
-      template: "visitor_pass",
-      status: delivery.status,
-    });
+      await db.from("notification_logs").insert({
+        organization_id: visit.organization_id,
+        visit_id: visit.id,
+        channel: "email",
+        recipient_masked: maskEmail(values.email),
+        template: "visitor_pass",
+        status: delivery.status,
+      });
+    }
 
     return NextResponse.json(
       {

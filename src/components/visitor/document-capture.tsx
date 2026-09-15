@@ -11,29 +11,39 @@ import {
 } from "@/lib/image";
 
 export type DocumentSide = "front" | "back";
+export type CaptureGuide = "id-front" | "id-back" | "wide" | "square";
 
-const copy: Record<DocumentSide, { title: string; hint: string }> = {
+const idCopy: Record<DocumentSide, { title: string; hint: string; footer: string }> = {
   front: {
     title: "Frente de tu identificación",
     hint: "El lado con tu fotografía",
+    footer: "Coloca la credencial dentro del marco, sin reflejos",
   },
   back: {
     title: "Reverso de tu identificación",
     hint: "El otro lado de la credencial",
+    footer: "Encuadra el reverso completo, sin recortes",
   },
 };
 
 /**
- * Captura de identificación pensada para el teléfono: cámara en vivo con marco
- * guía y, como respaldo garantizado, la galería del sistema. Nunca deja al
- * visitante sin una vía para continuar.
+ * Cámara en vivo con marco guía y galería de respaldo. Sirve para INE, placas
+ * y anexos: el visitante nunca se queda sin una vía para continuar.
  */
-export function DocumentCapture({
-  side,
+export function PhotoCapture({
+  title,
+  hint,
+  footer,
+  guide = "square",
+  filePrefix = "foto",
   onCaptured,
   onCancel,
 }: {
-  side: DocumentSide;
+  title: string;
+  hint: string;
+  footer?: string;
+  guide?: CaptureGuide;
+  filePrefix?: string;
   onCaptured: (file: File, preview: string) => void;
   onCancel?: () => void;
 }) {
@@ -102,11 +112,8 @@ export function DocumentCapture({
     setBusy(true);
     try {
       const compressed = await compressIdentityImage(file).catch(() => null);
-      if (!compressed) {
-        setError("No pudimos leer esa foto. Tómala de nuevo o usa JPG.");
-        return;
-      }
-      onCaptured(compressed, URL.createObjectURL(compressed));
+      const usable = compressed ?? file;
+      onCaptured(usable, URL.createObjectURL(usable));
     } finally {
       setBusy(false);
     }
@@ -117,7 +124,7 @@ export function DocumentCapture({
     setBusy(true);
     setError("");
     try {
-      const file = await captureFrame(videoRef.current);
+      const file = await captureFrame(videoRef.current, 1800, filePrefix);
       streamRef.current?.getTracks().forEach((track) => track.stop());
       onCaptured(file, URL.createObjectURL(file));
     } catch {
@@ -128,12 +135,18 @@ export function DocumentCapture({
   }
 
   const live = cameraState === "ready";
+  const frameClass =
+    guide === "wide"
+      ? "aspect-[2/1] w-full max-w-sm"
+      : guide === "square"
+        ? "aspect-square w-full max-w-xs"
+        : "aspect-[1.586/1] w-full max-w-xs";
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-slate-50 p-3 text-center">
-        <p className="text-sm font-semibold">{copy[side].title}</p>
-        <p className="mt-0.5 text-xs text-slate-500">{copy[side].hint}</p>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
       </div>
 
       <div className="relative aspect-[3/4] w-full overflow-hidden rounded-3xl bg-slate-900 sm:aspect-[4/3]">
@@ -148,19 +161,17 @@ export function DocumentCapture({
           )}
         />
 
-        {/* Marco guía: enseña dónde colocar la credencial. */}
         <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
-          <div className="relative aspect-[1.586/1] w-full max-w-xs">
+          <div className={cn("relative", frameClass)}>
             <span className="absolute -left-1 -top-1 size-9 rounded-tl-2xl border-l-4 border-t-4 border-[#10cfc9]" />
             <span className="absolute -right-1 -top-1 size-9 rounded-tr-2xl border-r-4 border-t-4 border-[#10cfc9]" />
             <span className="absolute -bottom-1 -left-1 size-9 rounded-bl-2xl border-b-4 border-l-4 border-[#10cfc9]" />
             <span className="absolute -bottom-1 -right-1 size-9 rounded-br-2xl border-b-4 border-r-4 border-[#10cfc9]" />
 
-            {/* En el reverso se marca la parte inferior de la credencial. */}
-            {side === "back" && (
+            {guide === "id-back" && (
               <span className="absolute inset-x-3 bottom-2 h-[38%] rounded-lg border-2 border-dashed border-[#10cfc9]/70" />
             )}
-            {live && side === "front" && (
+            {live && guide === "id-front" && (
               <span className="animate-sweep absolute inset-x-2 top-1/2 h-0.5 rounded-full bg-[#10cfc9] shadow-[0_0_18px_4px_rgba(16,207,201,.55)]" />
             )}
           </div>
@@ -200,9 +211,7 @@ export function DocumentCapture({
         )}
 
         <p className="absolute inset-x-0 bottom-3 text-center text-[11px] font-medium text-white/80">
-          {side === "back"
-            ? "Encuadra el reverso completo, sin recortes"
-            : "Coloca la credencial dentro del marco, sin reflejos"}
+          {footer ?? "Encuadra el motivo dentro del marco"}
         </p>
       </div>
 
@@ -260,5 +269,28 @@ export function DocumentCapture({
         al cumplirse la política de retención de la empresa.
       </p>
     </div>
+  );
+}
+
+export function DocumentCapture({
+  side,
+  onCaptured,
+  onCancel,
+}: {
+  side: DocumentSide;
+  onCaptured: (file: File, preview: string) => void;
+  onCancel?: () => void;
+}) {
+  const copy = idCopy[side];
+  return (
+    <PhotoCapture
+      title={copy.title}
+      hint={copy.hint}
+      footer={copy.footer}
+      guide={side === "back" ? "id-back" : "id-front"}
+      filePrefix="identificacion"
+      onCaptured={onCaptured}
+      onCancel={onCancel}
+    />
   );
 }

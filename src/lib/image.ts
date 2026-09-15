@@ -46,6 +46,7 @@ export async function compressIdentityImage(
 export async function captureFrame(
   video: HTMLVideoElement,
   maxDimension = MAX_DIMENSION,
+  fileName = "identificacion",
 ): Promise<File> {
   const width = video.videoWidth;
   const height = video.videoHeight;
@@ -60,7 +61,7 @@ export async function captureFrame(
   if (!context) throw new Error("No fue posible capturar la imagen");
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  return canvasToFile(canvas, `identificacion-${Date.now()}.jpg`);
+  return canvasToFile(canvas, `${fileName}-${Date.now()}.jpg`);
 }
 
 /**

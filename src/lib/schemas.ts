@@ -37,15 +37,15 @@ export const invitationSchema = z
 export type InvitationInput = z.infer<typeof invitationSchema>;
 
 export const visitorRegistrationSchema = z.object({
-  fullName: z.string().trim().min(2, "Escribe tu nombre completo").max(120),
-  email: z.email("Correo inválido"),
-  phone: z.string().trim().min(7, "Teléfono incompleto").max(30),
-  company: z.string().trim().min(2, "Escribe tu empresa").max(120),
-  documentType: z.string().min(1),
+  fullName: z.string().trim().max(120).optional(),
+  email: z.union([z.literal(""), z.email("Correo inválido")]).optional(),
+  phone: z.string().trim().max(30).optional(),
+  company: z.string().trim().max(120).optional(),
+  documentType: z.string().max(40).optional(),
   documentNumber: optionalText(80),
   vehiclePlate: optionalText(20),
   visitorNotes: optionalText(500),
-  consent: z.literal(true, { error: "Debes aceptar el aviso de privacidad" }),
+  consent: z.boolean().optional(),
 });
 
 export const manualVisitSchema = z.object({
@@ -101,7 +101,15 @@ export const locationSchema = z.object({
 export const settingsSchema = z.object({
   documentRetentionDays: z.number().int().min(1).max(365),
   allowDocumentPreviewForGuards: z.boolean(),
-  requireIdentification: z.boolean(),
+  requireIdentification: z.boolean().optional(),
+  visitorFlow: z.object({
+    identity: z.enum(["off", "optional", "required"]),
+    identification: z.enum(["off", "optional", "required"]),
+    vehicle: z.enum(["off", "optional", "required"]),
+    notes: z.enum(["off", "optional", "required"]),
+    attachments: z.enum(["off", "optional", "required"]),
+    consent: z.enum(["off", "optional", "required"]),
+  }),
   earlyEntryMinutes: z.number().int().min(0).max(240),
   lateEntryMinutes: z.number().int().min(0).max(1440),
   privacyNotice: z.string().trim().min(40).max(4000),
