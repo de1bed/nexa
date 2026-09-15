@@ -26,15 +26,12 @@ import {
 import { useWorkspace } from "./workspace-provider";
 import { Avatar, Button, Card, EmptyState, MetricTile, StatusPill, Skeleton } from "./ui";
 import { LiveDuration } from "./ui-client";
-import { eventLabels, formatDuration, timeInsideMs } from "@/lib/domain";
-
-const time = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(
-    new Date(value),
-  );
+import { timeInsideMs } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 export function Dashboard() {
   const { visits, events, viewer, organization, loading } = useWorkspace();
+  const { t, formatTime, formatWeekday, formatDuration, intl } = useI18n();
 
   const metrics = useMemo(() => {
     const today = new Date().toDateString();
@@ -61,7 +58,7 @@ export function Dashboard() {
         (visit) => new Date(visit.startsAt).toDateString() === label,
       );
       return {
-        day: new Intl.DateTimeFormat("es-MX", { weekday: "short" }).format(day),
+        day: formatWeekday(day),
         entradas: sameDay.filter((visit) => visit.checkedInAt).length,
         salidas: sameDay.filter((visit) => visit.checkedOutAt).length,
       };
@@ -74,7 +71,7 @@ export function Dashboard() {
       averageMs,
       chart,
     };
-  }, [visits]);
+  }, [visits, formatWeekday]);
 
   const upcoming = useMemo(
     () =>
@@ -94,7 +91,11 @@ export function Dashboard() {
 
   const hour = new Date().getHours();
   const greeting =
-    hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
+    hour < 12
+      ? t("dashboard.goodMorning")
+      : hour < 19
+        ? t("dashboard.goodAfternoon")
+        : t("dashboard.goodEvening");
 
   if (loading && visits.length === 0)
     return (
@@ -114,7 +115,7 @@ export function Dashboard() {
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] font-medium text-[#0d9d99] first-letter:uppercase">
-            {new Intl.DateTimeFormat("es-MX", {
+            {new Intl.DateTimeFormat(intl, {
               weekday: "long",
               day: "numeric",
               month: "long",
@@ -136,7 +137,7 @@ export function Dashboard() {
           </Link>
           <Link href="/app/visits/new">
             <Button>
-              Nueva invitación
+              {t("nav.newInvite")}
               <ArrowUpRight size={17} />
             </Button>
           </Link>
@@ -178,27 +179,27 @@ export function Dashboard() {
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricTile
-          label="Dentro ahora"
+          label={t("dashboard.inside")}
           value={metrics.inside.length}
           icon={Users}
           tone="success"
         />
         <MetricTile
-          label="Programadas hoy"
+          label={t("dashboard.today")}
           value={metrics.scheduledToday.length}
           icon={CalendarDays}
           tone="info"
         />
         <MetricTile
-          label="Salidas hoy"
+          label={t("dashboard.exits")}
           value={metrics.exitsToday.length}
           icon={LogOut}
           tone="neutral"
         />
         <MetricTile
-          label="Estancia promedio"
+          label={t("dashboard.average")}
           value={
-            metrics.averageMs ? formatDuration(metrics.averageMs) : "Sin datos"
+            metrics.averageMs ? formatDuration(metrics.averageMs) : t("dashboard.noData")
           }
           icon={Clock3}
           tone="accent"
@@ -208,7 +209,7 @@ export function Dashboard() {
       {metrics.inside.length > 0 && (
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold">Dentro de las instalaciones</h2>
+            <h2 className="font-semibold">{t("dashboard.currentlyInside")}</h2>
             <Link
               href="/app/people-on-site"
               className="text-sm font-medium text-blue-600"
@@ -236,7 +237,7 @@ export function Dashboard() {
                     <Clock3 size={14} />
                     <LiveDuration since={visit.checkedInAt} />
                   </span>
-                  <span>desde {visit.checkedInAt ? time(visit.checkedInAt) : "—"}</span>
+                  <span>desde {visit.checkedInAt ? formatTime(visit.checkedInAt) : "—"}</span>
                 </div>
               </Card>
             ))}
@@ -327,7 +328,7 @@ export function Dashboard() {
                       {visit.visitorName}
                     </span>
                     <span className="block truncate text-xs text-slate-500">
-                      {visit.hostName} · {time(visit.startsAt)}
+                      {visit.hostName} · {formatTime(visit.startsAt)}
                     </span>
                   </span>
                   <StatusPill status={visit.status} />
@@ -377,7 +378,7 @@ export function Dashboard() {
                         {visit?.visitorName ?? "Visita"}
                       </p>
                       <p className="truncate text-xs text-slate-500">
-                        {eventLabels[event.type]} · {time(event.at)} ·{" "}
+                        {t(`events.${event.type}`)} · {formatTime(event.at)} ·{" "}
                         {event.actor}
                       </p>
                     </div>

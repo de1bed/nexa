@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, Field, cn, fieldDarkClass } from "./ui";
+import { useI18n } from "./i18n-provider";
 import { manualVisitSchema } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
 import { compressIdentityImage, validateImage, ACCEPTED_IMAGE_TYPES } from "@/lib/image";
@@ -23,6 +24,7 @@ import { compressIdentityImage, validateImage, ACCEPTED_IMAGE_TYPES } from "@/li
  */
 export function ManualAccess() {
   const { hosts, locations, createManualVisit, settings } = useWorkspace();
+  const { t } = useI18n();
   const [done, setDone] = useState<Visit | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,7 +62,7 @@ export function ManualAccess() {
   async function attach(file: File) {
     const invalid = validateImage(file);
     if (invalid) {
-      toast.error(invalid);
+      toast.error(t(`errors.${invalid}`));
       return;
     }
     const compressed = await compressIdentityImage(file).catch(() => null);

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChevronsUpDown } from "lucide-react";
 import { useWorkspace } from "./workspace-provider";
 import { Avatar, cn } from "./ui";
-import { roleLabels } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 /** Abre el selector cuando la cuenta pertenece a más de un espacio. */
 export function WorkspaceSwitcher({
@@ -15,6 +15,7 @@ export function WorkspaceSwitcher({
   dark?: boolean;
 }) {
   const { organization, viewer } = useWorkspace();
+  const { t } = useI18n();
 
   function forgetStickyOrg() {
     void fetch("/api/session", { method: "DELETE" });
@@ -36,7 +37,7 @@ export function WorkspaceSwitcher({
             {organization.name}
           </span>
           <span className="text-[11px] leading-tight text-slate-500">
-            {roleLabels[viewer.role]} · tocar para cambiar
+            {t(`roles.${viewer.role}`)} · tocar para cambiar
           </span>
         </span>
       </Link>
@@ -70,7 +71,7 @@ export function WorkspaceSwitcher({
             dark ? "text-slate-400" : "text-slate-500",
           )}
         >
-          {roleLabels[viewer.role]} · cambiar de empresa
+          {t(`roles.${viewer.role}`)} · cambiar de empresa
         </span>
       </span>
       <ChevronsUpDown size={16} className="shrink-0 text-slate-400" />

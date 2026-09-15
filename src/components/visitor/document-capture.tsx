@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Images, RefreshCcw, ScanLine, ShieldCheck, X } from "lucide-react";
 import { Button, Callout, cn } from "../ui";
+import { useI18n } from "../i18n-provider";
+import { translate } from "@/lib/i18n";
 import {
   ACCEPTED_IMAGE_TYPES,
   captureFrame,
@@ -12,19 +14,6 @@ import {
 
 export type DocumentSide = "front" | "back";
 export type CaptureGuide = "id-front" | "id-back" | "wide" | "square";
-
-const idCopy: Record<DocumentSide, { title: string; hint: string; footer: string }> = {
-  front: {
-    title: "Frente de tu identificación",
-    hint: "El lado con tu fotografía",
-    footer: "Coloca la credencial dentro del marco, sin reflejos",
-  },
-  back: {
-    title: "Reverso de tu identificación",
-    hint: "El otro lado de la credencial",
-    footer: "Encuadra el reverso completo, sin recortes",
-  },
-};
 
 /**
  * Cámara en vivo con marco guía y galería de respaldo. Sirve para INE, placas
@@ -47,6 +36,7 @@ export function PhotoCapture({
   onCaptured: (file: File, preview: string) => void;
   onCancel?: () => void;
 }) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraState, setCameraState] = useState<
@@ -88,8 +78,8 @@ export function PhotoCapture({
         setCameraState("unavailable");
         setError(
           reason instanceof Error && reason.name === "NotAllowedError"
-            ? "No diste permiso de cámara. Puedes subir una foto desde tu galería."
-            : "No encontramos una cámara disponible. Sube una foto desde tu galería.",
+            ? translate("visitor.cameraDenied")
+            : translate("visitor.cameraMissing"),
         );
       }
     }
@@ -105,7 +95,7 @@ export function PhotoCapture({
   async function handleFile(file: File) {
     const invalid = validateImage(file);
     if (invalid) {
-      setError(invalid);
+      setError(t(`errors.${invalid}`));
       return;
     }
     setError("");
@@ -128,7 +118,7 @@ export function PhotoCapture({
       streamRef.current?.getTracks().forEach((track) => track.stop());
       onCaptured(file, URL.createObjectURL(file));
     } catch {
-      setError("No pudimos tomar la foto. Intenta de nuevo.");
+      setError(t("visitor.captureFail"));
     } finally {
       setBusy(false);
     }
@@ -184,7 +174,7 @@ export function PhotoCapture({
                 <span className="mx-auto grid size-14 place-items-center rounded-full bg-white/10">
                   <Camera size={24} />
                 </span>
-                <p className="mt-4 text-sm">Encendiendo la cámara…</p>
+                <p className="mt-4 text-sm">{t("visitor.cameraStarting")}</p>
               </div>
             ) : (
               <div className="text-slate-300">
@@ -192,7 +182,7 @@ export function PhotoCapture({
                   <Images size={24} />
                 </span>
                 <p className="mt-4 max-w-xs text-sm leading-6">
-                  Sube una foto desde la galería.
+                  {t("visitor.uploadGallery")}
                 </p>
               </div>
             )}
@@ -203,7 +193,7 @@ export function PhotoCapture({
           <button
             type="button"
             onClick={onCancel}
-            aria-label="Cancelar captura"
+            aria-label={t("visitor.cancelCapture")}
             className="absolute right-3 top-3 grid size-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur"
           >
             <X size={18} />
@@ -211,7 +201,7 @@ export function PhotoCapture({
         )}
 
         <p className="absolute inset-x-0 bottom-3 text-center text-[11px] font-medium text-white/80">
-          {footer ?? "Encuadra el motivo dentro del marco"}
+          {footer ?? t("visitor.frameSubject")}
         </p>
       </div>
 
@@ -220,7 +210,7 @@ export function PhotoCapture({
       <div className="flex items-center gap-3">
         <label className="inline-flex h-14 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-[15px] font-semibold text-[#071426] active:bg-slate-50">
           <Images size={19} />
-          Galería
+          {t("visitor.gallery")}
           <input
             type="file"
             accept={ACCEPTED_IMAGE_TYPES.join(",")}
@@ -238,7 +228,7 @@ export function PhotoCapture({
             type="button"
             onClick={shoot}
             disabled={busy}
-            aria-label="Tomar foto"
+            aria-label={t("visitor.takePhoto")}
             className="relative grid size-16 shrink-0 place-items-center rounded-full bg-[#10cfc9] text-[#043b39] shadow-[0_16px_36px_-14px_#10cfc9] transition active:scale-95 disabled:opacity-60"
           >
             <span className="animate-pulse-ring absolute inset-0 rounded-full border-2 border-[#10cfc9]" />
@@ -257,7 +247,7 @@ export function PhotoCapture({
               className="shrink-0"
             >
               <RefreshCcw size={18} />
-              Reintentar
+              {t("common.retry")}
             </Button>
           )
         )}
@@ -265,8 +255,7 @@ export function PhotoCapture({
 
       <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
         <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#0d9d99]" />
-        La imagen se guarda en almacenamiento privado y se elimina automáticamente
-        al cumplirse la política de retención de la empresa.
+        {t("visitor.privateStorage")}
       </p>
     </div>
   );
@@ -281,12 +270,12 @@ export function DocumentCapture({
   onCaptured: (file: File, preview: string) => void;
   onCancel?: () => void;
 }) {
-  const copy = idCopy[side];
+  const { t } = useI18n();
   return (
     <PhotoCapture
-      title={copy.title}
-      hint={copy.hint}
-      footer={copy.footer}
+      title={t(side === "front" ? "visitor.frontTitle" : "visitor.backTitle")}
+      hint={t(side === "front" ? "visitor.frontHint" : "visitor.backHint")}
+      footer={t(side === "front" ? "visitor.frontFooter" : "visitor.backFooter")}
       guide={side === "back" ? "id-back" : "id-front"}
       filePrefix="identificacion"
       onCaptured={onCaptured}

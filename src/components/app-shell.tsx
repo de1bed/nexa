@@ -18,57 +18,60 @@ import type { LucideIcon } from "lucide-react";
 import { Brand } from "./brand";
 import { SessionExit } from "./session-exit";
 import { WorkspaceSwitcher } from "./workspace-switcher";
+import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
 import { useWorkspace } from "./workspace-provider";
+import { useI18n } from "./i18n-provider";
 
-type NavItem = { href: Route; label: string; short: string; icon: LucideIcon };
-
-const adminNav = [
-  { href: "/app/dashboard", label: "Resumen", short: "Resumen", icon: LayoutDashboard },
-  { href: "/app/visits", label: "Visitas", short: "Visitas", icon: CalendarDays },
-  { href: "/app/people-on-site", label: "Personas dentro", short: "Dentro", icon: UserRoundCheck },
-  { href: "/app/reports", label: "Reportes", short: "Reportes", icon: BarChart3 },
-] satisfies NavItem[];
-
-const adminSecondary = [
-  { href: "/app/team", label: "Equipo", short: "Equipo", icon: Users },
-  { href: "/app/locations", label: "Ubicaciones", short: "Sedes", icon: MapPin },
-  { href: "/app/settings", label: "Configuración", short: "Ajustes", icon: Settings },
-  { href: "/guard/scan", label: "Vista de caseta", short: "Caseta", icon: ScanLine },
-] satisfies NavItem[];
-
-const hostNav = [
-  { href: "/app/host", label: "Mi resumen", short: "Inicio", icon: LayoutDashboard },
-  { href: "/app/visits", label: "Mis visitas", short: "Visitas", icon: CalendarDays },
-  { href: "/app/people-on-site", label: "Quién está dentro", short: "Dentro", icon: UserRoundCheck },
-  { href: "/app/reports", label: "Mis reportes", short: "Reportes", icon: BarChart3 },
-] satisfies NavItem[];
-
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+type NavItem = { href: Route; labelKey: string; shortKey: string; icon: LucideIcon };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { viewer } = useWorkspace();
+  const { t } = useI18n();
   const isHost = viewer.role === "host";
+  const adminNav = [
+    { href: "/app/dashboard", labelKey: "nav.summary", shortKey: "nav.summary", icon: LayoutDashboard },
+    { href: "/app/visits", labelKey: "nav.visits", shortKey: "nav.visits", icon: CalendarDays },
+    { href: "/app/people-on-site", labelKey: "nav.inside", shortKey: "nav.insideShort", icon: UserRoundCheck },
+    { href: "/app/reports", labelKey: "nav.reports", shortKey: "nav.reports", icon: BarChart3 },
+  ] satisfies NavItem[];
+  const adminSecondary = [
+    { href: "/app/team", labelKey: "nav.team", shortKey: "nav.team", icon: Users },
+    { href: "/app/locations", labelKey: "nav.locations", shortKey: "nav.locations", icon: MapPin },
+    { href: "/app/settings", labelKey: "nav.settings", shortKey: "nav.settingsShort", icon: Settings },
+    { href: "/guard/scan", labelKey: "nav.booth", shortKey: "nav.boothShort", icon: ScanLine },
+  ] satisfies NavItem[];
+  const hostNav = [
+    { href: "/app/host", labelKey: "nav.hostHome", shortKey: "nav.hostHomeShort", icon: LayoutDashboard },
+    { href: "/app/visits", labelKey: "nav.hostVisits", shortKey: "nav.visits", icon: CalendarDays },
+    { href: "/app/people-on-site", labelKey: "nav.hostInside", shortKey: "nav.insideShort", icon: UserRoundCheck },
+    { href: "/app/reports", labelKey: "nav.hostReports", shortKey: "nav.reports", icon: BarChart3 },
+  ] satisfies NavItem[];
   const primary = isHost ? hostNav : adminNav;
   const secondary = isHost ? [] : adminSecondary;
   const dock = isHost
     ? [hostNav[0], hostNav[1], hostNav[2]]
     : [
-        adminNav[0],  // Resumen
-        adminNav[1],  // Visitas
-        { href: "/guard/scan" as Route, label: "Caseta", short: "Caseta", icon: ScanLine },
+        adminNav[0],
+        adminNav[1],
+        { href: "/guard/scan" as Route, labelKey: "nav.boothShort", shortKey: "nav.boothShort", icon: ScanLine },
       ];
+
+  function isActive(path: string, href: string) {
+    return path === href || path.startsWith(`${href}/`);
+  }
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-[#071426]">
       {/* Encabezado móvil */}
       <header className="safe-top no-print sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-lg lg:hidden">
-        <div className="flex h-15 items-center justify-between px-4">
+        <div className="flex h-15 items-center justify-between gap-2 px-4">
           <WorkspaceSwitcher compact />
-          <SessionExit compact />
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher compact />
+            <SessionExit compact />
+          </div>
         </div>
       </header>
 
@@ -81,25 +84,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <nav className="mt-7 flex-1 space-y-1">
           {primary.map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} label={t(item.labelKey)} />
           ))}
           {secondary.length > 0 && (
             <>
               <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Organización
+                {t("common.organization")}
               </p>
               {secondary.map((item) => (
                 <NavLink
                   key={item.href}
                   item={item}
                   active={isActive(pathname, item.href)}
+                  label={t(item.labelKey)}
                 />
               ))}
             </>
           )}
         </nav>
 
-        <SessionExit />
+        <div className="space-y-3">
+          <LanguageSwitcher />
+          <SessionExit />
+        </div>
       </aside>
 
       <main className="pb-dock print:p-0 lg:pb-0 lg:pl-64 print:pl-0">
@@ -111,7 +118,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Acceso rápido y barra inferior en móvil */}
       <Link
         href="/app/visits/new"
-        aria-label="Nueva invitación"
+        aria-label={t("nav.newInvite")}
         className="no-print fixed bottom-[calc(78px+env(safe-area-inset-bottom))] right-4 z-30 grid size-14 place-items-center rounded-2xl bg-[#10cfc9] text-[#043b39] shadow-[0_18px_38px_-14px_#10cfc9] transition active:scale-95 lg:hidden"
       >
         <Plus size={26} />
@@ -135,7 +142,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <item.icon size={21} strokeWidth={active ? 2.4 : 1.9} />
-                {item.short}
+                {t(item.shortKey)}
               </Link>
             );
           })}
@@ -149,7 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             {isHost ? <Plus size={21} /> : <Settings size={21} />}
-            {isHost ? "Invitar" : "Ajustes"}
+            {isHost ? t("nav.invite") : t("nav.settingsShort")}
           </Link>
         </div>
       </nav>
@@ -157,7 +164,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({
+  item,
+  active,
+  label,
+}: {
+  item: NavItem;
+  active: boolean;
+  label: string;
+}) {
   return (
     <Link
       href={item.href}
@@ -170,7 +185,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       )}
     >
       <item.icon size={18} />
-      {item.label}
+      {label}
     </Link>
   );
 }

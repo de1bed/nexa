@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, MailCheck, RotateCcw } from "lucide-react";
 import { Button, cn, fieldClass } from "./ui";
+import { useI18n } from "./i18n-provider";
+import { translate } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { accessCodeSchema } from "@/lib/schemas";
 
@@ -20,18 +22,16 @@ const resendDelaySeconds = 60;
  */
 export function accessRequestError(message: string) {
   const detail = message.toLowerCase();
-  if (detail.includes("signups not allowed"))
-    return "No encontramos una cuenta con ese correo. Registra tu empresa primero.";
+  if (detail.includes("signups not allowed")) return translate("auth.noAccount");
   if (detail.includes("rate limit") || detail.includes("security purposes")) {
-    // «For security purposes, you can only request this after 47 seconds.»
     const seconds = /after (\d+) second/.exec(detail)?.[1];
     return seconds
-      ? `Ya enviamos un código. Espera ${seconds} segundos para pedir otro.`
-      : "Ya enviamos un código. Espera un momento para pedir otro.";
+      ? translate("auth.waitSeconds", { n: seconds })
+      : translate("auth.waitMoment");
   }
   if (detail.includes("invalid") && detail.includes("email"))
-    return "Ese correo no parece válido. Revísalo.";
-  return "No pudimos enviar el código. Intenta de nuevo.";
+    return translate("auth.invalidEmail");
+  return translate("auth.sendFail");
 }
 
 /**
@@ -56,6 +56,7 @@ export function AccessCodeStep({
   onResend: () => Promise<void>;
   onBack: () => void;
 }) {
+  const { t } = useI18n();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -71,7 +72,7 @@ export function AccessCodeStep({
   async function verify(value: string) {
     const parsed = accessCodeSchema.safeParse(value);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Código inválido");
+      setError(parsed.error.issues[0]?.message ?? t("auth.invalidCode"));
       return;
     }
     if (running.current) return;
@@ -95,7 +96,7 @@ export function AccessCodeStep({
       if (result.error || !result.data.session) throw new Error("invalid");
       await onVerified();
     } catch {
-      setError("El código no es válido o ya venció. Pide uno nuevo.");
+      setError(t("auth.codeExpired"));
       setCode("");
       setBusy(false);
     } finally {
@@ -114,7 +115,7 @@ export function AccessCodeStep({
       setError(
         reason instanceof Error
           ? reason.message
-          : "No pudimos reenviar el código.",
+          : t("auth.resendFail"),
       );
     } finally {
       setBusy(false);
@@ -130,7 +131,8 @@ export function AccessCodeStep({
         {title}
       </h1>
       <p className="mt-2.5 text-[15px] leading-6 text-slate-500">
-        {description} Lo enviamos a <b className="text-[#071426]">{email}</b>.
+        {description} {t("auth.sentTo")}{" "}
+        <b className="text-[#071426]">{email}</b>.
       </p>
 
       <form
@@ -141,7 +143,7 @@ export function AccessCodeStep({
         className="mt-7"
       >
         <label htmlFor="access-code" className="sr-only">
-          Código de seis dígitos
+          {t("auth.sixDigit")}
         </label>
         <input
           id="access-code"
@@ -184,7 +186,7 @@ export function AccessCodeStep({
           disabled={busy || code.length < 6}
           className="mt-5"
         >
-          {busy ? <Loader2 size={19} className="animate-spin" /> : "Entrar"}
+          {busy ? <Loader2 size={19} className="animate-spin" /> : t("auth.enter")}
         </Button>
       </form>
 
@@ -194,7 +196,7 @@ export function AccessCodeStep({
           onClick={onBack}
           className="font-medium text-slate-500"
         >
-          Cambiar correo
+          {t("auth.changeEmail")}
         </button>
         <span aria-hidden className="text-slate-300">
           ·
@@ -206,7 +208,7 @@ export function AccessCodeStep({
           className="inline-flex items-center gap-1.5 font-semibold text-blue-600 disabled:text-slate-400"
         >
           <RotateCcw size={15} />
-          {wait > 0 ? `Reenviar en ${wait}s` : "Reenviar código"}
+          {wait > 0 ? t("auth.resendIn", { n: wait }) : t("auth.resend")}
         </button>
       </div>
     </div>

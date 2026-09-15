@@ -20,7 +20,8 @@ import { toast } from "sonner";
 import { useWorkspace, useMyVisits } from "./workspace-provider";
 import { Avatar, Button, Card, EmptyState, MetricTile, StatusPill, Skeleton } from "./ui";
 import { LiveDuration, ShareButton, Sheet } from "./ui-client";
-import { eventLabels, type AccessEventType } from "@/lib/domain";
+import { type AccessEventType } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 const activityIcon: Record<AccessEventType, typeof LogIn> = {
   check_in: LogIn,
@@ -53,6 +54,7 @@ const dateLabel = (value: string) =>
 export function HostDashboard() {
   const { events, viewer, loading, resendLink } = useWorkspace();
   const visits = useMyVisits();
+  const { t } = useI18n();
   const [shareUrl, setShareUrl] = useState("");
   const [shareName, setShareName] = useState("");
   const [busyId, setBusyId] = useState("");
@@ -319,7 +321,7 @@ export function HostDashboard() {
                         {visit?.visitorName ?? "Visita"}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {eventLabels[event.type]} · {dateLabel(event.at)}
+                        {t(`events.${event.type}`)} · {dateLabel(event.at)}
                       </p>
                     </div>
                   </div>

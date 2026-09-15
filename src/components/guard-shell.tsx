@@ -2,26 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Route } from "next";
 import { ArrowLeft, History, PenLine, ScanLine, Users } from "lucide-react";
 import { Brand } from "./brand";
 import { SessionExit } from "./session-exit";
+import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
 import { useWorkspace } from "./workspace-provider";
+import { useI18n } from "./i18n-provider";
 
-const nav: Array<{ href: Route; label: string; icon: typeof ScanLine }> = [
-  { href: "/guard/scan", label: "Escanear", icon: ScanLine },
-  { href: "/guard/manual", label: "Manual", icon: PenLine },
-  { href: "/guard/inside", label: "Dentro", icon: Users },
-  { href: "/guard/history", label: "Bitácora", icon: History },
-];
-
-/** Portal de caseta: contraste alto, objetivos grandes y una sola columna. */
 export function GuardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { visits, organization, viewer } = useWorkspace();
+  const { t } = useI18n();
   const inside = visits.filter((visit) => visit.status === "checked_in").length;
   const isAdmin = viewer.role === "admin" || viewer.role === "superadmin";
+  const nav = [
+    { href: "/guard/scan" as const, labelKey: "nav.scan", icon: ScanLine },
+    { href: "/guard/manual" as const, labelKey: "nav.manual", icon: PenLine },
+    { href: "/guard/inside" as const, labelKey: "nav.insideShort", icon: Users },
+    { href: "/guard/history" as const, labelKey: "nav.log", icon: History },
+  ];
 
   return (
     <div className="dark-panel min-h-screen text-white">
@@ -33,7 +33,7 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
               className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
               <ArrowLeft size={18} />
-              <span className="hidden sm:inline">Volver al panel</span>
+              <span className="hidden sm:inline">{t("nav.backToPanel")}</span>
             </Link>
           ) : (
             <Brand dark />
@@ -50,8 +50,9 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
               <span className="size-1.5 rounded-full bg-emerald-400" />
               {organization.name}
             </Link>
+            <LanguageSwitcher dark compact />
             <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium">
-              {inside} dentro
+              {t("nav.insideCount", { n: inside })}
             </span>
             {!isAdmin && <SessionExit dark compact />}
           </div>
@@ -71,21 +72,21 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                aria-label={item.label}
+                aria-label={t(item.labelKey)}
                 className={cn(
                   "flex min-h-16 flex-col items-center justify-center gap-1 text-[10px] font-medium transition",
                   active ? "text-[#10cfc9]" : "text-slate-400",
                 )}
               >
                 <item.icon size={22} strokeWidth={active ? 2.4 : 1.9} />
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             );
           })}
         </div>
       </nav>
 
-      <span className="sr-only">Sesión de {viewer.name}</span>
+      <span className="sr-only">{viewer.name}</span>
     </div>
   );
 }

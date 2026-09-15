@@ -12,9 +12,11 @@ import {
   LogIn,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { LanguageSwitcher } from "./language-switcher";
 import { PassCard } from "./visitor/pass-card";
 import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
+import { useI18n } from "./i18n-provider";
 import { Callout, cn } from "./ui";
 import { LiveDuration } from "./ui-client";
 import { isLiveMode } from "@/lib/config";
@@ -226,13 +228,17 @@ export function PublicPass({ token }: { token: string }) {
 }
 
 function Frame({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <main className="dark-panel min-h-screen text-white">
       <header className="safe-top border-b border-white/10">
         <div className="mx-auto flex h-15 max-w-2xl items-center justify-between px-5">
           <Brand dark href="#" />
-          <span className="text-[11px] font-medium text-slate-400">
-            Pase privado
+          <span className="flex items-center gap-2">
+            <LanguageSwitcher dark compact />
+            <span className="text-[11px] font-medium text-slate-400">
+              {t("pass.private")}
+            </span>
           </span>
         </div>
       </header>

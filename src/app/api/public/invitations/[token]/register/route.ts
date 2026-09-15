@@ -17,6 +17,8 @@ import {
   resolvedVisitorName,
   validateRegistration,
 } from "@/lib/visitor-flow";
+import { localeFromCookieHeader } from "@/lib/i18n/types";
+import { translate } from "@/lib/i18n/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +52,11 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/public/invitations/[token]/register">,
 ) {
+  const locale = localeFromCookieHeader(request.headers.get("cookie"));
   const limit = rateLimit(`register:${requestOrigin(request)}`, 8, 300000);
   if (!limit.allowed)
     return NextResponse.json(
-      { error: "Demasiados intentos. Espera unos minutos." },
+      { error: translate("errors.too_many", undefined, locale) },
       { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
     );
 
@@ -85,7 +88,7 @@ export async function POST(
     for (const image of images) {
       if (!isAllowedIdentityUpload(image.file))
         return NextResponse.json(
-          { error: "Las imágenes deben ser JPG, PNG o WebP" },
+          { error: translate("errors.image_type", undefined, locale) },
           { status: 400 },
         );
     }
@@ -104,7 +107,7 @@ export async function POST(
     };
     if (!resolved || resolved.state !== "active")
       return NextResponse.json(
-        { error: "Este enlace ya no está disponible" },
+        { error: translate("errors.link_unavailable", undefined, locale) },
         { status: 404 },
       );
 
@@ -115,7 +118,7 @@ export async function POST(
       .maybeSingle();
     if (!visit)
       return NextResponse.json(
-        { error: "Este enlace ya no está disponible" },
+        { error: translate("errors.link_unavailable", undefined, locale) },
         { status: 404 },
       );
 
@@ -149,7 +152,10 @@ export async function POST(
       flow,
     );
     if (problem)
-      return NextResponse.json({ error: problem }, { status: 400 });
+      return NextResponse.json(
+        { error: translate(`errors.${problem}`, undefined, locale), code: problem },
+        { status: 400 },
+      );
 
     const fullName = resolvedVisitorName(
       values.fullName,
@@ -342,14 +348,14 @@ export async function POST(
     if (error instanceof z.ZodError)
       return NextResponse.json(
         {
-          error: "Revisa los datos del formulario",
+          error: translate("errors.form_invalid", undefined, locale),
           issues: error.issues.map((issue) => issue.path.join(".")),
         },
         { status: 400 },
       );
     console.error("Public registration failed", error);
     return NextResponse.json(
-      { error: "No fue posible completar tu registro" },
+      { error: translate("errors.register_failed", undefined, locale) },
       { status: 500 },
     );
   }

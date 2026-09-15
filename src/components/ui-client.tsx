@@ -10,8 +10,9 @@ import {
 import { Check, Copy, Share2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "./ui";
-import { formatDuration } from "@/lib/domain";
+import { formatDurationI18n, translate } from "@/lib/i18n";
 import { getClock, getServerClock, subscribeClock } from "@/lib/clock";
+import { useLocale } from "@/lib/i18n/store";
 
 /** Primitivas con estado o efectos de navegador. */
 
@@ -41,6 +42,7 @@ export function LiveDuration({
   prefix?: string;
 }) {
   const now = useSyncExternalStore(subscribeClock, getClock, getServerClock);
+  const locale = useLocale();
 
   if (!since) return null;
   const end = until ? new Date(until).getTime() : now;
@@ -51,7 +53,7 @@ export function LiveDuration({
   return (
     <span className={className}>
       {prefix}
-      {formatDuration(elapsed)}
+      {formatDurationI18n(elapsed, locale)}
     </span>
   );
 }
@@ -60,13 +62,14 @@ export function LiveDuration({
 export function RemainingUntil({
   until,
   className,
-  expiredLabel = "Vencido",
+  expiredLabel,
 }: {
   until?: string;
   className?: string;
   expiredLabel?: string;
 }) {
   const now = useSyncExternalStore(subscribeClock, getClock, getServerClock);
+  const locale = useLocale();
 
   if (!until) return null;
   const end = new Date(until).getTime();
@@ -74,7 +77,9 @@ export function RemainingUntil({
   const left = end - now;
   return (
     <span className={className}>
-      {left <= 0 ? expiredLabel : formatDuration(left)}
+      {left <= 0
+        ? (expiredLabel ?? translate("pass.expired", undefined, locale))
+        : formatDurationI18n(left, locale)}
     </span>
   );
 }

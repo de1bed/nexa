@@ -40,7 +40,6 @@ import {
   showcaseTeam,
 } from "@/lib/demo-data";
 import {
-  roleLabels,
   memberStatusLabels,
   type Location,
   type MemberRole,
@@ -52,11 +51,11 @@ import {
   defaultVisitorFlow,
   parseVisitorFlow,
   visitorFlowKeys,
-  visitorFlowStepMeta,
   type StepPolicy,
   type VisitorFlowKey,
 } from "@/lib/visitor-flow";
 import { appUrl } from "@/lib/config";
+import { useI18n } from "./i18n-provider";
 
 type JoinCode = {
   id: string;
@@ -103,6 +102,7 @@ function formatTimeSince(dateString: string): string {
 
 export function TeamPage() {
   const { live, viewer, reload } = useWorkspace();
+  const { t } = useI18n();
   const [members, setMembers] = useState<TeamMember[]>(live ? [] : showcaseTeam);
   const [joinCodes, setJoinCodes] = useState<JoinCode[]>([]);
   const [loading, setLoading] = useState(live);
@@ -465,7 +465,7 @@ export function TeamPage() {
                   )}
                 </p>
                 <p className="truncate text-sm text-slate-500">
-                  {roleLabels[member.role]} · {member.email}
+                  {t(`roles.${member.role}`)} · {member.email}
                 </p>
               </div>
               <button
@@ -502,7 +502,7 @@ export function TeamPage() {
                   {jc.code}
                 </code>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{roleLabels[jc.role]}</p>
+                  <p className="text-sm font-medium">{t(`roles.${jc.role}`)}</p>
                   <p className="text-xs text-slate-500">
                     {jc.uses_remaining !== null
                       ? `${jc.uses_remaining} usos restantes`
@@ -573,7 +573,7 @@ export function TeamPage() {
             <ShareButton
               url={result.inviteUrl}
               title={`Únete a ${result.member.role === "guard" ? "caseta" : "NEXA VISIT"}`}
-              text={`${result.member.name}, te invitaron como ${roleLabels[result.member.role]}. Crea tu cuenta aquí:`}
+              text={`${result.member.name}, te invitaron como ${t(`roles.${result.member.role}`)}. Crea tu cuenta aquí:`}
               className="w-full"
             >
               Compartir por WhatsApp o correo
@@ -723,7 +723,7 @@ export function TeamPage() {
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
                 <div>
                   <p className="text-xs text-slate-400">Rol actual</p>
-                  <p className="text-sm font-medium">{roleLabels[editing.role]}</p>
+                  <p className="text-sm font-medium">{t(`roles.${editing.role}`)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Estado</p>
@@ -779,7 +779,7 @@ export function TeamPage() {
                       editing.id === viewer.id && "opacity-50 cursor-not-allowed",
                     )}
                   >
-                    <span className="text-sm font-semibold">{roleLabels[role]}</span>
+                    <span className="text-sm font-semibold">{t(`roles.${role}`)}</span>
                     {editing.role === role && (
                       <Check size={18} className="text-[#0d9d99]" />
                     )}
@@ -1064,6 +1064,7 @@ export function LocationsPage() {
 
 export function SettingsPage() {
   const { live, organization, reload } = useWorkspace();
+  const { t } = useI18n();
   const [settings, setSettings] = useState<OrganizationSettings>(showcaseSettings);
   const [loading, setLoading] = useState(live);
   const [busy, setBusy] = useState(false);
@@ -1137,8 +1138,8 @@ export function SettingsPage() {
     <>
       <SectionTitle
         eyebrow={organization.name}
-        title="Configuración"
-        description="Privacidad, qué le pides al visitante y ventanas de acceso."
+        title={t("settings.title")}
+        description={t("settings.description")}
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
@@ -1150,9 +1151,9 @@ export function SettingsPage() {
             <Users size={19} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">Equipo</span>
+            <span className="block font-semibold">{t("nav.team")}</span>
             <span className="block text-sm text-slate-500">
-              Invita anfitriones y guardias
+              {t("settings.teamHint")}
             </span>
           </span>
           <ChevronRight size={18} className="text-slate-400" />
@@ -1165,9 +1166,9 @@ export function SettingsPage() {
             <MapPin size={19} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">Ubicaciones</span>
+            <span className="block font-semibold">{t("nav.locations")}</span>
             <span className="block text-sm text-slate-500">
-              Sedes donde recibes visitas
+              {t("settings.locationsHint")}
             </span>
           </span>
           <ChevronRight size={18} className="text-slate-400" />
@@ -1176,18 +1177,17 @@ export function SettingsPage() {
 
       {loading ? (
         <Card>
-          <p className="text-sm text-slate-500">Cargando configuración…</p>
+          <p className="text-sm text-slate-500">{t("settings.loading")}</p>
         </Card>
       ) : (
         <div className="max-w-3xl space-y-5">
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <IdCard size={18} />
-              Qué le pides al visitante
+              {t("settings.askVisitor")}
             </h2>
             <p className="mt-1.5 text-sm text-slate-500">
-              Cada paso se puede apagar, dejar opcional u obligar. Si no
-              cambias nada, el visitante ve el mismo recorrido de siempre.
+              {t("settings.askHint")}
             </p>
             <div className="mt-5 space-y-4">
               {visitorFlowKeys.map((key) => (
@@ -1221,11 +1221,10 @@ export function SettingsPage() {
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <Shield size={18} />
-              Retención de identificaciones
+              {t("settings.retention")}
             </h2>
             <p className="mt-1.5 text-sm text-slate-500">
-              Al cumplirse el plazo, la imagen se borra del almacenamiento y queda
-              constancia en la bitácora.
+              {t("settings.retentionHint")}
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -1243,15 +1242,13 @@ export function SettingsPage() {
                       : "border-slate-200 bg-white text-slate-600",
                   )}
                 >
-                  {days} días
+                  {t("common.days", { n: days })}
                 </button>
               ))}
             </div>
 
             <Callout tone="neutral" className="mt-4">
-              El plazo se aplica a las identificaciones que se capturen a partir
-              de ahora; las ya almacenadas conservan la fecha con la que se
-              subieron.
+              {t("settings.retentionNote")}
             </Callout>
 
             <div className="mt-5">
@@ -1263,8 +1260,8 @@ export function SettingsPage() {
                     allowDocumentPreviewForGuards: value,
                   })
                 }
-                label="Guardias pueden ver la identificación"
-                description="Desactivado minimiza la exposición de datos personales en caseta."
+                label={t("settings.guardsPreview")}
+                description={t("settings.guardsPreviewHint")}
               />
             </div>
           </Card>
@@ -1272,15 +1269,14 @@ export function SettingsPage() {
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <Clock3 size={18} />
-              Ventana de acceso
+              {t("settings.window")}
             </h2>
             <p className="mt-1.5 text-sm text-slate-500">
-              Cuánta tolerancia hay antes y después del horario programado. Fuera
-              de la ventana, el guardia debe autorizar explícitamente.
+              {t("settings.windowHint")}
             </p>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label="Tolerancia de llegada anticipada">
+              <Field label={t("settings.early")}>
                 <select
                   className={fieldClass}
                   value={settings.earlyEntryMinutes}
@@ -1293,12 +1289,14 @@ export function SettingsPage() {
                 >
                   {[0, 10, 15, 30, 60, 120].map((value) => (
                     <option key={value} value={value}>
-                      {value === 0 ? "Sin tolerancia" : `${value} minutos antes`}
+                      {value === 0
+                        ? t("common.noTolerance")
+                        : t("common.minutesBefore", { n: value })}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Tolerancia de llegada tardía">
+              <Field label={t("settings.late")}>
                 <select
                   className={fieldClass}
                   value={settings.lateEntryMinutes}
@@ -1311,7 +1309,9 @@ export function SettingsPage() {
                 >
                   {[0, 15, 30, 60, 120, 240].map((value) => (
                     <option key={value} value={value}>
-                      {value === 0 ? "Sin tolerancia" : `${value} minutos después`}
+                      {value === 0
+                        ? t("common.noTolerance")
+                        : t("common.minutesAfter", { n: value })}
                     </option>
                   ))}
                 </select>
@@ -1322,11 +1322,10 @@ export function SettingsPage() {
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <Building2 size={18} />
-              Aviso de privacidad
+              {t("settings.privacy")}
             </h2>
             <p className="mt-1.5 text-sm text-slate-500">
-              Es el texto que lee y acepta cada visitante antes de entregar sus
-              datos. Al cambiarlo se genera una versión nueva.
+              {t("settings.privacyHint")}
             </p>
             <textarea
               rows={7}
@@ -1337,12 +1336,13 @@ export function SettingsPage() {
               className="mt-4 w-full rounded-2xl border border-slate-200 bg-white p-4 text-[15px] leading-6 outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
             />
             <p className="mt-2 text-xs text-slate-400">
-              Versión vigente: {settings.privacyNoticeVersion} ·{" "}
-              {settings.privacyNotice.length} caracteres
+              {t("settings.version", {
+                version: settings.privacyNoticeVersion,
+                chars: settings.privacyNotice.length,
+              })}
             </p>
             <Callout tone="warning" className="mt-4">
-              Este texto debe ser revisado por tu área legal antes de operar con
-              datos reales.
+              {t("settings.legal")}
             </Callout>
           </Card>
 
@@ -1355,7 +1355,7 @@ export function SettingsPage() {
               onClick={save}
             >
               {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-              Guardar cambios
+              {t("common.save")}
             </Button>
           </div>
         </div>
@@ -1373,17 +1373,19 @@ function StepPolicyRow({
   value: StepPolicy;
   onChange: (value: StepPolicy) => void;
 }) {
-  const meta = visitorFlowStepMeta[step];
+  const { t } = useI18n();
   const options: Array<{ id: StepPolicy; label: string }> = [
-    { id: "off", label: "No pedir" },
-    { id: "optional", label: "Opcional" },
-    { id: "required", label: "Obligatorio" },
+    { id: "off", label: t("flow.off") },
+    { id: "optional", label: t("flow.optional") },
+    { id: "required", label: t("flow.required") },
   ];
 
   return (
     <div className="rounded-2xl border border-slate-200 p-4">
-      <p className="text-sm font-semibold">{meta.label}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-500">{meta.description}</p>
+      <p className="text-sm font-semibold">{t(`flow.${step}`)}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">
+        {t(`flow.${step}Hint`)}
+      </p>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {options.map((option) => (
           <button

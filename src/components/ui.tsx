@@ -1,8 +1,12 @@
+"use client";
+
 import type { ComponentProps, ReactNode } from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { LucideIcon } from "lucide-react";
 import { statusLabels, type VisitStatus } from "@/lib/domain";
+import { translate } from "@/lib/i18n";
+import { useLocale } from "@/lib/i18n/store";
 
 /** Primitivas sin estado: utilizables desde Server y Client Components. */
 
@@ -227,7 +231,9 @@ export function Field({
           {label}
         </span>
         {optional && (
-          <span className="text-xs text-slate-400">Opcional</span>
+          <span className="text-xs text-slate-400">
+            <OptionalLabel />
+          </span>
         )}
         {warning && (
           <span className="text-xs font-medium text-amber-700">Revisar</span>
@@ -311,6 +317,7 @@ export function StatusPill({
   status: VisitStatus;
   className?: string;
 }) {
+  const locale = useLocale();
   return (
     <span
       className={cn(
@@ -319,9 +326,14 @@ export function StatusPill({
         className,
       )}
     >
-      {statusLabels[status]}
+      {translate(`status.${status}`, undefined, locale) || statusLabels[status]}
     </span>
   );
+}
+
+function OptionalLabel() {
+  const locale = useLocale();
+  return <>{translate("common.optional", undefined, locale)}</>;
 }
 
 export function MetricTile({

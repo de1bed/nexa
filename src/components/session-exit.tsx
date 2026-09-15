@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient, isLiveMode } from "@/lib/supabase/client";
 import { cn } from "./ui";
+import { useI18n } from "./i18n-provider";
 
 export function SessionExit({
   dark = false,
@@ -13,6 +14,7 @@ export function SessionExit({
   compact?: boolean;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
 
   async function exit() {
     if (isLiveMode()) {
@@ -35,7 +37,7 @@ export function SessionExit({
   return (
     <button
       onClick={exit}
-      aria-label="Cerrar sesión"
+      aria-label={t("common.signOut")}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition active:scale-95",
         compact ? "size-10" : "h-11 w-full",
@@ -45,7 +47,7 @@ export function SessionExit({
       )}
     >
       <LogOut size={17} />
-      {!compact && "Cerrar sesión"}
+      {!compact && t("common.signOut")}
     </button>
   );
 }

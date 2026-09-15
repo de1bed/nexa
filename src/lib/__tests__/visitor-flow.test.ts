@@ -91,7 +91,7 @@ describe("política de registro", () => {
         { ...complete, identityPhotos: 0 },
         defaultVisitorFlow,
       ),
-    ).toBe("Faltan las fotos de tu identificación.");
+    ).toBe("identity_photos_required");
 
     const optionalId = parseVisitorFlow({ identification: "optional" });
     expect(
@@ -104,7 +104,7 @@ describe("política de registro", () => {
         { ...complete, vehiclePlate: "", vehiclePhotos: 0 },
         requiredVehicle,
       ),
-    ).toBe("Escribe las placas del vehículo.");
+    ).toBe("plate_required");
   });
 
   it("permite apagar los datos y el consentimiento", () => {

@@ -5,7 +5,8 @@ import { History, LogIn, LogOut, ShieldX, UserRoundCheck } from "lucide-react";
 import { useWorkspace } from "./workspace-provider";
 import { useNow } from "./ui-client";
 import { EmptyState, cn } from "./ui";
-import { eventLabels, type AccessEventType } from "@/lib/domain";
+import { type AccessEventType } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 const iconByType: Record<AccessEventType, typeof LogIn> = {
   check_in: LogIn,
@@ -33,6 +34,7 @@ const toneByType: Record<AccessEventType, string> = {
 export function GuardHistory() {
   const { events, visits } = useWorkspace();
   const now = useNow();
+  const { t, formatTime } = useI18n();
 
   // El agrupado y las etiquetas relativas se calculan juntos: así el reloj se
   // consulta una sola vez y el render queda libre de llamadas impuras.
@@ -113,10 +115,8 @@ export function GuardHistory() {
                           {visit?.visitorName ?? "Visita"}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-400">
-                          {eventLabels[event.type]} ·{" "}
-                          {new Intl.DateTimeFormat("es-MX", {
-                            timeStyle: "short",
-                          }).format(new Date(event.at))}{" "}
+                          {t(`events.${event.type}`)} ·{" "}
+                          {formatTime(event.at)}{" "}
                           · {event.actor}
                         </p>
                         {event.detail && (

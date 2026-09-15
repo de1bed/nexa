@@ -254,42 +254,50 @@ export type RegistrationInput = {
   invitedName?: string;
 };
 
+export type RegistrationError =
+  | "name_required"
+  | "email_invalid"
+  | "phone_required"
+  | "company_required"
+  | "identity_photos_required"
+  | "identity_front_required"
+  | "identity_back_required"
+  | "plate_required"
+  | "plate_photo_required"
+  | "notes_required"
+  | "attachment_required"
+  | "consent_required";
+
 export function validateRegistration(
   input: RegistrationInput,
   flow: VisitorFlowConfig,
-): string | null {
+): RegistrationError | null {
   if (flow.identity === "required") {
-    if (input.fullName.trim().length < 2)
-      return "Escribe tu nombre completo.";
-    if (!isEmail(input.email)) return "Escribe un correo válido.";
-    if (input.phone.trim().length < 7)
-      return "Escribe un teléfono de contacto.";
-    if (input.company.trim().length < 2)
-      return "Escribe la empresa que representas.";
+    if (input.fullName.trim().length < 2) return "name_required";
+    if (!isEmail(input.email)) return "email_invalid";
+    if (input.phone.trim().length < 7) return "phone_required";
+    if (input.company.trim().length < 2) return "company_required";
   } else if (flow.identity === "optional") {
-    if (input.email.trim() && !isEmail(input.email))
-      return "Escribe un correo válido.";
+    if (input.email.trim() && !isEmail(input.email)) return "email_invalid";
     if (input.phone.trim() && input.phone.trim().length < 7)
-      return "Escribe un teléfono de contacto.";
+      return "phone_required";
   }
 
   if (flow.identification === "required" && input.identityPhotos < 2)
-    return "Faltan las fotos de tu identificación.";
+    return "identity_photos_required";
 
   if (flow.vehicle === "required") {
-    if (!input.vehiclePlate.trim()) return "Escribe las placas del vehículo.";
-    if (input.vehiclePhotos < 1)
-      return "Falta al menos una foto de las placas.";
+    if (!input.vehiclePlate.trim()) return "plate_required";
+    if (input.vehiclePhotos < 1) return "plate_photo_required";
   }
 
   if (flow.notes === "required" && !input.visitorNotes.trim())
-    return "Escribe una nota para recepción.";
+    return "notes_required";
 
   if (flow.attachments === "required" && input.attachmentPhotos < 1)
-    return "Agrega al menos una foto de anexo.";
+    return "attachment_required";
 
-  if (flow.consent === "required" && !input.consent)
-    return "Necesitamos tu consentimiento para registrar la visita.";
+  if (flow.consent === "required" && !input.consent) return "consent_required";
 
   return null;
 }

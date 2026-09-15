@@ -15,6 +15,8 @@ import {
 import { Brand } from "./brand";
 import { AccessCodeStep, accessRequestError } from "./access-code";
 import { ChoosePasswordStep } from "./choose-password";
+import { LanguageSwitcher } from "./language-switcher";
+import { useI18n } from "./i18n-provider";
 import { Button, Callout, Field, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { destinationAfterLogin, isLiveMode, roleHome } from "@/lib/config";
@@ -24,28 +26,12 @@ import type { MemberRole } from "@/lib/domain";
 
 const showcaseProfiles: Array<{
   role: Exclude<MemberRole, "superadmin">;
-  label: string;
-  description: string;
+  descKey: "login.adminDesc" | "login.hostDesc" | "login.guardDesc";
   icon: typeof Users;
 }> = [
-  {
-    role: "admin",
-    label: "Administración",
-    description: "Operación completa, reportes y configuración",
-    icon: Users,
-  },
-  {
-    role: "host",
-    label: "Anfitrión",
-    description: "Invita visitantes y recibe avisos de llegada",
-    icon: UserRound,
-  },
-  {
-    role: "guard",
-    label: "Guardia",
-    description: "Escanea pases y controla entradas y salidas",
-    icon: ShieldCheck,
-  },
+  { role: "admin", descKey: "login.adminDesc", icon: Users },
+  { role: "host", descKey: "login.hostDesc", icon: UserRound },
+  { role: "guard", descKey: "login.guardDesc", icon: ShieldCheck },
 ];
 
 /** Marca el perfil elegido en modo vitrina; no es un mecanismo de seguridad. */
@@ -61,6 +47,7 @@ export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const live = isLiveMode();
+  const { t } = useI18n();
 
   const invitedEmail = accessEmailSchema.safeParse(
     params.get("email")?.trim().toLowerCase() ?? "",
@@ -75,9 +62,7 @@ export function LoginForm() {
   const [choosePassword, setChoosePassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(
-    params.get("error") === "invalid_link"
-      ? "El enlace venció o ya se usó. Entra con tu contraseña o pide un código."
-      : "",
+    params.get("error") === "invalid_link" ? t("login.expiredLink") : "",
   );
 
   function enterShowcase(role: Exclude<MemberRole, "superadmin">) {
@@ -102,7 +87,7 @@ export function LoginForm() {
       password,
     });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Revisa los datos");
+      setError(parsed.error.issues[0]?.message ?? t("login.checkData"));
       return;
     }
 
@@ -114,14 +99,12 @@ export function LoginForm() {
         password: parsed.data.password,
       });
       if (authError) {
-        throw new Error(
-          "Correo o contraseña incorrectos. Si es tu primer acceso, pide un código.",
-        );
+        throw new Error(t("login.wrongPassword"));
       }
       await finishSignIn();
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "No pudimos entrar.",
+        reason instanceof Error ? reason.message : t("login.enterFail"),
       );
     } finally {
       setBusy(false);
@@ -131,7 +114,7 @@ export function LoginForm() {
   async function requestCode() {
     const parsed = accessEmailSchema.safeParse(email.trim().toLowerCase());
     if (!parsed.success) {
-      setError("Escribe un correo válido para enviarte el código");
+      setError(t("login.validEmail"));
       return;
     }
 
@@ -144,7 +127,7 @@ export function LoginForm() {
       setError(
         reason instanceof Error
           ? reason.message
-          : "No pudimos enviar el código.",
+          : t("login.sendFail"),
       );
     } finally {
       setBusy(false);
@@ -192,11 +175,9 @@ export function LoginForm() {
           ) : sentTo ? (
             <AccessCodeStep
               email={sentTo}
-              title="Escribe tu código"
+              title={t("login.codeTitle")}
               description={
-                inviteCode
-                  ? "Está en el correo de invitación. Confírmalo y después eliges tu contraseña."
-                  : "Solo esta vez: confirma el correo y después eliges tu contraseña."
+                inviteCode ? t("login.codeInvite") : t("login.codeOnce")
               }
               otpType={inviteCode ? "magiclink" : "email"}
               onVerified={() => setChoosePassword(true)}
@@ -212,19 +193,20 @@ export function LoginForm() {
             />
           ) : (
             <>
-              <Brand />
+              <div className="flex items-start justify-between gap-3">
+                <Brand />
+                <LanguageSwitcher compact />
+              </div>
 
               <header className="mt-10">
                 <p className="text-sm font-semibold text-[#0d9d99]">
-                  {live ? "Bienvenido de nuevo" : "Modo demostración"}
+                  {live ? t("login.welcomeBack") : t("login.demoMode")}
                 </p>
                 <h1 className="mt-2 text-[32px] font-semibold leading-tight tracking-[-.035em]">
-                  {live ? "Accede a tu espacio" : "Elige un perfil"}
+                  {live ? t("login.accessSpace") : t("login.chooseProfile")}
                 </h1>
                 <p className="mt-3 text-[15px] leading-6 text-slate-500">
-                  {live
-                    ? "Entra con tu correo y contraseña. El código solo se pide la primera vez."
-                    : "Explora los tres portales sin credenciales. Los datos viven solo en este navegador."}
+                  {live ? t("login.liveHint") : t("login.showcaseExplore")}
                 </p>
               </header>
 
@@ -241,10 +223,10 @@ export function LoginForm() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold">
-                          {profile.label}
+                          {t(`roles.${profile.role}`)}
                         </span>
                         <span className="mt-0.5 block text-xs leading-5 text-slate-500">
-                          {profile.description}
+                          {t(profile.descKey)}
                         </span>
                       </span>
                       <ArrowRight size={19} className="shrink-0 text-slate-300" />
@@ -252,14 +234,13 @@ export function LoginForm() {
                   ))}
 
                   <Callout tone="neutral" className="mt-5">
-                    Al conectar Supabase, esta pantalla pasa automáticamente a
-                    autenticación real.
+                    {t("login.showcaseCallout")}
                   </Callout>
                 </div>
               ) : (
                 <>
                   <form onSubmit={signIn} className="mt-8 space-y-4">
-                    <Field label="Correo">
+                    <Field label={t("login.email")}>
                       <input
                         required
                         autoFocus
@@ -267,12 +248,12 @@ export function LoginForm() {
                         inputMode="email"
                         autoComplete="email"
                         className={fieldClass}
-                        placeholder="tu@empresa.com"
+                        placeholder={t("login.emailPlaceholder")}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                       />
                     </Field>
-                    <Field label="Contraseña">
+                    <Field label={t("login.password")}>
                       <input
                         required
                         type="password"
@@ -303,7 +284,7 @@ export function LoginForm() {
                         <Loader2 size={19} className="animate-spin" />
                       ) : (
                         <>
-                          Entrar
+                          {t("login.enter")}
                           <ArrowRight size={18} />
                         </>
                       )}
@@ -314,14 +295,14 @@ export function LoginForm() {
                       onClick={() => void requestCode()}
                       className="w-full text-center text-sm font-semibold text-blue-600"
                     >
-                      Es mi primer acceso o olvidé la contraseña
+                      {t("login.firstAccess")}
                     </button>
                   </form>
 
                   <p className="mt-6 text-center text-sm text-slate-500">
-                    ¿Tu empresa aún no está aquí?{" "}
+                    {t("login.noCompany")}{" "}
                     <Link href="/signup" className="font-semibold text-blue-600">
-                      Crear cuenta
+                      {t("login.createAccount")}
                     </Link>
                   </p>
                 </>
@@ -338,11 +319,9 @@ export function LoginForm() {
             <LockKeyhole size={26} />
           </span>
           <blockquote className="mt-8 text-[38px] font-medium leading-[1.12] tracking-[-.03em]">
-            “Una recepción más ágil empieza antes de que llegue el visitante.”
+            {t("login.quote")}
           </blockquote>
-          <p className="mt-6 text-slate-400">
-            NEXA VISIT · Control inteligente de accesos
-          </p>
+          <p className="mt-6 text-slate-400">{t("login.tagline")}</p>
         </div>
       </section>
     </main>

@@ -15,15 +15,8 @@ import {
 } from "./ui";
 import { LiveDuration } from "./ui-client";
 import { safeCsvCell } from "@/lib/security";
-import { statusLabels, type VisitStatus } from "@/lib/domain";
-
-const shortDate = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+import { type VisitStatus } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 const filterable: VisitStatus[] = [
   "invited",
@@ -37,6 +30,7 @@ const filterable: VisitStatus[] = [
 export function VisitsTable() {
   const { viewer, loading } = useWorkspace();
   const allVisits = useMyVisits();
+  const { t, formatDateTime } = useI18n();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<VisitStatus | "all">("all");
 
@@ -57,16 +51,16 @@ export function VisitsTable() {
   function exportCsv() {
     const content = [
       [
-        "Visitante",
-        "Empresa",
-        "Anfitrión",
-        "Ubicación",
-        "Inicio",
-        "Entrada",
-        "Salida",
-        "Motivo",
-        "Estado",
-        "Origen",
+        t("people.visitor"),
+        t("visitor.company"),
+        t("visits.host"),
+        t("visits.location"),
+        t("invite.start"),
+        t("guard.authorized"),
+        t("guard.checkedOut"),
+        t("visitor.purpose"),
+        t("reports.status"),
+        t("invite.create"),
       ],
       ...rows.map((visit) => [
         visit.visitorName,
@@ -77,7 +71,7 @@ export function VisitsTable() {
         visit.checkedInAt ?? "",
         visit.checkedOutAt ?? "",
         visit.purpose,
-        statusLabels[visit.status],
+        t(`status.${visit.status}`),
         visit.origin === "guard_manual" ? "Registro en caseta" : "Invitación",
       ]),
     ]
@@ -149,7 +143,7 @@ export function VisitsTable() {
                 key={value}
                 active={status === value}
                 onClick={() => setStatus(value)}
-                label={statusLabels[value]}
+                label={t(`status.${value}`)}
                 count={count}
               />
             );
@@ -169,20 +163,20 @@ export function VisitsTable() {
           icon={query || status !== "all" ? SlidersHorizontal : CalendarDays}
           title={
             query || status !== "all"
-              ? "Sin resultados"
-              : "Todavía no hay visitas"
+              ? t("visits.empty")
+              : t("visits.title")
           }
           description={
             query || status !== "all"
-              ? "Cambia la búsqueda o quita los filtros."
-              : "Crea tu primera invitación y compártela con el visitante."
+              ? t("visits.empty")
+              : t("invite.title")
           }
           action={
             !query && status === "all" ? (
               <Link href="/app/visits/new">
                 <Button variant="accent">
                   <Plus size={18} />
-                  Nueva invitación
+                  {t("nav.newInvite")}
                 </Button>
               </Link>
             ) : undefined
@@ -205,7 +199,7 @@ export function VisitsTable() {
                       {visit.company || "Sin empresa"} · {visit.hostName}
                     </p>
                     <p className="mt-1 truncate text-xs text-slate-400">
-                      {shortDate(visit.startsAt)}
+                      {formatDateTime(visit.startsAt)}
                       {visit.status === "checked_in" && (
                         <>
                           {" · "}
@@ -226,13 +220,13 @@ export function VisitsTable() {
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     {[
-                      "Visitante",
-                      "Anfitrión",
-                      "Programada",
-                      "Entrada / salida",
-                      "Motivo",
-                      "Estado",
-                      "Origen",
+                      t("people.visitor"),
+                      t("visits.host"),
+                      t("visits.schedule"),
+                      t("guard.checkout"),
+                      t("visitor.purpose"),
+                      t("reports.status"),
+                      t("invite.create"),
                     ].map((header) => (
                       <th key={header} className="px-5 py-3 font-medium">
                         {header}
@@ -253,10 +247,10 @@ export function VisitsTable() {
                         <p className="text-xs text-slate-500">{visit.company}</p>
                       </td>
                       <td className="px-5 py-4">{visit.hostName}</td>
-                      <td className="px-5 py-4">{shortDate(visit.startsAt)}</td>
+                      <td className="px-5 py-4">{formatDateTime(visit.startsAt)}</td>
                       <td className="px-5 py-4 text-xs text-slate-600">
-                        {visit.checkedInAt ? shortDate(visit.checkedInAt) : "—"} /{" "}
-                        {visit.checkedOutAt ? shortDate(visit.checkedOutAt) : "—"}
+                        {visit.checkedInAt ? formatDateTime(visit.checkedInAt) : "—"} /{" "}
+                        {visit.checkedOutAt ? formatDateTime(visit.checkedOutAt) : "—"}
                       </td>
                       <td className="px-5 py-4">{visit.purpose}</td>
                       <td className="px-5 py-4">

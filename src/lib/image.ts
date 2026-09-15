@@ -161,7 +161,7 @@ export function validateImage(file: File) {
     "",
   ];
   if (type && !allowed.includes(type) && !type.startsWith("image/"))
-    return "Usa una imagen JPG, PNG, WebP o la foto de tu teléfono.";
-  if (file.size > MAX_IMAGE_BYTES) return "La imagen supera el límite de 8 MB.";
+    return "image_invalid";
+  if (file.size > MAX_IMAGE_BYTES) return "image_too_large";
   return null;
 }

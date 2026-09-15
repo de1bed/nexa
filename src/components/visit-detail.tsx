@@ -33,17 +33,13 @@ import {
 } from "./ui";
 import { LiveDuration, Sheet, ShareButton } from "./ui-client";
 import { StaffPassPanel } from "./staff-pass";
-import { eventLabels, formatDuration, timeInsideMs } from "@/lib/domain";
-
-const fullDate = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+import { timeInsideMs } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 export function VisitDetail({ id }: { id: string }) {
   const { visits, events, viewer, cancelVisit, resendLink, live, organization } =
     useWorkspace();
+  const { t, formatDateTime, formatTime, formatDuration } = useI18n();
   const [share, setShare] = useState<{ url: string; kind: "invitation" | "pass" } | null>(
     null,
   );
@@ -230,7 +226,7 @@ export function VisitDetail({ id }: { id: string }) {
             <Detail
               icon={CalendarClock}
               label="Fecha y horario"
-              value={`${fullDate(visit.startsAt)} — ${new Intl.DateTimeFormat("es-MX", { timeStyle: "short" }).format(new Date(visit.endsAt))}`}
+              value={`${formatDateTime(visit.startsAt)} — ${formatTime(visit.endsAt)}`}
             />
             <Detail
               icon={MapPin}
@@ -351,15 +347,15 @@ export function VisitDetail({ id }: { id: string }) {
         </Card>
 
         <Card className="p-5 sm:p-6">
-          <h2 className="mb-5 font-semibold">Cronología</h2>
+            <h2 className="mb-5 font-semibold">{t("visits.timeline")}</h2>
           <ol className="space-y-5">
             {timeline.map((event) => (
               <li key={event.id} className="flex gap-3">
                 <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#10cfc9] ring-4 ring-cyan-50" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{eventLabels[event.type]}</p>
+                  <p className="text-sm font-medium">{t(`events.${event.type}`)}</p>
                   <p className="text-xs text-slate-500">
-                    {fullDate(event.at)} · {event.actor}
+                    {formatDateTime(event.at)} · {event.actor}
                   </p>
                   {event.detail && (
                     <p className="mt-1 text-xs text-red-600">{event.detail}</p>

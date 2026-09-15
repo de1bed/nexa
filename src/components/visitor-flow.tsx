@@ -32,6 +32,9 @@ import {
 } from "lucide-react";
 import { Brand } from "./brand";
 import { Button, Callout, Field, cn, fieldClass } from "./ui";
+import { LanguageSwitcher } from "./language-switcher";
+import { useI18n } from "./i18n-provider";
+import { documentTypeMessageKey } from "@/lib/i18n";
 import {
   DocumentCapture,
   PhotoCapture,
@@ -114,6 +117,7 @@ const invalidInvitation = {
 
 export function VisitorFlow({ token }: { token: string }) {
   const live = isLiveMode();
+  const { t, formatFullDate } = useI18n();
 
   const showcaseState = useSyncExternalStore(
     subscribeShowcase,
@@ -304,13 +308,13 @@ export function VisitorFlow({ token }: { token: string }) {
       flow,
     );
     if (problem) {
-      setError(problem);
-      if (problem.includes("identificación")) go("document");
-      else if (problem.includes("placas") || problem.includes("vehículo"))
+      setError(t(`errors.${problem}`));
+      if (problem.startsWith("identity_")) go("document");
+      else if (problem.startsWith("plate_"))
         go(flow.vehicle === "required" ? "vehicle" : "extras");
-      else if (problem.includes("anexo")) go("attachments");
-      else if (problem.includes("nota")) go("extras");
-      else if (problem.includes("consentimiento")) go("consent");
+      else if (problem === "attachment_required") go("attachments");
+      else if (problem === "notes_required") go("extras");
+      else if (problem === "consent_required") go("consent");
       else if (flow.identity !== "off") go("identity");
       return;
     }
@@ -365,7 +369,7 @@ export function VisitorFlow({ token }: { token: string }) {
         };
         if (!response.ok || !payload.qrToken)
           throw new Error(
-            payload.error ?? "No fue posible completar tu registro",
+            payload.error ?? t("errors.register_failed"),
           );
 
         setPassToken(payload.qrToken);
@@ -401,7 +405,7 @@ export function VisitorFlow({ token }: { token: string }) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "No fue posible completar tu registro",
+          : t("errors.register_failed"),
       );
     } finally {
       setSubmitting(false);
@@ -416,29 +420,23 @@ export function VisitorFlow({ token }: { token: string }) {
       : (Math.max(1, stepIndex) / totalSteps) * 100;
 
   const dateLabel = useMemo(
-    () =>
-      invitation?.startsAt
-        ? new Intl.DateTimeFormat("es-MX", {
-            dateStyle: "full",
-            timeStyle: "short",
-          }).format(new Date(invitation.startsAt))
-        : "",
-    [invitation],
+    () => (invitation?.startsAt ? formatFullDate(invitation.startsAt) : ""),
+    [invitation, formatFullDate],
   );
 
   const extrasTitle =
     extrasShowsVehicle(flow) && extrasShowsNotes(flow)
-      ? "Detalles finales"
+      ? t("visitor.extras")
       : extrasShowsVehicle(flow)
-        ? "Tu vehículo"
-        : "Notas para recepción";
+        ? t("visitor.yourVehicle")
+        : t("visitor.receptionNotes");
 
   if (loading)
     return (
       <Frame>
         <div className="py-20 text-center">
           <Loader2 className="mx-auto animate-spin text-[#10aaa5]" size={38} />
-          <p className="mt-4 text-sm text-slate-500">Validando tu invitación…</p>
+          <p className="mt-4 text-sm text-slate-500">{t("visitor.validating")}</p>
         </div>
       </Frame>
     );
@@ -449,8 +447,8 @@ export function VisitorFlow({ token }: { token: string }) {
         <StateCard
           tone="warning"
           icon={AlertTriangle}
-          title="Enlace no disponible"
-          text="El enlace no es válido, ya venció o fue revocado. Pide a tu anfitrión que te envíe uno nuevo."
+          title={t("visitor.invalidTitle")}
+          text={t("visitor.invalidText")}
         />
       </Frame>
     );
@@ -461,8 +459,8 @@ export function VisitorFlow({ token }: { token: string }) {
         <StateCard
           tone="warning"
           icon={AlertTriangle}
-          title="Visita cancelada"
-          text={`${invitation.hostName} canceló esta visita. Contáctalo si necesitas reagendar.`}
+          title={t("visitor.cancelledTitle")}
+          text={t("visitor.cancelledText", { name: invitation.hostName })}
         />
       </Frame>
     );
@@ -473,8 +471,8 @@ export function VisitorFlow({ token }: { token: string }) {
         <StateCard
           tone="warning"
           icon={Clock3}
-          title="El enlace venció"
-          text="La ventana de esta invitación terminó. Solicita una nueva a tu anfitrión."
+          title={t("visitor.expiredTitle")}
+          text={t("visitor.expiredText")}
         />
       </Frame>
     );
@@ -485,8 +483,8 @@ export function VisitorFlow({ token }: { token: string }) {
         <StateCard
           tone="success"
           icon={BadgeCheck}
-          title="Tu registro ya está completo"
-          text="Revisa el correo donde recibiste tu pase para mostrar el código QR en recepción."
+          title={t("visitor.doneAlreadyTitle")}
+          text={t("visitor.doneAlreadyText")}
         />
       </Frame>
     );
@@ -494,17 +492,17 @@ export function VisitorFlow({ token }: { token: string }) {
   const captureCopy =
     capturing?.kind === "vehicle"
       ? {
-          title: "Foto de las placas",
-          hint: "Encuadra la placa completa, sin recortes",
-          footer: "Evita reflejos y toma la placa de frente",
+          title: t("visitor.platePhotoTitle"),
+          hint: t("visitor.platePhotoHint"),
+          footer: t("visitor.platePhotoFooter"),
           guide: "wide" as const,
           prefix: "placa",
         }
       : capturing?.kind === "attachment"
         ? {
-            title: "Foto de anexo",
-            hint: "Documento, equipo o lo que te pidan en recepción",
-            footer: "Asegúrate de que se lea con claridad",
+            title: t("visitor.attachmentTitle"),
+            hint: t("visitor.attachmentHint"),
+            footer: t("visitor.attachmentFooter"),
             guide: "square" as const,
             prefix: "anexo",
           }
@@ -523,26 +521,28 @@ export function VisitorFlow({ token }: { token: string }) {
             {invitation.organizationName}
           </p>
           <h1 className="mt-3 text-[30px] font-semibold leading-[1.15] tracking-[-.035em]">
-            {invitation.hostName} te está esperando
+            {t("visitor.waiting", { name: invitation.hostName })}
           </h1>
           <p className="mx-auto mt-3 max-w-sm text-[15px] leading-6 text-slate-500">
-            {value("fullName") ? `Hola, ${value("fullName").split(" ")[0]}. ` : ""}
-            Prepara tu visita en dos minutos y entra sin filas.
+            {value("fullName")
+              ? t("visitor.hello", { name: value("fullName").split(" ")[0] })
+              : ""}
+            {t("visitor.intro")}
           </p>
 
           <div className="mt-7 space-y-3 text-left">
-            <SummaryRow icon={CalendarClock} label="Cuándo" value={dateLabel} />
+            <SummaryRow icon={CalendarClock} label={t("visitor.when")} value={dateLabel} />
             <SummaryRow
               icon={MapPin}
-              label="Dónde"
+              label={t("visitor.where")}
               value={invitation.locationName}
               hint={invitation.locationAddress}
             />
-            <SummaryRow icon={FileCheck2} label="Motivo" value={invitation.purpose} />
+            <SummaryRow icon={FileCheck2} label={t("visitor.purpose")} value={invitation.purpose} />
             {invitation.accessRequirements && (
               <SummaryRow
                 icon={ShieldCheck}
-                label="Requisitos"
+                label={t("visitor.requirements")}
                 value={invitation.accessRequirements}
               />
             )}
@@ -560,12 +560,12 @@ export function VisitorFlow({ token }: { token: string }) {
               }}
               className="min-h-[52px] text-base"
             >
-              Comenzar mi registro
+              {t("visitor.start")}
               <ArrowRight size={19} />
             </Button>
             <p className="flex items-center justify-center gap-1.5 pb-2 text-xs text-slate-400">
               <LockKeyhole size={13} />
-              Enlace personal · vence después de la visita
+              {t("visitor.personalLink")}
             </p>
           </div>
         </div>
@@ -575,11 +575,11 @@ export function VisitorFlow({ token }: { token: string }) {
         <StepShell
           index={stepIndex}
           total={totalSteps}
-          title="Tus datos"
+          title={t("visitor.yourData")}
           subtitle={
             invitation.visitorName || invitation.visitorEmail
-              ? "Tu anfitrión adelantó algunos datos. Confírmalos o corrígelos."
-              : "Necesitamos lo mínimo para identificarte en recepción."
+              ? t("visitor.dataPrefill")
+              : t("visitor.dataHint")
           }
           onBack={() => back("identity")}
           onNext={() => {
@@ -598,28 +598,28 @@ export function VisitorFlow({ token }: { token: string }) {
               },
               { ...flow, identification: "off", vehicle: "off", notes: "off", attachments: "off", consent: "off" },
             );
-            if (problem) return setError(problem);
+            if (problem) return setError(t(`errors.${problem}`));
             advance("identity");
           }}
           error={error}
         >
           <div className="space-y-4">
             <Field
-              label="Nombre completo"
+              label={t("visitor.fullName")}
               optional={flow.identity !== "required"}
             >
               <input
                 className={fieldClass}
                 autoComplete="name"
-                placeholder="Como aparece en tu identificación"
+                placeholder={t("visitor.namePlaceholder")}
                 value={value("fullName")}
                 onChange={(event) => set("fullName", event.target.value)}
               />
             </Field>
             <Field
-              label="Correo"
+              label={t("visitor.email")}
               optional={flow.identity !== "required"}
-              hint="Ahí te enviaremos tu pase de acceso."
+              hint={t("visitor.emailHint")}
             >
               <input
                 className={fieldClass}
@@ -632,7 +632,7 @@ export function VisitorFlow({ token }: { token: string }) {
               />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Teléfono" optional={flow.identity !== "required"}>
+              <Field label={t("visitor.phone")} optional={flow.identity !== "required"}>
                 <input
                   className={fieldClass}
                   type="tel"
@@ -643,11 +643,11 @@ export function VisitorFlow({ token }: { token: string }) {
                   onChange={(event) => set("phone", event.target.value)}
                 />
               </Field>
-              <Field label="Empresa" optional={flow.identity !== "required"}>
+              <Field label={t("visitor.company")} optional={flow.identity !== "required"}>
                 <input
                   className={fieldClass}
                   autoComplete="organization"
-                  placeholder="A quién representas"
+                  placeholder={t("visitor.companyPlaceholder")}
                   value={value("company")}
                   onChange={(event) => set("company", event.target.value)}
                 />
@@ -661,13 +661,13 @@ export function VisitorFlow({ token }: { token: string }) {
         (capturing?.kind === "id" ? (
           <div className="animate-rise">
             <p className="text-[13px] font-semibold text-[#0d9d99]">
-              Paso {stepIndex} de {totalSteps}
+              {t("visitor.stepOf", { index: stepIndex, total: totalSteps })}
             </p>
             <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
-              Tu identificación
+              {t("visitor.identification")}
             </h1>
             <p className="mb-6 mt-2 text-[15px] leading-6 text-slate-500">
-              Encuadra la credencial y toma la foto.
+              {t("visitor.idFrame")}
             </p>
 
             <DocumentCapture
@@ -684,24 +684,24 @@ export function VisitorFlow({ token }: { token: string }) {
           <StepShell
             index={stepIndex}
             total={totalSteps}
-            title="Tu identificación"
+            title={t("visitor.identification")}
             subtitle={
               flow.identification === "required"
-                ? "Política de esta empresa: pide foto de las dos caras."
-                : "Es opcional. Si la subes, agiliza la entrada; si no, puedes continuar."
+                ? t("visitor.idRequired")
+                : t("visitor.idOptional")
             }
             onBack={() => back("document")}
             onNext={() => {
               if (flow.identification === "required" && !files.front)
-                return setError("Falta la foto del frente de tu identificación.");
+                return setError(t("errors.identity_front_required"));
               if (flow.identification === "required" && !files.back)
-                return setError("Falta la foto del reverso de tu identificación.");
+                return setError(t("errors.identity_back_required"));
               advance("document");
             }}
             nextLabel={
               flow.identification === "required" && (!files.front || !files.back)
-                ? "Agregar fotos para continuar"
-                : "Continuar"
+                ? t("visitor.addPhotos")
+                : t("common.continue")
             }
             nextDisabled={
               flow.identification === "required" && (!files.front || !files.back)
@@ -709,14 +709,18 @@ export function VisitorFlow({ token }: { token: string }) {
             error={error}
           >
             <div className="mb-5">
-              <Field label="Tipo de identificación">
+              <Field label={t("visitor.idType")}>
                 <select
                   className={fieldClass}
                   value={value("documentType")}
                   onChange={(event) => set("documentType", event.target.value)}
                 >
                   {documentTypes.map((type) => (
-                    <option key={type}>{type}</option>
+                    <option key={type} value={type}>
+                      {documentTypeMessageKey(type)
+                        ? t(documentTypeMessageKey(type))
+                        : type}
+                    </option>
                   ))}
                 </select>
               </Field>
@@ -738,8 +742,8 @@ export function VisitorFlow({ token }: { token: string }) {
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
               {flow.identification === "required"
-                ? "Esta empresa pide identificación para autorizar el acceso. Las fotos se guardan de forma privada."
-                : "No es obligatorio. Si las subes, se guardan de forma privada."}
+                ? t("visitor.idRequiredNote")
+                : t("visitor.idOptionalNote")}
             </Callout>
           </StepShell>
         ))}
@@ -748,12 +752,12 @@ export function VisitorFlow({ token }: { token: string }) {
         <StepShell
           index={stepIndex}
           total={totalSteps}
-          title="Confirma tus datos"
-          subtitle="Escribe el folio si lo tienes a la mano. El guardia verá las fotos."
+          title={t("visitor.review")}
+          subtitle={t("visitor.reviewHint")}
           onBack={() => back("review")}
           onNext={() => {
             if (flow.identity === "required" && !value("fullName").trim())
-              return setError("El nombre no puede quedar vacío.");
+              return setError(t("errors.name_required"));
             advance("review");
           }}
           error={error}
@@ -771,9 +775,9 @@ export function VisitorFlow({ token }: { token: string }) {
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Identificación capturada</p>
+              <p className="text-sm font-semibold">{t("visitor.idCaptured")}</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                Frente y reverso listos para caseta
+                {t("visitor.sidesReady")}
               </p>
             </div>
             <button
@@ -782,12 +786,12 @@ export function VisitorFlow({ token }: { token: string }) {
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold active:bg-slate-50"
             >
               <Pencil size={14} />
-              Repetir
+              {t("visitor.repeat")}
             </button>
           </div>
 
           <div className="space-y-4">
-            <Field label="Nombre completo">
+            <Field label={t("visitor.fullName")}>
               <input
                 className={fieldClass}
                 value={value("fullName")}
@@ -795,9 +799,9 @@ export function VisitorFlow({ token }: { token: string }) {
               />
             </Field>
             <Field
-              label="Número o folio"
+              label={t("visitor.folio")}
               optional
-              hint="Solo guardamos los últimos cuatro dígitos."
+              hint={t("visitor.folioHint")}
             >
               <input
                 className={fieldClass}
@@ -814,7 +818,7 @@ export function VisitorFlow({ token }: { token: string }) {
           <CaptureScreen
             index={stepIndex}
             total={totalSteps}
-            heading="Tu vehículo"
+            heading={t("visitor.yourVehicle")}
             copy={captureCopy}
             onCancel={() => setCapturing(null)}
             onCaptured={(file, preview) => {
@@ -826,14 +830,14 @@ export function VisitorFlow({ token }: { token: string }) {
           <StepShell
             index={stepIndex}
             total={totalSteps}
-            title="Tu vehículo"
-            subtitle="Fotografía las placas y escribe el número, como con tu identificación."
+            title={t("visitor.yourVehicle")}
+            subtitle={t("visitor.vehicleHint")}
             onBack={() => back("vehicle")}
             onNext={() => {
               if (!value("vehiclePlate").trim())
-                return setError("Escribe las placas del vehículo.");
+                return setError(t("errors.plate_required"));
               if (vehiclePhotos.length < 1)
-                return setError("Falta al menos una foto de las placas.");
+                return setError(t("errors.plate_photo_required"));
               advance("vehicle");
             }}
             nextDisabled={
@@ -879,13 +883,13 @@ export function VisitorFlow({ token }: { token: string }) {
             title={extrasTitle}
             subtitle={
               flow.notes === "required" || flow.vehicle === "required"
-                ? "Completa lo que esta empresa pide para agilizar tu entrada."
-                : "Opcional, pero agiliza tu entrada."
+                ? t("visitor.extrasRequired")
+                : t("visitor.extrasHint")
             }
             onBack={() => back("extras")}
             onNext={() => {
               if (flow.notes === "required" && !value("visitorNotes").trim())
-                return setError("Escribe una nota para recepción.");
+                return setError(t("errors.notes_required"));
               advance("extras");
             }}
             error={error}
@@ -910,13 +914,13 @@ export function VisitorFlow({ token }: { token: string }) {
               )}
               {extrasShowsNotes(flow) && (
                 <Field
-                  label="Notas para recepción"
+                  label={t("visitor.receptionNotes")}
                   optional={flow.notes !== "required"}
                 >
                   <textarea
                     rows={3}
                     className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-[16px] outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
-                    placeholder="Traigo equipo, llego con un acompañante…"
+                    placeholder={t("visitor.notesPlaceholder")}
                     value={value("visitorNotes")}
                     onChange={(event) => set("visitorNotes", event.target.value)}
                   />
@@ -926,7 +930,7 @@ export function VisitorFlow({ token }: { token: string }) {
 
             <div className="mt-6 rounded-2xl bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">
-                Tu visita
+                {t("visitor.yourVisit")}
               </p>
               <p className="mt-1.5 font-semibold">{invitation.hostName}</p>
               <p className="mt-1 text-sm text-slate-500">{dateLabel}</p>
@@ -940,7 +944,7 @@ export function VisitorFlow({ token }: { token: string }) {
           <CaptureScreen
             index={stepIndex}
             total={totalSteps}
-            heading="Anexos"
+            heading={t("visitor.attachments")}
             copy={captureCopy}
             onCancel={() => setCapturing(null)}
             onCaptured={(file, preview) => {
@@ -952,16 +956,16 @@ export function VisitorFlow({ token }: { token: string }) {
           <StepShell
             index={stepIndex}
             total={totalSteps}
-            title="Anexos"
+            title={t("visitor.attachments")}
             subtitle={
               flow.attachments === "required"
-                ? "Esta empresa pide al menos una foto adicional."
-                : "Puedes agregar fotos de lo que te pidan en recepción."
+                ? t("visitor.attachmentsRequired")
+                : t("visitor.attachmentsOptional")
             }
             onBack={() => back("attachments")}
             onNext={() => {
               if (flow.attachments === "required" && attachmentPhotos.length < 1)
-                return setError("Agrega al menos una foto de anexo.");
+                return setError(t("errors.attachment_required"));
               advance("attachments");
             }}
             nextDisabled={
@@ -971,8 +975,8 @@ export function VisitorFlow({ token }: { token: string }) {
           >
             <PhotoList
               photos={attachmentPhotos}
-              addLabel="Agregar foto"
-              emptyHint="Toca para fotografiar un anexo"
+              addLabel={t("visitor.addPhoto")}
+              emptyHint={t("visitor.attachmentEmpty")}
               onAdd={() => {
                 setError("");
                 setCapturing({ kind: "attachment" });
@@ -990,34 +994,28 @@ export function VisitorFlow({ token }: { token: string }) {
         <StepShell
           index={stepIndex}
           total={totalSteps}
-          title="Privacidad"
-          subtitle="Lee cómo se usará tu información antes de continuar."
+          title={t("visitor.privacy")}
+          subtitle={t("visitor.privacyHint")}
           onBack={() => back("consent")}
           onNext={submit}
-          nextLabel={submitting ? "Generando tu pase…" : "Aceptar y generar pase"}
+          nextLabel={submitting ? t("visitor.generating") : t("visitor.acceptPass")}
           nextDisabled={(flow.consent === "required" && !consent) || submitting}
           busy={submitting}
           error={error}
         >
           <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
             <p className="font-semibold text-[#071426]">
-              Aviso de privacidad · {invitation.organizationName}
+              {t("visitor.noticeTitle", { org: invitation.organizationName })}
             </p>
             <p className="mt-2 whitespace-pre-line">
-              {invitation.privacyNotice ||
-                "Los datos se utilizan únicamente para gestionar y auditar tu acceso a las instalaciones."}
+              {invitation.privacyNotice || t("visitor.noticeFallback")}
             </p>
             {flow.identification !== "off" ? (
               <p className="mt-3">
-                Tu identificación se conserva{" "}
-                <b>{invitation.retentionDays} días</b> y después se elimina de
-                forma permanente.
+                {t("visitor.retention", { days: invitation.retentionDays })}
               </p>
             ) : (
-              <p className="mt-3">
-                Esta empresa no exige foto de identificación. Solo se guardan
-                los datos que confirmaste para esta visita.
-              </p>
+              <p className="mt-3">{t("visitor.noIdNotice")}</p>
             )}
           </div>
 
@@ -1042,8 +1040,7 @@ export function VisitorFlow({ token }: { token: string }) {
               {consent && <Check size={15} strokeWidth={3} />}
             </span>
             <span className="text-sm leading-6 text-[#071426]">
-              He leído el aviso y acepto el tratamiento de mis datos para
-              gestionar esta visita.
+              {t("visitor.consent")}
             </span>
           </button>
         </StepShell>
@@ -1055,10 +1052,10 @@ export function VisitorFlow({ token }: { token: string }) {
             <Check size={32} strokeWidth={3} />
           </span>
           <h1 className="mt-5 text-[26px] font-semibold tracking-[-.03em]">
-            ¡Todo listo!
+            {t("visitor.allSet")}
           </h1>
           <p className="mt-2 text-[15px] text-slate-500">
-            Guárdalo ahora. Si lo pierdes, tendrás que pedírselo a tu anfitrión.
+            {t("visitor.saveNow")}
           </p>
 
           <div className="mt-7">
@@ -1103,12 +1100,11 @@ export function VisitorFlow({ token }: { token: string }) {
               href={`/pass/${passToken}`}
               className="inline-flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#071426] text-[15px] font-semibold text-white"
             >
-              Abrir mi pase
+              {t("visitor.openPass")}
               <ChevronRight size={18} />
             </Link>
             <p className="mx-auto max-w-xs text-xs leading-5 text-slate-400">
-              También te lo enviamos por correo. El código contiene solo un token
-              aleatorio, sin tus datos personales.
+              {t("visitor.emailAlso")}
             </p>
           </div>
         </div>
@@ -1124,14 +1120,18 @@ function Frame({
   children: React.ReactNode;
   progress?: number;
 }) {
+  const { t } = useI18n();
   return (
     <main className="flex min-h-[100dvh] flex-col bg-[#f4f7fb]">
       <header className="safe-top sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-5">
           <Brand href="#" />
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-            <LockKeyhole size={13} />
-            Conexión segura
+          <span className="flex items-center gap-2">
+            <LanguageSwitcher compact />
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+              <LockKeyhole size={13} />
+              {t("common.secure")}
+            </span>
           </span>
         </div>
         {progress !== undefined && (
@@ -1161,7 +1161,7 @@ function StepShell({
   children,
   onBack,
   onNext,
-  nextLabel = "Continuar",
+  nextLabel,
   nextDisabled,
   hideNext,
   busy,
@@ -1180,10 +1180,11 @@ function StepShell({
   busy?: boolean;
   error?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className="animate-rise">
       <p className="text-[13px] font-semibold text-[#0d9d99]">
-        Paso {Math.max(1, index)} de {total}
+        {t("visitor.stepOf", { index: Math.max(1, index), total })}
       </p>
       <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
         {title}
@@ -1209,7 +1210,7 @@ function StepShell({
           className="inline-flex h-13 min-h-[48px] items-center gap-1.5 rounded-2xl px-4 text-sm font-medium text-slate-500 active:bg-slate-100"
         >
           <ArrowLeft size={18} />
-          Atrás
+          {t("common.back")}
         </button>
         {!hideNext && onNext && (
           <Button
@@ -1220,7 +1221,7 @@ function StepShell({
             className="min-h-[48px] flex-1"
           >
             {busy && <Loader2 size={18} className="animate-spin" />}
-            {nextLabel}
+            {nextLabel ?? t("common.continue")}
             {!busy && <ArrowRight size={18} />}
           </Button>
         )}
@@ -1250,16 +1251,17 @@ function CaptureScreen({
   onCancel: () => void;
   onCaptured: (file: File, preview: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="animate-rise">
       <p className="text-[13px] font-semibold text-[#0d9d99]">
-        Paso {index} de {total}
+        {t("visitor.stepOf", { index, total })}
       </p>
       <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-[-.03em]">
         {heading}
       </h1>
       <p className="mb-6 mt-2 text-[15px] leading-6 text-slate-500">
-        Encuadra y toma la foto.
+        {t("visitor.capturePhoto")}
       </p>
       <PhotoCapture
         title={copy.title}
@@ -1289,20 +1291,21 @@ function VehicleFields({
   onAdd: () => void;
   onRemove: (index: number) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
-      <Field label="Placas del vehículo" optional={!required}>
+      <Field label={t("visitor.plate")} optional={!required}>
         <input
           className={fieldClass}
-          placeholder="ABC-1234"
+          placeholder={t("visitor.platePlaceholder")}
           value={plate}
           onChange={(event) => onPlate(event.target.value)}
         />
       </Field>
       <PhotoList
         photos={photos}
-        addLabel="Fotografiar placas"
-        emptyHint="Como con la INE: cámara o galería"
+        addLabel={t("visitor.photoPlate")}
+        emptyHint={t("visitor.plateEmptyHint")}
         onAdd={onAdd}
         onRemove={onRemove}
       />
@@ -1323,6 +1326,7 @@ function PhotoList({
   onAdd: () => void;
   onRemove: (index: number) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3">
       {photos.map((photo, index) => (
@@ -1336,9 +1340,9 @@ function PhotoList({
             className="size-16 shrink-0 overflow-hidden rounded-xl bg-white object-cover text-[0px]"
           />
           <span className="min-w-0 flex-1 text-sm font-semibold">
-            Foto {index + 1}
+            {t("visitor.photoN", { n: index + 1 })}
             <span className="mt-0.5 block text-xs font-normal text-slate-500">
-              Lista para caseta
+              {t("visitor.readyBooth")}
             </span>
           </span>
           <button
@@ -1346,7 +1350,7 @@ function PhotoList({
             onClick={() => onRemove(index)}
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"
           >
-            Quitar
+            {t("visitor.remove")}
           </button>
         </div>
       ))}
@@ -1376,8 +1380,9 @@ function SideSlot({
   preview?: string;
   onPick: () => void;
 }) {
-  const label = side === "front" ? "Frente" : "Reverso";
-  const hint = side === "front" ? "Con tu foto" : "El otro lado de la credencial";
+  const { t } = useI18n();
+  const label = t(side === "front" ? "visitor.front" : "visitor.back");
+  const hint = t(side === "front" ? "visitor.withPhoto" : "visitor.otherSide");
 
   return (
     <button
@@ -1407,7 +1412,7 @@ function SideSlot({
           {preview && <Check size={15} className="text-[#0d9d99]" />}
         </span>
         <span className="mt-0.5 block text-xs text-slate-500">
-          {preview ? "Tocar para repetir" : hint}
+          {preview ? t("visitor.tapRepeat") : hint}
         </span>
       </span>
     </button>
@@ -1452,6 +1457,7 @@ function StateCard({
   text: string;
   tone: "warning" | "success";
 }) {
+  const { t } = useI18n();
   return (
     <div className="py-8 text-center">
       <span
@@ -1473,7 +1479,7 @@ function StateCard({
         className="mt-7 inline-flex h-12 items-center gap-2 rounded-2xl border border-slate-200 px-5 text-sm font-semibold"
       >
         <Building2 size={17} />
-        Conocer NEXA VISIT
+        {t("visitor.learnMore")}
       </Link>
     </div>
   );

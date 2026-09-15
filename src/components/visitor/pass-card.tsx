@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import { CalendarClock, Hourglass, MapPin, ShieldCheck, UserRound } from "lucide-react";
 import { cn } from "../ui";
 import { RemainingUntil } from "../ui-client";
-import { formatDateTimeMx } from "@/lib/domain";
+import { useI18n } from "../i18n-provider";
 
 /**
  * Tarjeta del pase. El QR codifica únicamente un token aleatorio: no lleva
@@ -33,6 +33,7 @@ export function PassCard({
   state?: "valid" | "used" | "expired" | "revoked";
   accessRequirements?: string;
 }) {
+  const { t, formatFullDate, formatDateTime } = useI18n();
   const [qr, setQr] = useState("");
 
   useEffect(() => {
@@ -52,10 +53,7 @@ export function PassCard({
     };
   }, [token]);
 
-  const dateLabel = new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "full",
-    timeStyle: "short",
-  }).format(new Date(startsAt));
+  const dateLabel = formatFullDate(startsAt);
 
   const inactive = state !== "valid";
   const visitStart = new Date(startsAt).getTime();
@@ -65,7 +63,7 @@ export function PassCard({
     <div className="animate-pop mx-auto w-full max-w-sm overflow-hidden rounded-[28px] bg-white shadow-[0_28px_70px_-32px_rgba(7,20,38,.5)] ring-1 ring-slate-200">
       <div className="dark-panel px-6 pb-8 pt-6 text-center text-white">
         <p className="text-[11px] font-semibold tracking-[.22em] text-[#10cfc9]">
-          PASE DE ACCESO
+          {t("landing.passAccess")}
         </p>
         {organizationName && (
           <p className="mt-1.5 text-lg font-semibold">{organizationName}</p>
@@ -80,7 +78,7 @@ export function PassCard({
           {qr ? (
             <img
               src={qr}
-              alt="Código QR de acceso"
+              alt={t("pass.qrAlt")}
               width={240}
               height={240}
               className="size-56 rounded-xl"
@@ -92,10 +90,10 @@ export function PassCard({
             <span className="absolute inset-0 grid place-items-center rounded-3xl">
               <span className="rounded-full bg-slate-900/85 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
                 {state === "used"
-                  ? "Utilizado"
+                  ? t("pass.usedLabel")
                   : state === "expired"
-                    ? "Vencido"
-                    : "Revocado"}
+                    ? t("pass.expired")
+                    : t("pass.revoked")}
               </span>
             </span>
           )}
@@ -106,7 +104,7 @@ export function PassCard({
           {token.slice(0, 4).toUpperCase()}-{token.slice(4, 8).toUpperCase()}-{token.slice(8, 12).toUpperCase()}
         </p>
         <p className="mt-0.5 text-[10px] text-slate-400">
-          Código para entrada manual
+          {t("pass.manualCode")}
         </p>
 
         <p className="mt-4 text-xl font-semibold tracking-[-.02em]">
@@ -122,9 +120,9 @@ export function PassCard({
       </div>
 
       <div className="space-y-3.5 px-6 pb-7">
-        <Row icon={UserRound} label="Anfitrión" value={hostName} />
-        <Row icon={MapPin} label="Ubicación" value={location} />
-        <Row icon={CalendarClock} label="Horario de la visita" value={dateLabel} />
+        <Row icon={UserRound} label={t("pass.host")} value={hostName} />
+        <Row icon={MapPin} label={t("pass.location")} value={location} />
+        <Row icon={CalendarClock} label={t("pass.schedule")} value={dateLabel} />
         {expiresAt && (
           <div className="flex items-start gap-3">
             <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-teal-50 text-[#0d9d99]">
@@ -132,14 +130,14 @@ export function PassCard({
             </span>
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                El QR vale hasta
+                {t("pass.validUntil")}
               </p>
               <p className="mt-0.5 text-sm font-medium leading-5 text-[#071426]">
-                {formatDateTimeMx(expiresAt)}
+                {formatDateTime(expiresAt)}
               </p>
               {!inactive && (
                 <p className="mt-0.5 text-xs font-semibold text-[#0d9d99]">
-                  Quedan <RemainingUntil until={expiresAt} />
+                  {t("pass.remaining")}: <RemainingUntil until={expiresAt} />
                 </p>
               )}
             </div>
@@ -148,14 +146,13 @@ export function PassCard({
         {accessRequirements && (
           <Row
             icon={ShieldCheck}
-            label="Requisitos de acceso"
+            label={t("pass.accessReq")}
             value={accessRequirements}
           />
         )}
         {showEarlyNote && (
           <p className="rounded-2xl bg-slate-50 px-3.5 py-3 text-[12px] leading-5 text-slate-500">
-            El código ya está activo. Si llegas antes del horario, en caseta
-            pueden pedirte esperar.
+            {t("pass.earlyNote")}
           </p>
         )}
       </div>

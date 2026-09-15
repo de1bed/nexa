@@ -6,8 +6,9 @@ import Link from "next/link";
 import { Building2, ChevronRight, Loader2, Plus } from "lucide-react";
 import { Brand } from "./brand";
 import { Button, Card, EmptyState } from "./ui";
-import { roleLabels, type MemberRole } from "@/lib/domain";
+import { type MemberRole } from "@/lib/domain";
 import { roleHome } from "@/lib/config";
+import { useI18n } from "./i18n-provider";
 
 type Membership = {
   organizationId: string;
@@ -18,6 +19,7 @@ type Membership = {
 /** Una persona puede trabajar en varias empresas: aquí elige con cuál opera. */
 export function OrganizationSelector() {
   const router = useRouter();
+  const { t } = useI18n();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -101,7 +103,7 @@ export function OrganizationSelector() {
                       {membership.organizationName}
                     </span>
                     <span className="mt-0.5 block text-sm text-slate-500">
-                      {roleLabels[membership.role]}
+                      {t(`roles.${membership.role}`)}
                     </span>
                   </span>
                   {busy === membership.organizationId ? (
