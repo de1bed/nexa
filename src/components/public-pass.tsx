@@ -49,6 +49,7 @@ type Pass = {
 };
 
 export function PublicPass({ token }: { token: string }) {
+  const { t } = useI18n();
   const live = isLiveMode();
 
   /* En vitrina el pase refleja en vivo lo que hace el guardia en otra pestaña. */
@@ -125,7 +126,7 @@ export function PublicPass({ token }: { token: string }) {
       <Frame>
         <div className="py-24 text-center">
           <Loader2 className="mx-auto animate-spin text-[#10cfc9]" size={36} />
-          <p className="mt-4 text-sm text-slate-400">Cargando tu pase…</p>
+          <p className="mt-4 text-sm text-slate-400">{t("pass.loading")}</p>
         </div>
       </Frame>
     );
@@ -135,8 +136,8 @@ export function PublicPass({ token }: { token: string }) {
       <Frame>
         <Message
           icon={AlertTriangle}
-          title="Pase no disponible"
-          text="El enlace no existe, venció o fue revocado. Pide a tu anfitrión que te reenvíe el pase."
+          title={t("pass.unavailable")}
+          text={t("pass.unavailableText")}
         />
       </Frame>
     );
@@ -149,15 +150,13 @@ export function PublicPass({ token }: { token: string }) {
           tone={pass.state === "used" ? "success" : "warning"}
           title={
             pass.state === "used"
-              ? "Visita finalizada"
+              ? t("pass.finished")
               : pass.state === "expired"
-                ? "Pase vencido"
-                : "Pase revocado"
+                ? t("pass.expiredTitle")
+                : t("pass.revokedTitle")
           }
           text={
-            pass.state === "used"
-              ? "Tu salida ya quedó registrada. Gracias por tu visita."
-              : "Contacta a tu anfitrión si necesitas un pase nuevo."
+            pass.state === "used" ? t("pass.thanks") : t("pass.contactHost")
           }
         />
       </Frame>
@@ -220,7 +219,7 @@ export function PublicPass({ token }: { token: string }) {
         )}
         <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
           <LockKeyhole size={13} />
-          El código contiene solo un token aleatorio, sin datos personales.
+          {t("pass.tokenOnly")}
         </p>
       </div>
     </Frame>

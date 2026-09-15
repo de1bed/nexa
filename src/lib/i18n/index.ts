@@ -14,7 +14,11 @@ export function intlLocale(locale: Locale = getLocale()) {
   return localeIntl[locale];
 }
 
-export function formatDateTime(value: string | Date, locale: Locale = getLocale()) {
+export function formatDateTime(
+  value: string | Date | null | undefined,
+  locale: Locale = getLocale(),
+) {
+  if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
@@ -23,7 +27,11 @@ export function formatDateTime(value: string | Date, locale: Locale = getLocale(
   }).format(date);
 }
 
-export function formatDate(value: string | Date, locale: Locale = getLocale()) {
+export function formatDate(
+  value: string | Date | null | undefined,
+  locale: Locale = getLocale(),
+) {
+  if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
@@ -31,7 +39,11 @@ export function formatDate(value: string | Date, locale: Locale = getLocale()) {
   }).format(date);
 }
 
-export function formatTime(value: string | Date, locale: Locale = getLocale()) {
+export function formatTime(
+  value: string | Date | null | undefined,
+  locale: Locale = getLocale(),
+) {
+  if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
@@ -80,4 +92,19 @@ const documentTypeKeys: Record<string, string> = {
 
 export function documentTypeMessageKey(type: string) {
   return documentTypeKeys[type] ?? "";
+}
+
+const purposeKeys: Record<string, string> = {
+  "Reunión comercial": "purpose.commercial",
+  "Entrega de proveedor": "purpose.delivery",
+  Entrevista: "purpose.interview",
+  Auditoría: "purpose.audit",
+  "Soporte técnico": "purpose.support",
+  Mantenimiento: "purpose.maintenance",
+  Capacitación: "purpose.training",
+  "Visita ejecutiva": "purpose.executive",
+};
+
+export function visitPurposeMessageKey(purpose: string) {
+  return purposeKeys[purpose] ?? "";
 }

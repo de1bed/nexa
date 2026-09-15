@@ -26,14 +26,9 @@ import { useMyVisits, useWorkspace } from "./workspace-provider";
 import { Button, Card, EmptyState, Field, MetricTile, fieldClass } from "./ui";
 import { LiveDuration, Sheet, useNow } from "./ui-client";
 import { safeCsvCell } from "@/lib/security";
-import {
-  formatDateTimeMx,
-  formatDuration,
-  statusLabels,
-  timeInsideMs,
-  type Visit,
-  type VisitStatus,
-} from "@/lib/domain";
+import { timeInsideMs, type Visit, type VisitStatus } from "@/lib/domain";
+import { visitPurposeMessageKey } from "@/lib/i18n";
+import { useI18n } from "./i18n-provider";
 
 type Period = "daily" | "weekly" | "monthly";
 
@@ -56,13 +51,17 @@ function downloadCsv(filename: string, lines: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-function stayLabel(visit: Visit) {
+function stayLabel(
+  visit: Visit,
+  formatDuration: (ms: number) => string,
+) {
   if (!visit.checkedInAt) return "—";
   return formatDuration(timeInsideMs(visit));
 }
 
 export function Reports() {
   const { organization, viewer, syncedAt, live } = useWorkspace();
+  const { t, formatDateTime, formatDuration } = useI18n();
   const visits = useMyVisits();
   const hostView = viewer.role === "host";
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -138,7 +137,7 @@ export function Reports() {
     const count = (key: (visit: Visit) => string) =>
       Object.entries(
         rows.reduce<Record<string, number>>((acc, visit) => {
-          const value = key(visit) || "Sin dato";
+          const value = key(visit) || t("common.noData");
           acc[value] = (acc[value] ?? 0) + 1;
           return acc;
         }, {}),
@@ -166,16 +165,18 @@ export function Reports() {
     return {
       entered,
       averageMs,
-      purposes: count((visit) => visit.purpose).slice(0, 6),
+      purposes: count(
+        (visit) => t(visitPurposeMessageKey(visit.purpose)) || visit.purpose,
+      ).slice(0, 6),
       hosts: count((visit) => visit.hostName).slice(0, 6),
       companies: count((visit) => visit.company).slice(0, 6),
       timeline,
     };
-  }, [rows, period]);
+  }, [rows, period, t]);
 
   const clock = useNow();
-  const generatedAt = formatDateTimeMx(
-    syncedAt ?? (clock ? new Date(clock).toISOString() : undefined),
+  const generatedAt = formatDateTime(
+    syncedAt ?? (clock ? new Date(clock).toISOString() : new Date().toISOString()),
   );
   const periodLabel = `${filters.from} a ${filters.to}`;
 
@@ -205,8 +206,8 @@ export function Reports() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTimeMx(visit.checkedInAt),
-        stayLabel(visit),
+        formatDateTime(visit.checkedInAt),
+        stayLabel(visit, formatDuration),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
       ]),
       [],
@@ -232,12 +233,12 @@ export function Reports() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTimeMx(visit.startsAt),
-        formatDateTimeMx(visit.endsAt),
-        formatDateTimeMx(visit.checkedInAt),
-        formatDateTimeMx(visit.checkedOutAt),
-        stayLabel(visit),
-        statusLabels[visit.status],
+        formatDateTime(visit.startsAt),
+        formatDateTime(visit.endsAt),
+        formatDateTime(visit.checkedInAt),
+        formatDateTime(visit.checkedOutAt),
+        stayLabel(visit, formatDuration),
+        t(`status.${visit.status}`),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
         visit.vehiclePlate || "",
       ]),
@@ -262,25 +263,25 @@ export function Reports() {
       <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] font-semibold text-[#0d9d99]">
-            Control de acceso
+            {hostView ? t("reports.hostEyebrow") : t("reports.controlEyebrow")}
           </p>
           <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
-            {hostView ? "Mis reportes" : "Reportes de auditoría"}
+            {hostView ? t("reports.mine") : t("reports.audit")}
           </h1>
           <p className="mt-1.5 max-w-2xl text-[15px] text-slate-500">
-            Bitácora de {organization.name}
-            {hostView ? " · solo tus visitas" : ""}. Personas dentro en este
-            momento, independiente del periodo.
+            {t("reports.logOf", { org: organization.name })}
+            {hostView ? t("reports.hostOnly") : ""}
+            {t("reports.insideIndependent")}
           </p>
         </div>
         <div className="no-print flex gap-2">
           <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Printer size={16} />
-            Imprimir
+            {t("reports.print")}
           </Button>
           <Button size="sm" onClick={exportCsv}>
             <Download size={16} />
-            Exportar CSV
+            {t("reports.export")}
           </Button>
         </div>
       </header>
@@ -292,25 +293,25 @@ export function Reports() {
         <h2 className="mt-1 text-xl font-semibold">{organization.name}</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <dt className="text-slate-400">Documento</dt>
-            <dd className="font-medium">Bitácora de visitas</dd>
+            <dt className="text-slate-400">{t("people.document")}</dt>
+            <dd className="font-medium">{t("reports.visitLog")}</dd>
           </div>
           <div>
-            <dt className="text-slate-400">Periodo</dt>
+            <dt className="text-slate-400">{t("reports.period")}</dt>
             <dd className="font-medium">{periodLabel}</dd>
           </div>
           <div>
-            <dt className="text-slate-400">Generado</dt>
+            <dt className="text-slate-400">{t("people.generated")}</dt>
             <dd className="font-medium">{generatedAt}</dd>
           </div>
           <div>
-            <dt className="text-slate-400">Responsable</dt>
+            <dt className="text-slate-400">{t("reports.owner")}</dt>
             <dd className="font-medium">{viewer.name}</dd>
           </div>
         </dl>
         {live && (
           <p className="mt-3 text-xs text-slate-400">
-            Esta vista se actualiza sola cada 20 segundos.
+            {t("reports.liveHint")}
           </p>
         )}
       </Card>
@@ -323,7 +324,7 @@ export function Reports() {
           className="relative"
         >
           <SlidersHorizontal size={16} />
-          Filtros
+          {t("reports.filtersShort")}
           {activeFilters > 0 && (
             <span className="ml-1 grid size-5 place-items-center rounded-full bg-[#10cfc9] text-[11px] font-bold text-[#043b39]">
               {activeFilters}
@@ -337,27 +338,31 @@ export function Reports() {
             variant={period === value ? "primary" : "outline"}
             onClick={() => setPeriod(value)}
           >
-            {value === "daily" ? "Diario" : value === "weekly" ? "Semanal" : "Mensual"}
+            {value === "daily"
+              ? t("reports.daily")
+              : value === "weekly"
+                ? t("reports.weekly")
+                : t("reports.monthly")}
           </Button>
         ))}
       </div>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricTile label="Visitas del periodo" value={rows.length} icon={BarChart3} tone="info" />
+        <MetricTile label={t("reports.periodVisits")} value={rows.length} icon={BarChart3} tone="info" />
         <MetricTile
-          label="Entradas registradas"
+          label={t("reports.recordedEntries")}
           value={stats.entered.length}
           icon={LogIn}
           tone="success"
         />
         <MetricTile
-          label="Dentro ahora"
+          label={t("reports.insideNowShort")}
           value={insideNow.length}
           icon={Users}
           tone="accent"
         />
         <MetricTile
-          label="Estancia promedio"
+          label={t("reports.avgStay")}
           value={stats.averageMs ? formatDuration(stats.averageMs) : "—"}
           icon={Clock3}
           tone="warning"
@@ -367,7 +372,7 @@ export function Reports() {
       <section className="mt-6">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Personas dentro ahora</h2>
+            <h2 className="text-lg font-semibold">{t("reports.insideNow")}</h2>
             <p className="text-sm text-slate-500">
               Aforo en vivo. No depende del rango de fechas.
             </p>
@@ -380,8 +385,8 @@ export function Reports() {
         {insideNow.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="Nadie está dentro"
-            description="Cuando caseta registre una entrada, la persona aparecerá aquí al instante."
+            title={t("reports.nobodyInside")}
+            description={t("reports.nobodyInsideHint")}
           />
         ) : (
           <AuditTable
@@ -393,7 +398,7 @@ export function Reports() {
 
       <section className="mt-8">
         <div className="mb-3">
-          <h2 className="text-lg font-semibold">Bitácora del periodo</h2>
+          <h2 className="text-lg font-semibold">{t("reports.periodLog")}</h2>
           <p className="text-sm text-slate-500">
             {rows.length} visita{rows.length === 1 ? "" : "s"} entre {filters.from} y{" "}
             {filters.to}
@@ -403,7 +408,7 @@ export function Reports() {
         {rows.length === 0 ? (
           <EmptyState
             icon={BarChart3}
-            title="Sin datos en este rango"
+            title={t("reports.emptyRange")}
             description="Amplía el periodo o quita algunos filtros."
           />
         ) : (
@@ -425,7 +430,7 @@ export function Reports() {
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="Motivos más frecuentes">
+          <ChartCard title={t("reports.topPurposes")}>
             <BarChart data={stats.purposes} layout="vertical">
               <CartesianGrid horizontal={false} stroke="#edf0f4" />
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
@@ -440,7 +445,7 @@ export function Reports() {
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="Empresas con más visitas">
+          <ChartCard title={t("reports.topCompanies")}>
             <BarChart data={stats.companies} layout="vertical">
               <CartesianGrid horizontal={false} stroke="#edf0f4" />
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
@@ -455,7 +460,7 @@ export function Reports() {
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="Visitas por anfitrión">
+          <ChartCard title={t("reports.byHost")}>
             <PieChart>
               <Pie
                 data={stats.hosts}
@@ -483,7 +488,7 @@ export function Reports() {
       <Sheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        title="Filtros del reporte"
+        title={t("reports.filters")}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -559,7 +564,7 @@ export function Reports() {
                 ] as VisitStatus[]
               ).map((value) => (
                 <option key={value} value={value}>
-                  {statusLabels[value]}
+                  {t(`status.${value}`)}
                 </option>
               ))}
             </select>
@@ -606,6 +611,7 @@ function AuditTable({
   visits: Visit[];
   mode: "inside" | "log";
 }) {
+  const { t, formatDateTime, formatDuration } = useI18n();
   return (
     <Card className="overflow-hidden p-0">
       <div className="overflow-x-auto">
@@ -637,33 +643,33 @@ function AuditTable({
                   <p className="text-xs text-slate-400">{visit.purpose}</p>
                 </td>
                 <td className="px-4 py-3 text-slate-600">
-                  {visit.company || "Sin empresa"}
+                      {visit.company || t("common.noCompany")}
                 </td>
                 <td className="px-4 py-3">{visit.hostName}</td>
                 <td className="px-4 py-3">{visit.location}</td>
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {formatDateTimeMx(visit.startsAt)}
+                    {formatDateTime(visit.startsAt)}
                   </td>
                 )}
                 <td className="whitespace-nowrap px-4 py-3">
-                  {formatDateTimeMx(visit.checkedInAt) || "—"}
+                  {formatDateTime(visit.checkedInAt) || "—"}
                 </td>
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3">
-                    {formatDateTimeMx(visit.checkedOutAt) || "—"}
+                    {formatDateTime(visit.checkedOutAt) || "—"}
                   </td>
                 )}
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-800">
                   {mode === "inside" && visit.checkedInAt ? (
                     <LiveDuration since={visit.checkedInAt} />
                   ) : (
-                    stayLabel(visit)
+                    stayLabel(visit, formatDuration)
                   )}
                 </td>
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3">
-                    {statusLabels[visit.status]}
+                    {t(`status.${visit.status}`)}
                   </td>
                 )}
               </tr>

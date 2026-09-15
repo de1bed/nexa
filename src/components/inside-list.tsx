@@ -7,15 +7,12 @@ import { useWorkspace } from "./workspace-provider";
 import { Button, EmptyState } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
 import type { Visit } from "@/lib/domain";
-
-const time = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", { timeStyle: "short" }).format(
-    new Date(value),
-  );
+import { useI18n } from "./i18n-provider";
 
 /** Quién está dentro, en vivo, con salida a un toque. */
 export function InsideList() {
   const { visits, decide, live, reload } = useWorkspace();
+  const { t, formatTime } = useI18n();
   const [confirm, setConfirm] = useState<Visit | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,14 +22,14 @@ export function InsideList() {
     setBusy(true);
     try {
       await decide(visit.id, "checked_out");
-      toast.success(`Salida de ${visit.visitorName} registrada`);
+      toast.success(t("people.checkoutToast", { name: visit.visitorName }));
       setConfirm(null);
       if (live) void reload();
     } catch (reason) {
       toast.error(
         reason instanceof Error
           ? reason.message
-          : "No fue posible registrar la salida",
+          : t("guard.decisionFail"),
       );
     } finally {
       setBusy(false);
@@ -43,10 +40,10 @@ export function InsideList() {
     <div className="animate-rise">
       <header className="mb-6">
         <p className="text-[13px] font-semibold text-[#10cfc9]">
-          Estado en tiempo real
+          {t("people.liveEyebrow")}
         </p>
         <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-.03em]">
-          Personas dentro{" "}
+          {t("people.title")}{" "}
           <span className="text-[#10cfc9]">{inside.length}</span>
         </h1>
       </header>
@@ -55,8 +52,8 @@ export function InsideList() {
         <EmptyState
           dark
           icon={Users}
-          title="Las instalaciones están vacías"
-          description="Cuando valides un pase, la persona aparecerá aquí."
+          title={t("guard.emptyInside")}
+          description={t("guard.emptyInsideHint")}
         />
       ) : (
         <div className="space-y-3">
@@ -76,7 +73,7 @@ export function InsideList() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{visit.visitorName}</p>
                   <p className="truncate text-sm text-slate-500">
-                    {visit.company || "Sin empresa"} · {visit.hostName}
+                    {visit.company || t("common.noCompany")} · {visit.hostName}
                     {visit.location ? ` · ${visit.location}` : ""}
                   </p>
                 </div>
@@ -86,11 +83,11 @@ export function InsideList() {
                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
                   <Clock3 size={14} />
                   <LiveDuration since={visit.checkedInAt} />
-                  {visit.checkedInAt && ` · desde ${time(visit.checkedInAt)}`}
+                  {visit.checkedInAt && ` · ${t("dashboard.since", { time: formatTime(visit.checkedInAt) })}`}
                 </span>
                 <Button size="sm" onClick={() => setConfirm(visit)}>
                   <LogOut size={16} />
-                  Salida
+                  {t("people.checkout")}
                 </Button>
               </div>
             </article>
@@ -101,10 +98,10 @@ export function InsideList() {
       <Sheet
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
-        title="¿Registrar la salida?"
+        title={t("people.checkoutConfirm")}
         description={
           confirm
-            ? `${confirm.visitorName} dejará de aparecer como presente y su pase se desactivará.`
+            ? t("people.checkoutHint", { name: confirm.visitorName })
             : undefined
         }
       >
@@ -115,7 +112,7 @@ export function InsideList() {
             className="flex-1"
             onClick={() => setConfirm(null)}
           >
-            Cancelar
+            {t("common.cancel")}
           </Button>
           <Button
             variant="primary"
@@ -125,7 +122,7 @@ export function InsideList() {
             onClick={() => confirm && checkOut(confirm)}
           >
             <LogOut size={18} />
-            Registrar salida
+            {t("people.recordCheckout")}
           </Button>
         </div>
       </Sheet>

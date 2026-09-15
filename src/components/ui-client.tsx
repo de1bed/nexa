@@ -13,6 +13,7 @@ import { cn } from "./ui";
 import { formatDurationI18n, translate } from "@/lib/i18n";
 import { getClock, getServerClock, subscribeClock } from "@/lib/clock";
 import { useLocale } from "@/lib/i18n/store";
+import { useI18n } from "./i18n-provider";
 
 /** Primitivas con estado o efectos de navegador. */
 
@@ -244,19 +245,21 @@ export async function copyText(value: string) {
 
 export function CopyField({
   value,
-  label = "Enlace de invitación",
+  label,
 }: {
   value: string;
   label?: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const fieldLabel = label ?? t("invite.linkLabel");
 
   return (
     <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 pl-4">
       <input
         readOnly
         value={value}
-        aria-label={label}
+        aria-label={fieldLabel}
         onFocus={(event) => event.currentTarget.select()}
         className="min-w-0 flex-1 bg-transparent text-sm text-slate-600 outline-none"
       />
@@ -265,14 +268,14 @@ export function CopyField({
         onClick={async () => {
           if (await copyText(value)) {
             setCopied(true);
-            toast.success("Enlace copiado");
+            toast.success(t("common.copied"));
             setTimeout(() => setCopied(false), 1800);
           }
         }}
         className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#071426] px-4 text-sm font-semibold text-white active:scale-[.97]"
       >
         {copied ? <Check size={16} /> : <Copy size={16} />}
-        {copied ? "Copiado" : "Copiar"}
+        {copied ? t("common.copiedShort") : t("common.copy")}
       </button>
     </div>
   );
@@ -292,6 +295,7 @@ export function ShareButton({
   className?: string;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -305,7 +309,7 @@ export function ShareButton({
             return;
           }
         }
-        if (await copyText(url)) toast.success("Enlace copiado");
+        if (await copyText(url)) toast.success(t("common.copied"));
       }}
       className={cn(
         "inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#10cfc9] px-5 text-[15px] font-semibold text-[#043b39] active:scale-[.985]",
@@ -313,7 +317,7 @@ export function ShareButton({
       )}
     >
       <Share2 size={18} />
-      {children ?? "Compartir enlace"}
+      {children ?? t("common.shareLink")}
     </button>
   );
 }

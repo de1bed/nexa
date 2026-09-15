@@ -24,6 +24,8 @@ import { Button, Callout, Card, Field, cn, fieldClass } from "./ui";
 import { CopyField, ShareButton } from "./ui-client";
 import { invitationSchema } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
+import { visitPurposeMessageKey } from "@/lib/i18n";
+import { useI18n } from "./i18n-provider";
 
 /** Una vía de envío. Solo se muestra si la instalación la tiene configurada. */
 function ChannelOption({
@@ -81,9 +83,9 @@ function todayPlus(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatDateSpanish(dateString: string): string {
+function formatDateLong(dateString: string, locale: string): string {
   const date = new Date(dateString + "T12:00:00");
-  return date.toLocaleDateString("es-MX", {
+  return date.toLocaleDateString(locale, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -102,6 +104,7 @@ function addMinutes(time: string, minutes: number) {
 }
 
 export function InvitationForm() {
+  const { t, intl } = useI18n();
   const { locations, hosts, viewer, channels, createInvitation, live } =
     useWorkspace();
   const [created, setCreated] = useState<{ visit: Visit; url: string } | null>(
@@ -154,14 +157,14 @@ export function InvitationForm() {
         fieldErrors[key] ??= issue.message;
       });
       setErrors(fieldErrors);
-      toast.error("Revisa los datos del formulario");
+      toast.error(t("common.formReview"));
       return;
     }
 
     const startsAt = new Date(`${payload.date}T${payload.startTime}`);
     const endsAt = new Date(`${payload.date}T${payload.endTime}`);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-      setErrors({ date: "La fecha u hora no son válidas" });
+      setErrors({ date: t("common.invalidDate") });
       return;
     }
 
@@ -185,14 +188,14 @@ export function InvitationForm() {
       setCreated({ visit: result.visit, url: result.invitationUrl });
       toast.success(
         payload.sendEmail || payload.sendWhatsApp
-          ? "Invitación creada y enviada"
-          : "Invitación creada",
+          ? t("invite.createdSent")
+          : t("invite.created"),
       );
     } catch (reason) {
       toast.error(
         reason instanceof Error
           ? reason.message
-          : "No fue posible crear la invitación",
+          : t("invite.createFail"),
       );
     } finally {
       setSubmitting(false);
@@ -208,13 +211,13 @@ export function InvitationForm() {
             <Check size={32} strokeWidth={3} />
           </span>
           <h1 className="mt-5 text-2xl font-semibold tracking-[-.02em]">
-            Invitación lista
+            {t("invite.ready")}
           </h1>
           <p className="mx-auto mt-2 max-w-sm text-[15px] leading-6 text-slate-500">
             {created.visit.inviteeName
-              ? `${created.visit.inviteeName} completará su registro`
-              : "Tu invitado completará su registro"}{" "}
-            desde el teléfono y recibirá su pase QR automáticamente.
+              ? t("invite.guestWill", { name: created.visit.inviteeName })
+              : t("invite.guestWillAnon")}{" "}
+            {t("invite.guestWillRest")}
           </p>
 
           <div className="mt-6 text-left">
@@ -224,18 +227,22 @@ export function InvitationForm() {
           <div className="mt-4">
             <ShareButton
               url={created.url}
-              title="Invitación de visita"
-              text={`Hola${created.visit.inviteeName ? ` ${created.visit.inviteeName}` : ""}, completa tu registro para tu visita:`}
+              title={t("invite.shareTitle")}
+              text={t("invite.shareText", {
+                name: created.visit.inviteeName
+                  ? ` ${created.visit.inviteeName}`
+                  : "",
+              })}
               className="w-full"
             >
-              Compartir por WhatsApp o correo
+              {t("invite.shareChannels")}
             </ShareButton>
           </div>
 
           <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
             <Link href={`/app/visits/${created.visit.id}`} className="flex-1">
               <Button variant="outline" block>
-                Ver la visita
+                {t("invite.viewVisit")}
               </Button>
             </Link>
             <Button
@@ -254,15 +261,14 @@ export function InvitationForm() {
               }}
             >
               <Plus size={17} />
-              Crear otra
+              {t("invite.createAnother")}
             </Button>
           </div>
 
           {!live && (
             <p className="mt-5 text-xs leading-5 text-slate-400">
               <Mail className="mr-1 inline" size={13} />
-              En modo vitrina el correo no se envía: comparte el enlace
-              directamente.
+              {t("invite.showcaseNote")}
             </p>
           )}
         </Card>
@@ -278,26 +284,26 @@ export function InvitationForm() {
         className="mb-5 inline-flex items-center gap-2 text-sm text-slate-500"
       >
         <ArrowLeft size={16} />
-        Volver
+        {t("invite.back")}
       </Link>
 
       <header className="mb-6">
-        <p className="text-[13px] font-semibold text-[#0d9d99]">Nueva visita</p>
+        <p className="text-[13px] font-semibold text-[#0d9d99]">{t("invite.eyebrow")}</p>
         <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
-          Crear invitación
+          {t("invite.heading")}
         </h1>
         <p className="mt-1.5 text-[15px] text-slate-500">
-          Solo necesitas cuándo y dónde. El visitante pone el resto.
+          {t("invite.subtitle")}
         </p>
       </header>
 
       {noLocations && (
         <Callout tone="warning" icon={MapPin} className="mb-5">
-          Todavía no hay ubicaciones activas.{" "}
+          {t("invite.noLocations")}{" "}
           <Link href="/app/locations" className="font-semibold underline">
-            Crea la primera
+            {t("invite.createFirst")}
           </Link>{" "}
-          para poder invitar visitantes.
+          {t("invite.noLocationsRest")}
         </Callout>
       )}
 
@@ -307,10 +313,10 @@ export function InvitationForm() {
             <div>
               <h2 className="flex items-center gap-2 font-semibold">
                 <UserRound size={18} />
-                Datos que ya conoces
+                {t("invite.knownData")}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Todos son opcionales: el visitante los confirma o corrige.
+                {t("invite.knownHint")}
               </p>
             </div>
             {(form.visitorName || form.email || form.phone || form.company) && (
@@ -327,32 +333,32 @@ export function InvitationForm() {
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
               >
                 <Wand2 size={15} />
-                Limpiar campos
+                {t("invite.clear")}
               </button>
             )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nombre completo" optional error={errors.visitorName}>
+            <Field label={t("invite.fullName")} optional error={errors.visitorName}>
               <input
                 className={fieldClass}
                 autoComplete="off"
-                placeholder="Nombre del visitante"
+                placeholder={t("invite.namePlaceholder")}
                 value={form.visitorName}
                 onChange={(event) => update("visitorName", event.target.value)}
               />
             </Field>
-            <Field label="Correo" optional error={errors.email}>
+            <Field label={t("invite.email")} optional error={errors.email}>
               <input
                 type="email"
                 inputMode="email"
                 className={fieldClass}
-                placeholder="visitante@empresa.com"
+                placeholder={t("invite.emailPlaceholder")}
                 value={form.email}
                 onChange={(event) => update("email", event.target.value)}
               />
             </Field>
-            <Field label="Teléfono" optional>
+            <Field label={t("invite.phone")} optional>
               <input
                 type="tel"
                 inputMode="tel"
@@ -362,10 +368,10 @@ export function InvitationForm() {
                 onChange={(event) => update("phone", event.target.value)}
               />
             </Field>
-            <Field label="Empresa" optional>
+            <Field label={t("invite.company")} optional>
               <input
                 className={fieldClass}
-                placeholder="A quién representa"
+                placeholder={t("invite.companyPlaceholder")}
                 value={form.company}
                 onChange={(event) => update("company", event.target.value)}
               />
@@ -376,11 +382,11 @@ export function InvitationForm() {
         <Card className="p-5 sm:p-6">
           <h2 className="mb-5 flex items-center gap-2 font-semibold">
             <CalendarClock size={18} />
-            Agenda
+            {t("invite.agenda")}
           </h2>
 
           <div className="space-y-4">
-            <Field label="Ubicación" error={errors.locationId}>
+            <Field label={t("invite.location")} error={errors.locationId}>
               <select
                 className={fieldClass}
                 value={activeLocation}
@@ -396,8 +402,8 @@ export function InvitationForm() {
 
             {canDelegate && hosts.length > 0 && (
               <Field
-                label="Anfitrión"
-                hint="Quien recibe al visitante y aparece en su pase."
+                label={t("invite.host")}
+                hint={t("invite.hostHint")}
               >
                 <select
                   className={fieldClass}
@@ -407,7 +413,7 @@ export function InvitationForm() {
                   {hosts.map((host) => (
                     <option key={host.id} value={host.id}>
                       {host.name}
-                      {host.id === viewer.id ? " (yo)" : ""}
+                      {host.id === viewer.id ? ` ${t("invite.me")}` : ""}
                     </option>
                   ))}
                 </select>
@@ -416,9 +422,9 @@ export function InvitationForm() {
 
             <div className="grid gap-4 sm:grid-cols-3">
               <Field 
-                label="Fecha" 
+                label={t("invite.date")} 
                 error={errors.date}
-                hint={form.date ? formatDateSpanish(form.date) : undefined}
+                hint={form.date ? formatDateLong(form.date, intl) : undefined}
               >
                 <input
                   type="date"
@@ -428,7 +434,7 @@ export function InvitationForm() {
                   onChange={(event) => update("date", event.target.value)}
                 />
               </Field>
-              <Field label="Inicio">
+              <Field label={t("invite.start")}>
                 <input
                   type="time"
                   className={fieldClass}
@@ -439,7 +445,7 @@ export function InvitationForm() {
                   }}
                 />
               </Field>
-              <Field label="Fin" error={errors.endTime}>
+              <Field label={t("invite.end")} error={errors.endTime}>
                 <input
                   type="time"
                   className={fieldClass}
@@ -469,26 +475,28 @@ export function InvitationForm() {
               ))}
             </div>
 
-            <Field label="Motivo" error={errors.purpose}>
+            <Field label={t("invite.purpose")} error={errors.purpose}>
               <select
                 className={fieldClass}
                 value={form.purpose}
                 onChange={(event) => update("purpose", event.target.value)}
               >
                 {visitPurposes.map((purpose) => (
-                  <option key={purpose}>{purpose}</option>
+                  <option key={purpose} value={purpose}>
+                    {t(visitPurposeMessageKey(purpose)) || purpose}
+                  </option>
                 ))}
               </select>
             </Field>
 
             <Field
-              label="Requisitos de acceso"
+              label={t("invite.access")}
               optional
-              hint="Se muestran al visitante en su pase."
+              hint={t("invite.accessHint")}
             >
               <input
                 className={fieldClass}
-                placeholder="Ej. traer calzado de seguridad"
+                placeholder={t("invite.accessPlaceholder")}
                 value={form.accessRequirements}
                 onChange={(event) =>
                   update("accessRequirements", event.target.value)
@@ -497,9 +505,9 @@ export function InvitationForm() {
             </Field>
 
             <Field
-              label="Notas internas"
+              label={t("invite.notes")}
               optional
-              hint="Solo visibles para tu equipo."
+              hint={t("invite.notesHint")}
             >
               <textarea
                 rows={3}
@@ -512,9 +520,9 @@ export function InvitationForm() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="mb-1 font-semibold">¿Cómo se lo hacemos llegar?</h2>
+          <h2 className="mb-1 font-semibold">{t("invite.deliveryTitle")}</h2>
           <p className="mb-4 text-sm text-slate-500">
-            Siempre puedes compartir el enlace tú, desde el teléfono, al terminar.
+            {t("invite.deliveryHint")}
           </p>
 
           <div className="space-y-2.5">
@@ -523,11 +531,11 @@ export function InvitationForm() {
                 checked={form.sendEmail}
                 onToggle={() => update("sendEmail", !form.sendEmail)}
                 icon={Mail}
-                label="Enviar por correo"
+                label={t("invite.emailSend")}
                 hint={
                   form.email
-                    ? `Se enviará a ${form.email}`
-                    : "Captura un correo para activarlo."
+                    ? t("invite.emailHintOn", { email: form.email })
+                    : t("invite.emailHintOff")
                 }
                 error={form.sendEmail ? errors.email : undefined}
               />
@@ -538,11 +546,11 @@ export function InvitationForm() {
                 checked={form.sendWhatsApp}
                 onToggle={() => update("sendWhatsApp", !form.sendWhatsApp)}
                 icon={MessageCircle}
-                label="Enviar por WhatsApp"
+                label={t("invite.whatsapp")}
                 hint={
                   form.phone
-                    ? `Se enviará al ${form.phone}`
-                    : "Captura un teléfono para activarlo."
+                    ? t("invite.phoneHintOn", { phone: form.phone })
+                    : t("invite.phoneHintOff")
                 }
                 error={form.sendWhatsApp ? errors.phone : undefined}
               />
@@ -550,9 +558,7 @@ export function InvitationForm() {
 
             {!channels.email && !channels.whatsapp && (
               <Callout tone="neutral" icon={Share2}>
-                Esta instalación no tiene configurado el envío automático. Al
-                crear la invitación podrás compartir el enlace directamente desde
-                tu teléfono.
+                {t("invite.noChannels")}
               </Callout>
             )}
           </div>
@@ -577,10 +583,10 @@ export function InvitationForm() {
               <Sparkles size={19} />
             )}
             {submitting
-              ? "Creando…"
+              ? t("invite.creating")
               : form.sendEmail || form.sendWhatsApp
-                ? "Crear y enviar invitación"
-                : "Crear invitación"}
+                ? t("invite.createSend")
+                : t("invite.create")}
           </Button>
         </div>
       </form>

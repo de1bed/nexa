@@ -16,17 +16,14 @@ import {
 } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
 import { safeCsvCell } from "@/lib/security";
-import {
-  formatDateTimeMx,
-  formatDuration,
-  timeInsideMs,
-  type Visit,
-} from "@/lib/domain";
+import { timeInsideMs, type Visit } from "@/lib/domain";
+import { useI18n } from "./i18n-provider";
 
 /** Vista de quién está dentro, con búsqueda y salida manual. */
 export function PeopleAdmin() {
   const { decide, live, reload, viewer, organization, syncedAt } =
     useWorkspace();
+  const { t, formatDateTime, formatDuration } = useI18n();
   const visits = useMyVisits();
   const [query, setQuery] = useState("");
   const [confirm, setConfirm] = useState<Visit | null>(null);
@@ -53,13 +50,13 @@ export function PeopleAdmin() {
   const grouped = useMemo(() => {
     const map = new Map<string, Visit[]>();
     for (const visit of rows) {
-      const key = visit.location || "Sin ubicación";
+      const key = visit.location || t("common.noLocation");
       const list = map.get(key) ?? [];
       list.push(visit);
       map.set(key, list);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [rows]);
+  }, [rows, t]);
 
   const longest = useMemo(
     () => inside.reduce((max, visit) => Math.max(max, timeInsideMs(visit)), 0),
@@ -70,14 +67,14 @@ export function PeopleAdmin() {
     setBusy(true);
     try {
       await decide(visit.id, "checked_out");
-      toast.success(`Salida de ${visit.visitorName} registrada`);
+      toast.success(t("people.checkoutToast", { name: visit.visitorName }));
       setConfirm(null);
       if (live) void reload();
     } catch (reason) {
       toast.error(
         reason instanceof Error
           ? reason.message
-          : "No fue posible registrar la salida",
+          : t("guard.decisionFail"),
       );
     } finally {
       setBusy(false);
@@ -85,32 +82,33 @@ export function PeopleAdmin() {
   }
 
   function exportInside() {
-    const generated = formatDateTimeMx(syncedAt ?? new Date().toISOString());
+    const generated = formatDateTime(syncedAt ?? new Date().toISOString());
     const content = [
-      ["Organización", organization.name],
-      ["Documento", hostView ? "Visitantes del anfitrión dentro" : "Personas dentro ahora"],
-      ["Generado", generated],
-      ["Presentes", String(inside.length)],
+      [t("people.organization"), organization.name],
+      [t("people.document"), hostView ? t("people.hostInside") : t("people.allInside")],
+      [t("people.generated"), generated],
+      [t("people.present"), String(inside.length)],
       [],
       [
-        "Visitante",
-        "Empresa",
-        "Anfitrión",
-        "Ubicación",
-        "Motivo",
-        "Entrada",
-        "Tiempo dentro",
-        "Identificación",
+        t("people.visitor"),
+        t("common.company"),
+        t("visits.host"),
+        t("visits.location"),
+        t("invite.purpose"),
+        t("common.entry"),
+        t("reports.timeInside"),
+        t("visits.identification"),
       ],
       ...inside.map((visit) => [
         visit.visitorName,
-        visit.company || "Sin empresa",
+        visit.company || t("common.noCompany"),
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTimeMx(visit.checkedInAt),
+        formatDateTime(visit.checkedInAt ?? ""),
         formatDuration(timeInsideMs(visit)),
-        visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
+        visit.documentMasked ||
+          (visit.documentCaptured ? t("people.captured") : t("visits.notCaptured")),
       ]),
     ]
       .map((row) => row.map(safeCsvCell).join(","))
@@ -131,38 +129,36 @@ export function PeopleAdmin() {
     <>
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[13px] font-semibold text-[#0d9d99]">Tiempo real</p>
+          <p className="text-[13px] font-semibold text-[#0d9d99]">{t("people.live")}</p>
           <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
-            {hostView ? "Mis visitantes dentro" : "Personas dentro"}
+            {hostView ? t("people.mine") : t("people.title")}
           </h1>
           <p className="mt-1.5 text-[15px] text-slate-500">
-            {hostView
-              ? "Quién de tus invitados está ahora en las instalaciones."
-              : "Aforo actual por ubicación, con hora de entrada y tiempo de estancia."}
+            {hostView ? t("people.hostHint") : t("people.opsHint")}
           </p>
           {syncedAt && (
             <p className="mt-1 text-xs text-slate-400">
-              Actualizado {formatDateTimeMx(syncedAt)}
+              {t("people.updated", { time: formatDateTime(syncedAt) })}
             </p>
           )}
         </div>
         {inside.length > 0 && (
           <Button variant="outline" size="sm" onClick={exportInside}>
             <Download size={16} />
-            Exportar
+            {t("people.export")}
           </Button>
         )}
       </header>
 
       <section className="mb-5 grid grid-cols-2 gap-3">
         <MetricTile
-          label="En instalaciones"
+          label={t("people.onSite")}
           value={inside.length}
           icon={Users}
           tone="success"
         />
         <MetricTile
-          label="Estancia más larga"
+          label={t("people.longest")}
           value={longest ? formatDuration(longest) : "—"}
           icon={Clock3}
           tone="warning"
@@ -178,8 +174,8 @@ export function PeopleAdmin() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Buscar personas dentro"
-            placeholder="Buscar por nombre, empresa, anfitrión o sede…"
+            aria-label={t("people.searchAria")}
+            placeholder={t("people.searchPlaceholder")}
             className={cn(fieldClass, "pl-11")}
           />
         </label>
@@ -190,13 +186,13 @@ export function PeopleAdmin() {
           icon={Users}
           title={
             inside.length === 0
-              ? "No hay visitantes dentro"
-              : "Sin coincidencias"
+              ? t("people.noneInside")
+              : t("people.noMatches")
           }
           description={
             inside.length === 0
-              ? "Las entradas validadas en caseta aparecerán aquí al instante."
-              : "Prueba con otro nombre o empresa."
+              ? t("people.noneHint")
+              : t("people.noMatchesHint")
           }
         />
       ) : (
@@ -215,13 +211,13 @@ export function PeopleAdmin() {
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Visitante</th>
-                      <th className="px-4 py-3 font-semibold">Empresa</th>
+                      <th className="px-4 py-3 font-semibold">{t("people.visitor")}</th>
+                      <th className="px-4 py-3 font-semibold">{t("common.company")}</th>
                       {!hostView && (
-                        <th className="px-4 py-3 font-semibold">Anfitrión</th>
+                        <th className="px-4 py-3 font-semibold">{t("visits.host")}</th>
                       )}
-                      <th className="px-4 py-3 font-semibold">Entrada</th>
-                      <th className="px-4 py-3 font-semibold">Lleva dentro</th>
+                      <th className="px-4 py-3 font-semibold">{t("common.entry")}</th>
+                      <th className="px-4 py-3 font-semibold">{t("people.timeInside")}</th>
                       {canCheckOut && <th className="px-4 py-3" />}
                     </tr>
                   </thead>
@@ -238,13 +234,13 @@ export function PeopleAdmin() {
                           <p className="text-xs text-slate-400">{visit.purpose}</p>
                         </td>
                         <td className="px-4 py-3 text-slate-600">
-                          {visit.company || "Sin empresa"}
+                          {visit.company || t("common.noCompany")}
                         </td>
                         {!hostView && (
                           <td className="px-4 py-3">{visit.hostName}</td>
                         )}
                         <td className="whitespace-nowrap px-4 py-3">
-                          {formatDateTimeMx(visit.checkedInAt) || "—"}
+                          {formatDateTime(visit.checkedInAt ?? "") || "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 font-semibold text-emerald-700">
                           <LiveDuration since={visit.checkedInAt} />
@@ -257,7 +253,7 @@ export function PeopleAdmin() {
                               onClick={() => setConfirm(visit)}
                             >
                               <LogOut size={14} />
-                              Salida
+                              {t("people.checkout")}
                             </Button>
                           </td>
                         )}
@@ -280,7 +276,7 @@ export function PeopleAdmin() {
                           {visit.visitorName}
                         </Link>
                         <p className="truncate text-sm text-slate-500">
-                          {visit.company || "Sin empresa"}
+                          {visit.company || t("common.noCompany")}
                         </p>
                       </div>
                     </div>
@@ -288,18 +284,18 @@ export function PeopleAdmin() {
                     <dl className="mt-4 space-y-1.5 rounded-2xl bg-slate-50 p-4 text-sm">
                       {!hostView && (
                         <div className="flex justify-between gap-3">
-                          <dt className="text-slate-500">Anfitrión</dt>
+                          <dt className="text-slate-500">{t("visits.host")}</dt>
                           <dd className="truncate font-medium">{visit.hostName}</dd>
                         </div>
                       )}
                       <div className="flex justify-between gap-3">
-                        <dt className="text-slate-500">Entrada</dt>
+                        <dt className="text-slate-500">{t("common.entry")}</dt>
                         <dd className="font-medium">
-                          {formatDateTimeMx(visit.checkedInAt) || "—"}
+                          {formatDateTime(visit.checkedInAt ?? "") || "—"}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <dt className="text-slate-500">Lleva dentro</dt>
+                        <dt className="text-slate-500">{t("people.timeInside")}</dt>
                         <dd className="font-semibold text-emerald-700">
                           <LiveDuration since={visit.checkedInAt} />
                         </dd>
@@ -314,7 +310,7 @@ export function PeopleAdmin() {
                         onClick={() => setConfirm(visit)}
                       >
                         <LogOut size={16} />
-                        Registrar salida
+                        {t("people.recordCheckout")}
                       </Button>
                     )}
                   </Card>
@@ -328,10 +324,10 @@ export function PeopleAdmin() {
       <Sheet
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
-        title="¿Registrar la salida?"
+        title={t("people.checkoutConfirm")}
         description={
           confirm
-            ? `${confirm.visitorName} dejará de contar en el aforo y su pase se desactivará.`
+            ? t("people.checkoutHint", { name: confirm.visitorName })
             : undefined
         }
       >
@@ -342,7 +338,7 @@ export function PeopleAdmin() {
             className="flex-1"
             onClick={() => setConfirm(null)}
           >
-            Cancelar
+            {t("common.cancel")}
           </Button>
           <Button
             size="lg"
@@ -351,7 +347,7 @@ export function PeopleAdmin() {
             onClick={() => confirm && checkOut(confirm)}
           >
             <LogOut size={18} />
-            Registrar salida
+            {t("people.recordCheckout")}
           </Button>
         </div>
       </Sheet>

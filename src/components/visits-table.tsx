@@ -72,7 +72,7 @@ export function VisitsTable() {
         visit.checkedOutAt ?? "",
         visit.purpose,
         t(`status.${visit.status}`),
-        visit.origin === "guard_manual" ? "Registro en caseta" : "Invitación",
+        visit.origin === "guard_manual" ? t("visits.boothOrigin") : t("visits.invitation"),
       ]),
     ]
       .map((row) => row.map(safeCsvCell).join(","))
@@ -94,21 +94,19 @@ export function VisitsTable() {
       <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] font-semibold text-[#0d9d99]">
-            {isHost ? "Portal del anfitrión" : "Operación"}
+            {isHost ? t("visits.hostPortal") : t("visits.operation")}
           </p>
           <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
-            {isHost ? "Mis visitas" : "Visitas"}
+            {isHost ? t("visits.myVisits") : t("visits.title")}
           </h1>
           <p className="mt-1.5 text-[15px] text-slate-500">
-            {isHost
-              ? "Consulta y administra únicamente tus invitaciones."
-              : "Historial completo de accesos de la organización."}
+            {isHost ? t("visits.hostHint") : t("visits.opsHint")}
           </p>
         </div>
         <Link href="/app/visits/new" className="hidden lg:block">
           <Button>
             <Plus size={17} />
-            Nueva invitación
+            {t("nav.newInvite")}
           </Button>
         </Link>
       </header>
@@ -122,8 +120,8 @@ export function VisitsTable() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Buscar visitas"
-            placeholder="Buscar visitante, empresa o anfitrión…"
+            aria-label={t("visits.search")}
+            placeholder={t("visits.searchPlaceholder")}
             className={cn(fieldClass, "pl-11")}
           />
         </label>
@@ -132,7 +130,7 @@ export function VisitsTable() {
           <FilterChip
             active={status === "all"}
             onClick={() => setStatus("all")}
-            label="Todas"
+            label={t("common.all")}
             count={allVisits.length}
           />
           {filterable.map((value) => {
@@ -196,14 +194,14 @@ export function VisitsTable() {
                       <StatusPill status={visit.status} />
                     </div>
                     <p className="mt-0.5 truncate text-xs text-slate-500">
-                      {visit.company || "Sin empresa"} · {visit.hostName}
+                      {visit.company || t("common.noCompany")} · {visit.hostName}
                     </p>
                     <p className="mt-1 truncate text-xs text-slate-400">
                       {formatDateTime(visit.startsAt)}
                       {visit.status === "checked_in" && (
                         <>
                           {" · "}
-                          <LiveDuration since={visit.checkedInAt} prefix="dentro " />
+                          <LiveDuration since={visit.checkedInAt} prefix={t("visits.insidePrefix")} />
                         </>
                       )}
                     </p>
@@ -257,7 +255,7 @@ export function VisitsTable() {
                         <StatusPill status={visit.status} />
                       </td>
                       <td className="px-5 py-4 text-xs">
-                        {visit.origin === "guard_manual" ? "Caseta" : "Invitación"}
+                        {visit.origin === "guard_manual" ? t("visits.booth") : t("visits.invitation")}
                       </td>
                     </tr>
                   ))}
@@ -269,7 +267,9 @@ export function VisitsTable() {
       )}
 
       <p className="mt-4 text-center text-sm text-slate-500">
-        {loading ? "Sincronizando…" : `${rows.length} de ${allVisits.length} visitas`}
+        {loading
+          ? t("common.syncing")
+          : t("visits.count", { n: rows.length, total: allVisits.length })}
       </p>
     </>
   );

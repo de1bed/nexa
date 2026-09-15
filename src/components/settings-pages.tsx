@@ -40,7 +40,6 @@ import {
   showcaseTeam,
 } from "@/lib/demo-data";
 import {
-  memberStatusLabels,
   type Location,
   type MemberRole,
   type MemberStatus,
@@ -378,22 +377,22 @@ export function TeamPage() {
 
   function statusLabel(member: TeamMember) {
     if (member.status === "invited" && member.inviteDelivery === "failed")
-      return "Invitación no enviada";
-    return memberStatusLabels[member.status];
+      return t("team.inviteNotSent");
+    return t(`memberStatus.${member.status}`);
   }
 
   return (
     <>
       <SectionTitle
-        eyebrow="Administración"
-        title="Equipo"
-        description="Quién puede invitar, recibir visitantes y operar la caseta."
+        eyebrow={t("team.eyebrow")}
+        title={t("team.title")}
+        description={t("team.description")}
         action={
           <div className="flex flex-wrap gap-2">
             <Link href="/guard/scan">
               <Button variant="outline">
                 <ScanLine size={17} />
-                Abrir caseta
+                {t("dashboard.openBooth")}
               </Button>
             </Link>
             <Button variant="outline" onClick={() => setCodeOpen(true)}>
@@ -407,7 +406,7 @@ export function TeamPage() {
               }}
             >
               <UserPlus size={17} />
-              Invitar
+              {t("nav.invite")}
             </Button>
           </div>
         }
@@ -415,13 +414,13 @@ export function TeamPage() {
 
       {loading ? (
         <Card>
-          <p className="text-sm text-slate-500">Cargando equipo…</p>
+          <p className="text-sm text-slate-500">{t("common.loading")}</p>
         </Card>
       ) : members.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="Todavía estás solo"
-          description="Invita a tus anfitriones y al personal de seguridad."
+          title={t("team.alone")}
+          description={t("team.aloneHint")}
           action={
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" onClick={() => setCodeOpen(true)}>
@@ -844,6 +843,7 @@ export function TeamPage() {
 
 export function LocationsPage() {
   const { live, reload } = useWorkspace();
+  const { t } = useI18n();
   const [locations, setLocations] = useState<Location[]>(
     live ? [] : showcaseLocations,
   );
@@ -944,9 +944,9 @@ export function LocationsPage() {
   return (
     <>
       <SectionTitle
-        eyebrow="Administración"
-        title="Ubicaciones"
-        description="Los puntos donde recibes visitantes."
+        eyebrow={t("locations.eyebrow")}
+        title={t("locations.title")}
+        description={t("locations.description")}
         action={
           <Button onClick={() => setOpen(true)}>
             <Plus size={17} />
@@ -962,8 +962,8 @@ export function LocationsPage() {
       ) : locations.length === 0 ? (
         <EmptyState
           icon={MapPin}
-          title="Sin ubicaciones"
-          description="Crea al menos una recepción para poder invitar visitantes."
+          title={t("locations.empty")}
+          description={t("locations.emptyHint")}
           action={
             <Button variant="accent" onClick={() => setOpen(true)}>
               <Plus size={18} />

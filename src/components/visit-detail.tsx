@@ -34,6 +34,7 @@ import {
 import { LiveDuration, Sheet, ShareButton } from "./ui-client";
 import { StaffPassPanel } from "./staff-pass";
 import { timeInsideMs } from "@/lib/domain";
+import { documentTypeMessageKey, visitPurposeMessageKey } from "@/lib/i18n";
 import { useI18n } from "./i18n-provider";
 
 export function VisitDetail({ id }: { id: string }) {
@@ -67,11 +68,11 @@ export function VisitDetail({ id }: { id: string }) {
     return (
       <EmptyState
         icon={FileWarning}
-        title="Visita no encontrada"
-        description="Puede que se haya cancelado o que no tengas acceso a ella."
+        title={t("visits.notFound")}
+        description={t("visits.notFoundHint")}
         action={
           <Link href="/app/visits">
-            <Button variant="outline">Volver a visitas</Button>
+            <Button variant="outline">{t("visits.back")}</Button>
           </Link>
         }
       />
@@ -87,12 +88,12 @@ export function VisitDetail({ id }: { id: string }) {
     setBusy(kind);
     try {
       const url = await resendLink(id, kind, false);
-      if (!url) throw new Error("No fue posible generar el enlace");
+      if (!url) throw new Error(t("visits.linkFail"));
       setShare({ url, kind });
       if (kind === "pass") setPassNonce((value) => value + 1);
     } catch (reason) {
       toast.error(
-        reason instanceof Error ? reason.message : "No fue posible generar el enlace",
+        reason instanceof Error ? reason.message : t("visits.linkFail"),
       );
     } finally {
       setBusy("");
@@ -115,12 +116,12 @@ export function VisitDetail({ id }: { id: string }) {
         error?: string;
       };
       if (!response.ok || !payload.documents?.length)
-        throw new Error(payload.error ?? "No fue posible abrir el documento");
+        throw new Error(payload.error ?? t("visits.documentFail"));
       setDocumentFilter(filter);
       setDocuments(payload.documents);
     } catch (reason) {
       toast.error(
-        reason instanceof Error ? reason.message : "No fue posible abrir el documento",
+        reason instanceof Error ? reason.message : t("visits.documentFail"),
       );
     } finally {
       setBusy("");
@@ -134,7 +135,7 @@ export function VisitDetail({ id }: { id: string }) {
         className="mb-5 inline-flex items-center gap-2 text-sm text-slate-500"
       >
         <ArrowLeft size={16} />
-        Volver a visitas
+        {t("visits.back")}
       </Link>
 
       <Card className="p-5 sm:p-6">
@@ -148,7 +149,7 @@ export function VisitDetail({ id }: { id: string }) {
               <StatusPill status={visit.status} />
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              {visit.company || "Sin empresa"}
+              {visit.company || t("common.noCompany")}
             </p>
             {visit.email && (
               <p className="mt-0.5 truncate text-sm text-slate-500">{visit.email}</p>
@@ -158,19 +159,19 @@ export function VisitDetail({ id }: { id: string }) {
 
         {visit.status === "checked_in" && (
           <div className="mt-4 flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-            <span>Dentro de las instalaciones</span>
+            <span>{t("dashboard.currentlyInside")}</span>
             <LiveDuration since={visit.checkedInAt} />
           </div>
         )}
         {visit.status === "checked_out" && visit.checkedInAt && (
           <div className="mt-4 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
-            <span>Duración de la visita</span>
+            <span>{t("visits.visitDuration")}</span>
             <span>{formatDuration(timeInsideMs(visit))}</span>
           </div>
         )}
         {visit.status === "denied" && visit.denialReason && (
           <Callout tone="danger" icon={AlertTriangle} className="mt-4">
-            <b>Acceso denegado:</b> {visit.denialReason}
+            <b>{t("visits.deniedLabel")}</b> {visit.denialReason}
           </Callout>
         )}
       </Card>
@@ -186,9 +187,9 @@ export function VisitDetail({ id }: { id: string }) {
             <Link2 size={18} />
             {visit.status === "invited"
               ? timeline.some((e) => e.type === "invitation_resent")
-                ? "Volver a compartir enlace"
-                : "Compartir enlace de registro"
-              : "Nuevo enlace de registro"}
+                ? t("visits.shareAgain")
+                : t("visits.shareRegister")
+              : t("visits.newRegisterLink")}
           </Button>
           {visit.status !== "invited" && (
             <Button
@@ -198,7 +199,7 @@ export function VisitDetail({ id }: { id: string }) {
               onClick={() => link("pass")}
             >
               <Ticket size={18} />
-              Generar pase nuevo
+              {t("visits.newPass")}
             </Button>
           )}
         </div>
@@ -221,45 +222,49 @@ export function VisitDetail({ id }: { id: string }) {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.3fr_1fr]">
         <Card className="p-5 sm:p-6">
-          <h2 className="mb-5 font-semibold">Detalles de la visita</h2>
+          <h2 className="mb-5 font-semibold">{t("visits.details")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Detail
               icon={CalendarClock}
-              label="Fecha y horario"
+              label={t("visits.schedule")}
               value={`${formatDateTime(visit.startsAt)} — ${formatTime(visit.endsAt)}`}
             />
             <Detail
               icon={MapPin}
-              label="Ubicación"
+              label={t("visits.location")}
               value={visit.location}
               hint={visit.locationAddress}
             />
-            <Detail icon={UserRound} label="Anfitrión" value={visit.hostName} />
-            <Detail icon={ShieldCheck} label="Motivo" value={visit.purpose} />
+            <Detail icon={UserRound} label={t("visits.host")} value={visit.hostName} />
+            <Detail
+              icon={ShieldCheck}
+              label={t("invite.purpose")}
+              value={t(visitPurposeMessageKey(visit.purpose)) || visit.purpose}
+            />
             {visit.vehiclePlate && (
-              <Detail icon={Car} label="Placas" value={visit.vehiclePlate} />
+              <Detail icon={Car} label={t("visits.plates")} value={visit.vehiclePlate} />
             )}
             <Detail
               icon={(visit.identityCaptured ?? visit.documentCaptured) ? BadgeCheck : FileWarning}
-              label="Identificación"
+              label={t("visits.identification")}
               value={
                 (visit.identityCaptured ?? visit.documentCaptured)
-                  ? `${visit.documentType ?? "Documento"} ${visit.documentMasked ?? ""}`.trim()
-                  : "No capturada"
+                  ? `${t(documentTypeMessageKey(visit.documentType ?? "") || "people.document") || visit.documentType || t("people.document")} ${visit.documentMasked ?? ""}`.trim()
+                  : t("visits.notCaptured")
               }
             />
             {visit.vehiclePhotosCaptured && (
-              <Detail icon={Car} label="Fotos de placas" value="Capturadas" />
+              <Detail icon={Car} label={t("visits.platePhotos")} value={t("visits.captured")} />
             )}
             {visit.attachmentsCaptured && (
-              <Detail icon={Images} label="Anexos" value="Capturados" />
+              <Detail icon={Images} label={t("visits.attachments")} value={t("visits.attachmentsCaptured")} />
             )}
           </div>
 
           {visit.notes && (
             <div className="mt-5 rounded-2xl bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">
-                Notas internas
+                {t("visits.internalNotes")}
               </p>
               <p className="mt-1 text-sm">{visit.notes}</p>
             </div>
@@ -267,14 +272,14 @@ export function VisitDetail({ id }: { id: string }) {
           {visit.visitorNotes && (
             <div className="mt-3 rounded-2xl bg-blue-50 p-4">
               <p className="text-xs uppercase tracking-wide text-blue-500">
-                Nota del visitante
+                {t("visits.visitorNote")}
               </p>
               <p className="mt-1 text-sm text-blue-900">{visit.visitorNotes}</p>
             </div>
           )}
           {visit.accessRequirements && (
             <Callout tone="warning" icon={AlertTriangle} className="mt-3">
-              <b>Requisitos de acceso:</b> {visit.accessRequirements}
+              <b>{t("visits.accessReq")}</b> {visit.accessRequirements}
             </Callout>
           )}
 
@@ -295,7 +300,7 @@ export function VisitDetail({ id }: { id: string }) {
                   onClick={() => viewDocument("identification")}
                 >
                   <Eye size={17} />
-                  Ver identificación
+                  {t("visits.viewId")}
                 </Button>
               )}
               {visit.vehiclePhotosCaptured && (
@@ -305,7 +310,7 @@ export function VisitDetail({ id }: { id: string }) {
                   onClick={() => viewDocument("vehicle")}
                 >
                   <Eye size={17} />
-                  Ver placas
+                  {t("visits.viewPlates")}
                 </Button>
               )}
               {visit.attachmentsCaptured && (
@@ -315,7 +320,7 @@ export function VisitDetail({ id }: { id: string }) {
                   onClick={() => viewDocument("attachment")}
                 >
                   <Eye size={17} />
-                  Ver anexos
+                  {t("visits.viewAttachments")}
                 </Button>
               )}
               {!visit.identityCaptured &&
@@ -328,7 +333,7 @@ export function VisitDetail({ id }: { id: string }) {
                     onClick={() => viewDocument("all")}
                   >
                     <Eye size={17} />
-                    Ver documentos
+                    {t("visits.viewDocs")}
                   </Button>
                 )}
             </div>
@@ -341,7 +346,7 @@ export function VisitDetail({ id }: { id: string }) {
               onClick={() => setConfirmCancel(true)}
             >
               <XCircle size={17} />
-              Cancelar visita
+              {t("visits.cancelVisit")}
             </Button>
           )}
         </Card>
@@ -366,8 +371,8 @@ export function VisitDetail({ id }: { id: string }) {
             <li className="flex gap-3">
               <span className="mt-1.5 size-2 shrink-0 rounded-full bg-slate-300 ring-4 ring-slate-50" />
               <div>
-                <p className="text-sm font-medium">Invitación creada</p>
-                <p className="text-xs text-slate-500">Por {visit.hostName}</p>
+                <p className="text-sm font-medium">{t("visits.invitationCreated")}</p>
+                <p className="text-xs text-slate-500">{t("visits.byHost", { name: visit.hostName })}</p>
               </div>
             </li>
           </ol>
@@ -378,12 +383,10 @@ export function VisitDetail({ id }: { id: string }) {
         open={Boolean(share)}
         onClose={() => setShare(null)}
         title={
-          share?.kind === "pass" ? "Pase de acceso" : "Enlace de registro"
+          share?.kind === "pass" ? t("visits.passLink") : t("visits.inviteLink")
         }
         description={
-          share?.kind === "pass"
-            ? "Este pase sustituye a cualquier código anterior de esta visita."
-            : "Con este enlace el visitante completa sus datos y recibe su pase. El enlace anterior queda invalidado."
+          share?.kind === "pass" ? t("visits.passHint") : t("visits.inviteHint")
         }
       >
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -397,9 +400,9 @@ export function VisitDetail({ id }: { id: string }) {
             <ShareButton
               url={share.url}
               title={
-                share.kind === "pass" ? "Tu pase de acceso" : "Invitación de visita"
+                share.kind === "pass" ? t("visits.yourPass") : t("invite.shareTitle")
               }
-              text={`Hola ${visit.visitorName}:`}
+              text={t("visits.helloVisitor", { name: visit.visitorName })}
               className="w-full"
             />
           )}
@@ -409,8 +412,8 @@ export function VisitDetail({ id }: { id: string }) {
       <Sheet
         open={confirmCancel}
         onClose={() => setConfirmCancel(false)}
-        title="¿Cancelar esta visita?"
-        description="Se revocarán el enlace de registro y el pase QR. El visitante no podrá entrar."
+        title={t("visits.cancelConfirm")}
+        description={t("visits.cancelHint")}
       >
         <div className="flex gap-3">
           <Button
@@ -419,7 +422,7 @@ export function VisitDetail({ id }: { id: string }) {
             className="flex-1"
             onClick={() => setConfirmCancel(false)}
           >
-            Conservar
+            {t("visits.keep")}
           </Button>
           <Button
             variant="danger"
@@ -430,20 +433,20 @@ export function VisitDetail({ id }: { id: string }) {
               setBusy("cancel");
               try {
                 await cancelVisit(id);
-                toast.success("Visita cancelada");
+                toast.success(t("visits.cancelledToast"));
                 setConfirmCancel(false);
               } catch (reason) {
                 toast.error(
                   reason instanceof Error
                     ? reason.message
-                    : "No fue posible cancelar",
+                    : t("visits.cancelFail"),
                 );
               } finally {
                 setBusy("");
               }
             }}
           >
-            Cancelar visita
+            {t("visits.cancelVisit")}
           </Button>
         </div>
       </Sheet>
@@ -456,14 +459,14 @@ export function VisitDetail({ id }: { id: string }) {
         }}
         title={
           documentFilter === "vehicle"
-            ? "Placas"
+            ? t("visits.plates")
             : documentFilter === "attachment"
-              ? "Anexos"
+              ? t("visits.attachments")
               : documentFilter === "identification"
-                ? "Identificación"
-                : "Documentos"
+                ? t("visits.idTitle")
+                : t("visits.docsTitle")
         }
-        description="Enlaces temporales de 60 segundos. La consulta queda auditada."
+        description={t("visits.signedHint")}
       >
         <div className="space-y-4">
           {documents
@@ -478,7 +481,7 @@ export function VisitDetail({ id }: { id: string }) {
               </figcaption>
               {brokenDocs.includes(document.id) ? (
                 <p className="rounded-2xl bg-red-50 p-3 text-sm text-red-700">
-                  No se pudo mostrar la imagen. Cierra y vuelve a abrir.
+                  {t("visits.imageFail")}
                 </p>
               ) : (
                 <img

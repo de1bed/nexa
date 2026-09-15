@@ -56,10 +56,10 @@ export function OrganizationSelector() {
 
         <div className="mt-10">
           <h1 className="text-[26px] font-semibold tracking-[-.03em]">
-            Selecciona una organización
+            {t("common.selectOrg")}
           </h1>
           <p className="mt-2 text-[15px] text-slate-500">
-            Tu cuenta tiene acceso a más de un espacio de trabajo.
+            {t("common.selectOrgHint")}
           </p>
         </div>
 
@@ -71,13 +71,13 @@ export function OrganizationSelector() {
           <div className="mt-7">
             <EmptyState
               icon={Building2}
-              title="Todavía no perteneces a ninguna empresa"
-              description="Crea la tuya o pide a un administrador que te invite."
+              title={t("common.noOrg")}
+              description={t("common.noOrgHint")}
               action={
                 <Link href="/onboarding">
                   <Button variant="accent">
                     <Plus size={18} />
-                    Crear mi empresa
+                    {t("common.createCompany")}
                   </Button>
                 </Link>
               }

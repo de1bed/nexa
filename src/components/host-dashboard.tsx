@@ -45,16 +45,10 @@ const activityTone: Record<AccessEventType, string> = {
   cancelled: "text-amber-600",
 };
 
-const dateLabel = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-
 export function HostDashboard() {
   const { events, viewer, loading, resendLink } = useWorkspace();
   const visits = useMyVisits();
-  const { t } = useI18n();
+  const { t, formatDateTime } = useI18n();
   const [shareUrl, setShareUrl] = useState("");
   const [shareName, setShareName] = useState("");
   const [busyId, setBusyId] = useState("");
@@ -89,12 +83,12 @@ export function HostDashboard() {
     setBusyId(visitId);
     try {
       const url = await resendLink(visitId, "invitation", false);
-      if (!url) throw new Error("No fue posible generar el enlace");
+      if (!url) throw new Error(t("host.linkFail"));
       setShareUrl(url);
       setShareName(visitorName);
     } catch (reason) {
       toast.error(
-        reason instanceof Error ? reason.message : "No fue posible compartir",
+        reason instanceof Error ? reason.message : t("host.shareFail"),
       );
     } finally {
       setBusyId("");
@@ -118,20 +112,20 @@ export function HostDashboard() {
     <>
       <header className="mb-6">
         <p className="text-[13px] font-semibold text-[#0d9d99]">
-          Portal del anfitrión
+          {t("host.portal")}
         </p>
         <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">
-          Hola, {viewer.name.split(" ")[0]}
+          {t("host.hello", { name: viewer.name.split(" ")[0] })}
         </h1>
         <p className="mt-1.5 text-[15px] text-slate-500">
-          Comparte un enlace y tu visitante se registra solo.
+          {t("host.subtitle")}
         </p>
         <Link
           href="/app/reports"
           className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600"
         >
           <BarChart3 size={16} />
-          Abrir mis reportes
+          {t("host.openReports")}
         </Link>
       </header>
 
@@ -141,9 +135,9 @@ export function HostDashboard() {
             <Plus size={28} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-lg font-semibold">Invitar a alguien</p>
+            <p className="text-lg font-semibold">{t("host.inviteSomeone")}</p>
             <p className="mt-0.5 text-sm text-slate-300">
-              Toma 30 segundos. El visitante completa el resto.
+              {t("host.inviteHint")}
             </p>
           </div>
           <ArrowUpRight size={22} className="shrink-0 text-slate-400" />
@@ -160,11 +154,11 @@ export function HostDashboard() {
               <div>
                 <h2 className="font-semibold text-emerald-950">
                   {groups.inside.length === 1
-                    ? "Tu visitante ya está dentro"
-                    : `${groups.inside.length} visitantes dentro ahora`}
+                    ? t("host.alreadyInside")
+                    : t("host.insideCount", { n: groups.inside.length })}
                 </h2>
                 <p className="text-sm text-emerald-800/80">
-                  Aforo de tus invitados, actualizado en vivo.
+                  {t("host.occupancy")}
                 </p>
               </div>
             </div>
@@ -172,7 +166,7 @@ export function HostDashboard() {
               href="/app/people-on-site"
               className="shrink-0 text-sm font-medium text-emerald-800"
             >
-              Ver todos
+              {t("common.viewAll")}
             </Link>
           </div>
           <div className="space-y-2">
@@ -188,9 +182,9 @@ export function HostDashboard() {
                     {visit.visitorName}
                   </p>
                   <p className="truncate text-xs text-slate-500">
-                    {visit.company || "Sin empresa"} · {visit.location}
+                    {visit.company || t("common.noCompany")} · {visit.location}
                     {visit.checkedInAt
-                      ? ` · desde ${dateLabel(visit.checkedInAt)}`
+                      ? t("host.since", { time: formatDateTime(visit.checkedInAt) })
                       : ""}
                   </p>
                 </div>
@@ -206,19 +200,19 @@ export function HostDashboard() {
 
       <section className="mt-5 grid grid-cols-3 gap-3">
         <MetricTile
-          label="Próximas"
+          label={t("host.upcoming")}
           value={groups.upcoming.length}
           icon={CalendarDays}
           tone="info"
         />
         <MetricTile
-          label="Sin registrar"
+          label={t("host.unregistered")}
           value={groups.waiting.length}
           icon={Clock3}
           tone="warning"
         />
         <MetricTile
-          label="Dentro"
+          label={t("host.inside")}
           value={groups.inside.length}
           icon={UserRoundCheck}
           tone="success"
@@ -229,16 +223,16 @@ export function HostDashboard() {
         <Card className="p-0">
           <div className="flex items-center justify-between border-b border-slate-100 p-5">
             <div>
-              <h2 className="font-semibold">Mis próximas visitas</h2>
+              <h2 className="font-semibold">{t("host.myUpcoming")}</h2>
               <p className="text-sm text-slate-500">
-                Solo las invitaciones creadas por ti
+                {t("host.myUpcomingHint")}
               </p>
             </div>
             <Link
               href="/app/visits"
               className="shrink-0 text-sm font-medium text-blue-600"
             >
-              Ver todas
+              {t("common.viewAll")}
             </Link>
           </div>
 
@@ -246,13 +240,13 @@ export function HostDashboard() {
             <div className="p-5">
               <EmptyState
                 icon={CalendarDays}
-                title="No tienes visitas próximas"
-                description="Crea una invitación y compártela por WhatsApp o correo."
+                title={t("host.noUpcoming")}
+                description={t("host.noUpcomingHint")}
                 action={
                   <Link href="/app/visits/new">
                     <Button variant="accent">
                       <Plus size={18} />
-                      Nueva invitación
+                      {t("nav.newInvite")}
                     </Button>
                   </Link>
                 }
@@ -275,7 +269,7 @@ export function HostDashboard() {
                         <StatusPill status={visit.status} />
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500">
-                        {dateLabel(visit.startsAt)} · {visit.location}
+                        {formatDateTime(visit.startsAt)} · {visit.location}
                       </span>
                     </span>
                   </Link>
@@ -284,7 +278,7 @@ export function HostDashboard() {
                       type="button"
                       onClick={() => share(visit.id, visit.visitorName)}
                       disabled={busyId === visit.id}
-                      aria-label={`Compartir enlace de ${visit.visitorName}`}
+                      aria-label={t("host.shareAria", { name: visit.visitorName })}
                       className="grid size-11 shrink-0 place-items-center rounded-2xl border border-slate-200 text-slate-600 active:bg-slate-50 disabled:opacity-50"
                     >
                       <Send size={17} />
@@ -297,10 +291,10 @@ export function HostDashboard() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-semibold">Actividad de mis visitas</h2>
+          <h2 className="font-semibold">{t("host.activity")}</h2>
           {activity.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500">
-              Aquí verás cuándo se registran y llegan tus visitantes.
+              {t("host.activityEmpty")}
             </p>
           ) : (
             <div className="mt-4 space-y-2.5">
@@ -318,10 +312,10 @@ export function HostDashboard() {
                     />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {visit?.visitorName ?? "Visita"}
+                        {visit?.visitorName ?? t("common.visit")}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {t(`events.${event.type}`)} · {dateLabel(event.at)}
+                        {t(`events.${event.type}`)} · {formatDateTime(event.at)}
                       </p>
                     </div>
                   </div>
@@ -335,8 +329,8 @@ export function HostDashboard() {
       <Sheet
         open={Boolean(shareUrl)}
         onClose={() => setShareUrl("")}
-        title="Compartir invitación"
-        description={`Envía este enlace a ${shareName}. Al abrirlo completará su registro y recibirá su pase.`}
+        title={t("host.shareInvite")}
+        description={t("host.shareSheet", { name: shareName })}
       >
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <Link2 size={18} className="shrink-0 text-slate-400" />
@@ -347,8 +341,8 @@ export function HostDashboard() {
         <div className="mt-4">
           <ShareButton
             url={shareUrl}
-            title="Invitación de visita"
-            text={`Hola ${shareName}, completa tu registro para tu visita:`}
+            title={t("invite.shareTitle")}
+            text={t("invite.shareText", { name: shareName ? ` ${shareName}` : "" })}
             className="w-full"
           />
         </div>

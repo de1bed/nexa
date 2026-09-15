@@ -25,7 +25,9 @@ import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, EmptyState, StatusPill, cn } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
 import { accessWindow, type Visit } from "@/lib/domain";
+import { visitPurposeMessageKey } from "@/lib/i18n";
 import { findShowcaseVisit } from "@/lib/showcase-store";
+import { useI18n } from "./i18n-provider";
 
 type Mode = "home" | "camera" | "result" | "done";
 type Decision = "checked_in" | "checked_out" | "denied";
@@ -37,6 +39,7 @@ function haptic(pattern: number | number[]) {
 }
 
 export function GuardScan() {
+  const { t, formatDateTime } = useI18n();
   const { live, visits, decide, settings, reload } = useWorkspace();
   const [mode, setMode] = useState<Mode>("home");
   const [manualToken, setManualToken] = useState("");
@@ -150,8 +153,8 @@ export function GuardScan() {
     } catch (reason) {
       setCameraError(
         reason instanceof Error && reason.name === "NotAllowedError"
-          ? "No hay permiso de cámara. Actívalo en el navegador o escribe el código."
-          : "No encontramos una cámara disponible. Escribe el código manualmente.",
+          ? t("guard.cameraDenied")
+          : t("guard.cameraMissing"),
       );
     }
   }
@@ -190,7 +193,7 @@ export function GuardScan() {
       setDecisionError(
         reason instanceof Error
           ? reason.message
-          : "No fue posible registrar la decisión",
+          : t("guard.decideFail"),
       );
     } finally {
       setBusy(false);
@@ -217,12 +220,12 @@ export function GuardScan() {
           className="mb-5 inline-flex items-center gap-2 text-sm text-slate-300"
         >
           <ArrowLeft size={17} />
-          Volver
+          {t("guard.back")}
         </button>
 
-        <h1 className="text-2xl font-semibold">Centra el código</h1>
+        <h1 className="text-2xl font-semibold">{t("guard.centerCode")}</h1>
         <p className="mt-1.5 text-sm text-slate-400">
-          Se valida solo en cuanto lo detecte.
+          {t("guard.autoDetect")}
         </p>
 
         <div className="relative mt-6 overflow-hidden rounded-3xl bg-black">
@@ -239,7 +242,7 @@ export function GuardScan() {
         </div>
 
         {resolving && (
-          <p className="mt-4 text-center text-sm text-slate-300">Validando…</p>
+          <p className="mt-4 text-center text-sm text-slate-300">{t("guard.validating")}</p>
         )}
 
         {cameraError && (
@@ -250,7 +253,7 @@ export function GuardScan() {
               onClick={() => setMode("home")}
               className="mt-3 block font-semibold text-white"
             >
-              Escribir el código
+              {t("guard.typeInstead")}
             </button>
           </div>
         )}
@@ -274,7 +277,7 @@ export function GuardScan() {
           className="mb-5 inline-flex items-center gap-2 text-sm text-slate-300"
         >
           <ArrowLeft size={17} />
-          Escanear otro
+          {t("guard.scanAnother")}
         </button>
 
         {!visit ? (
@@ -282,10 +285,9 @@ export function GuardScan() {
             <span className="mx-auto grid size-20 place-items-center rounded-full bg-red-500/20 text-red-300">
               <X size={38} />
             </span>
-            <h1 className="mt-5 text-2xl font-semibold">Pase no válido</h1>
+            <h1 className="mt-5 text-2xl font-semibold">{t("guard.invalidPass")}</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              El código no existe en esta organización, venció o fue revocado.
-              Registra la entrada de forma manual si la persona está autorizada.
+              {t("guard.invalidHint")}
             </p>
             <div className="mt-7 space-y-3">
               <Link
@@ -293,10 +295,10 @@ export function GuardScan() {
                 className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-white font-semibold text-[#071426]"
               >
                 <Keyboard size={18} />
-                Registro manual
+                {t("nav.manual")}
               </Link>
               <Button variant="light" size="lg" block onClick={reset}>
-                Escanear otro
+                {t("guard.scanAnother")}
               </Button>
             </div>
           </div>
@@ -331,14 +333,14 @@ export function GuardScan() {
                     <CheckCircle2 size={19} />
                   )}
                   {blocked
-                    ? "Pase bloqueado"
+                    ? t("guard.blocked")
                     : outsideWindow
                       ? window_ === "early"
-                        ? "Llegó antes de tiempo"
-                        : "Fuera de horario"
+                        ? t("guard.early")
+                        : t("guard.late")
                       : insideNow
-                        ? "Visita en curso"
-                        : "Pase válido"}
+                        ? t("guard.inProgress")
+                        : t("guard.validPass")}
                 </span>
                 <StatusPill status={visit.status} />
               </div>
@@ -357,7 +359,7 @@ export function GuardScan() {
                       {visit.visitorName}
                     </h1>
                     <p className="mt-0.5 truncate text-sm text-slate-500">
-                      {visit.company || "Sin empresa"}
+                      {visit.company || t("common.noCompany")}
                     </p>
                   </div>
                 </div>
@@ -365,31 +367,32 @@ export function GuardScan() {
                 {visit.status === "checked_in" && visit.checkedInAt && (
                   <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                     <Clock3 size={17} />
-                    <LiveDuration since={visit.checkedInAt} prefix="Dentro desde hace " />
+                    <LiveDuration since={visit.checkedInAt} prefix={t("guard.insideSince")} />
                   </div>
                 )}
 
                 <dl className="mt-5 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm">
-                  <Row label="Anfitrión" value={visit.hostName} icon={UserRoundCheck} />
-                  <Row label="Ubicación" value={visit.location} icon={Building2} />
-                  <Row label="Motivo" value={visit.purpose} icon={Sparkles} />
+                  <Row label={t("guard.host")} value={visit.hostName} icon={UserRoundCheck} />
+                  <Row label={t("guard.location")} value={visit.location} icon={Building2} />
                   <Row
-                    label="Horario"
-                    value={new Intl.DateTimeFormat("es-MX", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }).format(new Date(visit.startsAt))}
+                    label={t("guard.purpose")}
+                    value={t(visitPurposeMessageKey(visit.purpose)) || visit.purpose}
+                    icon={Sparkles}
+                  />
+                  <Row
+                    label={t("guard.schedule")}
+                    value={formatDateTime(visit.startsAt)}
                     icon={Clock3}
                   />
                   {visit.vehiclePlate && (
-                    <Row label="Placas" value={visit.vehiclePlate} icon={Car} />
+                    <Row label={t("guard.plates")} value={visit.vehiclePlate} icon={Car} />
                   )}
                   <Row
-                    label="Identificación"
+                    label={t("guard.identification")}
                     value={
                       visit.documentCaptured
-                        ? "Capturada · vista restringida"
-                        : "No capturada"
+                        ? t("guard.capturedRestricted")
+                        : t("guard.notCaptured")
                     }
                     icon={visit.documentCaptured ? BadgeCheck : FileWarning}
                   />
@@ -397,12 +400,12 @@ export function GuardScan() {
 
                 {visit.visitorNotes && (
                   <Callout tone="info" className="mt-4">
-                    <b>Nota del visitante:</b> {visit.visitorNotes}
+                    <b>{t("guard.visitorNote")}</b> {visit.visitorNotes}
                   </Callout>
                 )}
                 {visit.accessRequirements && (
                   <Callout tone="warning" icon={AlertTriangle} className="mt-3">
-                    <b>Requisitos:</b> {visit.accessRequirements}
+                    <b>{t("guard.requirements")}</b> {visit.accessRequirements}
                   </Callout>
                 )}
               </div>
@@ -416,8 +419,7 @@ export function GuardScan() {
                   onChange={(event) => setOverrideWindow(event.target.checked)}
                   className="mt-0.5 size-5 shrink-0 accent-amber-400"
                 />
-                Autorizo explícitamente esta entrada fuera de la ventana
-                programada. Quedará registrado en la bitácora.
+                {t("guard.override")}
               </label>
             )}
 
@@ -441,7 +443,7 @@ export function GuardScan() {
                   className="h-16 text-lg"
                 >
                   <LogOut size={22} />
-                  Registrar salida
+                  {t("guard.checkout")}
                 </Button>
               ) : (
                 <Button
@@ -453,7 +455,7 @@ export function GuardScan() {
                   className="h-16 text-lg"
                 >
                   <LogIn size={22} />
-                  Autorizar entrada
+                  {t("guard.authorize")}
                 </Button>
               )}
 
@@ -467,7 +469,7 @@ export function GuardScan() {
                   className="border-red-400/30 bg-red-500/10 text-red-200"
                 >
                   <ShieldX size={19} />
-                  Denegar acceso
+                  {t("guard.denyAccess")}
                 </Button>
               )}
             </div>
@@ -477,15 +479,15 @@ export function GuardScan() {
         <Sheet
           open={denyOpen}
           onClose={() => setDenyOpen(false)}
-          title="Motivo del rechazo"
-          description="Queda registrado en la bitácora y se notifica al anfitrión."
+          title={t("guard.denyTitle")}
+          description={t("guard.denyHint")}
         >
           <textarea
             autoFocus
             rows={4}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Ej. No presentó identificación oficial"
+            placeholder={t("guard.denyPlaceholder")}
             className="w-full rounded-2xl border border-slate-200 p-4 text-[16px] outline-none focus:border-red-400"
           />
           <div className="mt-4 flex gap-3">
@@ -495,7 +497,7 @@ export function GuardScan() {
               className="flex-1"
               onClick={() => setDenyOpen(false)}
             >
-              Cancelar
+              {t("common.cancel")}
             </Button>
             <Button
               variant="danger"
@@ -504,7 +506,7 @@ export function GuardScan() {
               disabled={reason.trim().length < 2 || busy}
               onClick={() => applyDecision("denied", reason.trim())}
             >
-              Denegar
+              {t("guard.deny")}
             </Button>
           </div>
         </Sheet>
@@ -518,13 +520,13 @@ export function GuardScan() {
     <div className="animate-rise">
       <header className="mb-6">
         <p className="text-[13px] font-semibold text-[#10cfc9]">
-          Control de acceso
+          {t("guard.control")}
         </p>
         <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-.03em]">
-          ¿Quién llega?
+          {t("guard.whoArrives")}
         </h1>
         <p className="mt-1.5 text-[15px] text-slate-400">
-          Escanea el pase o escribe su código.
+          {t("guard.scanOrType")}
         </p>
       </header>
 
@@ -536,12 +538,12 @@ export function GuardScan() {
           <span className="animate-pulse-ring absolute inset-0 rounded-full border-2 border-white/70" />
           <ScanLine size={42} />
         </span>
-        <span className="mt-5 text-xl font-semibold">Escanear QR</span>
-        <span className="mt-1 text-sm opacity-70">Abrir la cámara</span>
+        <span className="mt-5 text-xl font-semibold">{t("guard.scanQr")}</span>
+        <span className="mt-1 text-sm opacity-70">{t("guard.openCamera")}</span>
       </button>
 
       <div className="my-6 flex items-center gap-3 text-[11px] font-medium tracking-wider text-slate-500">
-        <span className="h-px flex-1 bg-white/10" />O ESCRIBE EL CÓDIGO
+        <span className="h-px flex-1 bg-white/10" />{t("guard.orType")}
         <span className="h-px flex-1 bg-white/10" />
       </div>
 
@@ -549,7 +551,7 @@ export function GuardScan() {
         onSubmit={(event) => {
           event.preventDefault();
           if (!manualToken.trim()) {
-            toast.error("Escribe el código del pase");
+            toast.error(t("guard.codeRequired"));
             return;
           }
           void resolve(manualToken);
@@ -559,8 +561,8 @@ export function GuardScan() {
         <input
           value={manualToken}
           onChange={(event) => setManualToken(event.target.value)}
-          aria-label="Código del pase"
-          placeholder="Código del pase"
+          aria-label={t("guard.code")}
+          placeholder={t("guard.code")}
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
@@ -572,7 +574,7 @@ export function GuardScan() {
           disabled={resolving}
           className="h-14 shrink-0 bg-white text-[#071426]"
         >
-          {resolving ? "…" : "Validar"}
+          {resolving ? "…" : t("guard.validate")}
         </Button>
       </form>
 
@@ -581,14 +583,14 @@ export function GuardScan() {
         className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl border border-white/15 text-[15px] font-semibold"
       >
         <Keyboard size={19} />
-        Registro manual sin pase
+        {t("guard.manualNoPass")}
       </Link>
 
       <section className="mt-9">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Actualmente dentro</h2>
+          <h2 className="font-semibold">{t("guard.currentlyInside")}</h2>
           <Link href="/guard/inside" className="text-sm font-medium text-[#10cfc9]">
-            Ver {inside.length}
+            {t("guard.viewCount", { n: inside.length })}
           </Link>
         </div>
 
@@ -596,8 +598,8 @@ export function GuardScan() {
           <EmptyState
             dark
             icon={UserRoundCheck}
-            title="Nadie dentro"
-            description="Las entradas aparecerán aquí en cuanto valides un pase."
+            title={t("guard.nobody")}
+            description={t("guard.nobodyHint")}
           />
         ) : (
           <div className="space-y-2">
@@ -665,21 +667,22 @@ function ResultScreen({
   visit: Visit | null;
   onContinue: () => void;
 }) {
+  const { t, formatTime } = useI18n();
   const config = {
     checked_in: {
       icon: LogIn,
       tone: "bg-emerald-500/15 text-emerald-300",
-      title: "Entrada autorizada",
+      title: t("guard.authorized"),
     },
     checked_out: {
       icon: LogOut,
       tone: "bg-blue-500/15 text-blue-300",
-      title: "Salida registrada",
+      title: t("guard.checkedOut"),
     },
     denied: {
       icon: ShieldX,
       tone: "bg-red-500/15 text-red-300",
-      title: "Acceso denegado",
+      title: t("events.denied"),
     },
   } as const;
   const current = config[decision ?? "checked_in"];
@@ -699,14 +702,11 @@ function ResultScreen({
         {current.title}
       </h1>
       <p className="mt-3 text-slate-400">
-        {visit?.visitorName} ·{" "}
-        {new Intl.DateTimeFormat("es-MX", { timeStyle: "short" }).format(
-          new Date(),
-        )}
+        {visit?.visitorName} · {formatTime(new Date())}
       </p>
       {decision === "checked_in" && (
         <p className="mt-1.5 text-sm text-slate-500">
-          Se notificó a {visit?.hostName}.
+          {t("guard.notified", { name: visit?.hostName ?? "" })}
         </p>
       )}
       <Button
@@ -715,7 +715,7 @@ function ResultScreen({
         onClick={onContinue}
         className="mt-10 bg-white text-[#071426]"
       >
-        Escanear siguiente
+        {t("guard.next")}
       </Button>
     </div>
   );

@@ -125,14 +125,14 @@ export function Dashboard() {
             {greeting}, {viewer.name.split(" ")[0]}
           </h1>
           <p className="mt-1.5 text-[15px] text-slate-500">
-            Esto es lo que está pasando en {organization.name}.
+            {t("dashboard.happening", { org: organization.name })}
           </p>
         </div>
         <div className="hidden gap-2 lg:flex">
           <Link href="/guard/scan">
             <Button variant="outline">
               <ScanLine size={17} />
-              Abrir caseta
+              {t("dashboard.openBooth")}
             </Button>
           </Link>
           <Link href="/app/visits/new">
@@ -153,9 +153,9 @@ export function Dashboard() {
             <Users size={22} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">Invita a tu equipo</span>
+            <span className="block font-semibold">{t("dashboard.inviteTeam")}</span>
             <span className="mt-0.5 block text-sm text-slate-600">
-              Anfitriones y guardias entran con un correo.
+              {t("dashboard.inviteTeamHint")}
             </span>
           </span>
           <ArrowUpRight size={18} className="shrink-0 text-slate-400" />
@@ -168,9 +168,9 @@ export function Dashboard() {
             <ScanLine size={22} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">Abrir caseta</span>
+            <span className="block font-semibold">{t("dashboard.openBooth")}</span>
             <span className="mt-0.5 block text-sm text-slate-600">
-              Escanea pases y controla entradas como en recepción.
+              {t("dashboard.boothHint")}
             </span>
           </span>
           <ArrowUpRight size={18} className="shrink-0 text-slate-400" />
@@ -214,7 +214,7 @@ export function Dashboard() {
               href="/app/people-on-site"
               className="text-sm font-medium text-blue-600"
             >
-              Ver todas
+              {t("common.viewAll")}
             </Link>
           </div>
           <div className="hide-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 xl:grid-cols-3">
@@ -237,7 +237,7 @@ export function Dashboard() {
                     <Clock3 size={14} />
                     <LiveDuration since={visit.checkedInAt} />
                   </span>
-                  <span>desde {visit.checkedInAt ? formatTime(visit.checkedInAt) : "—"}</span>
+                  <span>{t("dashboard.since", { time: visit.checkedInAt ? formatTime(visit.checkedInAt) : "—" })}</span>
                 </div>
               </Card>
             ))}
@@ -248,8 +248,8 @@ export function Dashboard() {
       <section className="mt-6 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
         <Card className="p-5 sm:p-6">
           <div className="mb-5">
-            <h2 className="font-semibold">Flujo de la semana</h2>
-            <p className="text-sm text-slate-500">Entradas y salidas registradas</p>
+            <h2 className="font-semibold">{t("dashboard.flow")}</h2>
+            <p className="text-sm text-slate-500">{t("dashboard.weekFlowHint")}</p>
           </div>
           <div className="h-60 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -303,16 +303,16 @@ export function Dashboard() {
         <Card className="p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="font-semibold">Próximas visitas</h2>
-              <p className="text-sm text-slate-500">Agenda inmediata</p>
+              <h2 className="font-semibold">{t("dashboard.upcoming")}</h2>
+              <p className="text-sm text-slate-500">{t("dashboard.immediateAgenda")}</p>
             </div>
             <Activity size={18} className="text-slate-400" />
           </div>
           {upcoming.length === 0 ? (
             <EmptyState
               icon={CalendarDays}
-              title="Sin visitas próximas"
-              description="Cuando alguien programe una invitación aparecerá aquí."
+              title={t("dashboard.noUpcoming")}
+              description={t("dashboard.noUpcomingHint")}
             />
           ) : (
             <div className="space-y-1">
@@ -342,16 +342,16 @@ export function Dashboard() {
       <section className="mt-6">
         <Card className="p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Actividad reciente</h2>
+            <h2 className="font-semibold">{t("dashboard.activity")}</h2>
             <Link href="/app/visits" className="text-sm font-medium text-blue-600">
-              Ver todo
+              {t("common.viewEverything")}
             </Link>
           </div>
           {events.length === 0 ? (
             <EmptyState
               icon={Activity}
-              title="Sin movimientos todavía"
-              description="El registro de entradas y salidas se mostrará aquí."
+              title={t("dashboard.noActivity")}
+              description={t("dashboard.noActivityHint")}
             />
           ) : (
             <div className="grid gap-2.5 md:grid-cols-2">
@@ -375,7 +375,7 @@ export function Dashboard() {
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {visit?.visitorName ?? "Visita"}
+                        {visit?.visitorName ?? t("common.visit")}
                       </p>
                       <p className="truncate text-xs text-slate-500">
                         {t(`events.${event.type}`)} · {formatTime(event.at)} ·{" "}

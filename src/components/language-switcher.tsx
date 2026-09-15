@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { cn } from "./ui";
 import { useI18n } from "./i18n-provider";
 import type { Locale } from "@/lib/i18n/types";
@@ -12,6 +13,7 @@ export function LanguageSwitcher({
   compact?: boolean;
 }) {
   const { locale, setLocale, t } = useI18n();
+  const router = useRouter();
   const options: Locale[] = ["es", "en"];
 
   return (
@@ -27,7 +29,10 @@ export function LanguageSwitcher({
         <button
           key={option}
           type="button"
-          onClick={() => setLocale(option)}
+          onClick={() => {
+            setLocale(option);
+            router.refresh();
+          }}
           aria-pressed={locale === option}
           className={cn(
             "rounded-full px-2.5 py-1 transition",
