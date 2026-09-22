@@ -45,6 +45,8 @@ type Pass = {
   checkedOutAt?: string | null;
   purpose: string;
   accessRequirements: string;
+  internalPlace?: string;
+  meetingUrl?: string;
   wallet?: { apple?: boolean; google?: boolean };
 };
 
@@ -118,6 +120,8 @@ export function PublicPass({ token }: { token: string }) {
       checkedOutAt: showcaseVisit.checkedOutAt,
       purpose: showcaseVisit.purpose,
       accessRequirements: showcaseVisit.accessRequirements ?? "",
+      internalPlace: showcaseVisit.internalPlace,
+      meetingUrl: showcaseVisit.meetingUrl,
     };
   }, [live, remotePass, showcaseVisit]);
 
@@ -194,6 +198,8 @@ export function PublicPass({ token }: { token: string }) {
         startsAt={pass.startsAt}
         expiresAt={pass.expiresAt}
         accessRequirements={pass.accessRequirements || undefined}
+        internalPlace={pass.internalPlace || undefined}
+        meetingUrl={pass.meetingUrl || undefined}
       />
 
       <div className="mx-auto mt-6 max-w-sm space-y-4">

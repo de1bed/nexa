@@ -20,6 +20,8 @@ export function StaffPassPanel({
   location,
   startsAt,
   endsAt,
+  internalPlace,
+  meetingUrl,
 }: {
   visitId: string;
   visitorName: string;
@@ -28,6 +30,8 @@ export function StaffPassPanel({
   location: string;
   startsAt: string;
   endsAt?: string;
+  internalPlace?: string;
+  meetingUrl?: string;
 }) {
   const [pass, setPass] = useState<{
     passToken: string;
@@ -92,6 +96,8 @@ export function StaffPassPanel({
         hostName={hostName}
         location={location}
         startsAt={startsAt}
+        internalPlace={internalPlace}
+        meetingUrl={meetingUrl}
         expiresAt={
           pass.expiresAt ??
           (endsAt

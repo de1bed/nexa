@@ -27,6 +27,8 @@ export type ResolvedPass = {
   checkedOutAt: string | null;
   purpose: string;
   accessRequirements: string;
+  internalPlace: string;
+  meetingUrl: string;
   validFrom: string;
   expiresAt: string;
 };
@@ -44,6 +46,8 @@ type Row = {
     checked_in_at: string | null;
     checked_out_at: string | null;
     access_requirements: string | null;
+    internal_place: string | null;
+    meeting_url: string | null;
     organization: { name?: string } | null;
     visitor: { full_name?: string } | null;
     host: { full_name?: string } | null;
@@ -60,7 +64,7 @@ export async function resolvePassByToken(
     .from("qr_tokens")
     .select(
       "valid_from,expires_at,revoked_at," +
-        "visit:visits!qr_tokens_visit_id_fkey(id,status,starts_at,ends_at,purpose,checked_in_at,checked_out_at,access_requirements," +
+        "visit:visits!qr_tokens_visit_id_fkey(id,status,starts_at,ends_at,purpose,checked_in_at,checked_out_at,access_requirements,internal_place,meeting_url," +
         "organization:organizations(name),visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name),location:locations(name,address))",
     )
     .eq("token_hash", hash)
@@ -119,6 +123,8 @@ export async function resolvePassByToken(
     checkedOutAt: visit.checked_out_at,
     purpose: visit.purpose,
     accessRequirements: visit.access_requirements ?? "",
+    internalPlace: visit.internal_place ?? "",
+    meetingUrl: visit.meeting_url ?? "",
     validFrom,
     expiresAt,
   };

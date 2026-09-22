@@ -45,6 +45,8 @@ export type InvitationDraft = {
   phone: string;
   company: string;
   locationId: string;
+  internalPlace?: string;
+  meetingUrl?: string;
   hostId?: string;
   startsAt: string;
   endsAt: string;
@@ -87,7 +89,11 @@ type WorkspaceValue = Directory & {
   reload: (silent?: boolean) => Promise<void>;
   createInvitation: (
     draft: InvitationDraft,
-  ) => Promise<{ visit: Visit; invitationUrl: string }>;
+  ) => Promise<{
+    visit: Visit;
+    invitationUrl: string;
+    emailDelivery: "sent" | "development" | "failed" | "skipped";
+  }>;
   createManualVisit: (draft: ManualDraft) => Promise<Visit>;
   decide: (
     id: string,
@@ -99,7 +105,10 @@ type WorkspaceValue = Directory & {
     id: string,
     mode: "invitation" | "pass",
     notify?: boolean,
-  ) => Promise<string>;
+  ) => Promise<{
+    url: string;
+    delivery: "sent" | "development" | "failed" | "skipped";
+  }>;
 };
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -257,12 +266,17 @@ export function WorkspaceProvider({
         const payload = (await response.json()) as {
           visit: Visit;
           invitationUrl: string;
+          emailDelivery?: "sent" | "development" | "failed" | "skipped";
         };
         setRemoteState((current) => ({
           visits: [payload.visit, ...current.visits],
           events: current.events,
         }));
-        return payload;
+        return {
+          visit: payload.visit,
+          invitationUrl: payload.invitationUrl,
+          emailDelivery: payload.emailDelivery ?? "skipped",
+        };
       }
 
       const location =
@@ -286,6 +300,8 @@ export function WorkspaceProvider({
         locationId: location.id,
         location: location.name,
         locationAddress: location.address,
+        internalPlace: draft.internalPlace,
+        meetingUrl: draft.meetingUrl,
         startsAt: draft.startsAt,
         endsAt: draft.endsAt,
         purpose: draft.purpose,
@@ -315,6 +331,7 @@ export function WorkspaceProvider({
       return {
         visit,
         invitationUrl: `${window.location.origin}/visit/${token}`,
+        emailDelivery: "skipped",
       };
     },
     [live, viewer],
@@ -495,19 +512,26 @@ export function WorkspaceProvider({
         const payload = (await response.json()) as {
           invitationUrl?: string;
           passUrl?: string;
+          delivery?: "sent" | "development" | "failed" | "skipped";
         };
-        return payload.invitationUrl ?? payload.passUrl ?? "";
+        return {
+          url: payload.invitationUrl ?? payload.passUrl ?? "",
+          delivery: payload.delivery ?? "skipped",
+        };
       }
 
       const current = loadShowcaseState().visits.find(
         (visit) => visit.id === id,
       );
-      if (!current) return "";
+      if (!current) return { url: "", delivery: "skipped" };
 
       if (mode === "pass") {
         const passToken = current.qrToken ?? randomToken(24);
         patchShowcaseVisit(id, { qrToken: passToken });
-        return `${window.location.origin}/pass/${passToken}`;
+        return {
+          url: `${window.location.origin}/pass/${passToken}`,
+          delivery: "skipped",
+        };
       }
 
       const token = current.invitationToken ?? randomToken(24);
@@ -516,7 +540,10 @@ export function WorkspaceProvider({
         { invitationToken: token },
         { type: "invitation_resent", actor: viewer.name },
       );
-      return `${window.location.origin}/visit/${token}`;
+      return {
+        url: `${window.location.origin}/visit/${token}`,
+        delivery: "skipped",
+      };
     },
     [live, viewer],
   );

@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
-import { sendInvitationEmail } from "@/lib/server/email";
+import { sendHostCalendarEmail, sendInvitationEmail } from "@/lib/server/email";
+import { visitCalendarEvent } from "@/lib/calendar";
 import { requireApiContext } from "@/lib/server/session";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { eventSelect, mapEvent, mapVisit, visitSelect } from "@/lib/server/visit-mapper";
 import { appUrl } from "@/lib/config";
 import { maskEmail, maskPhone } from "@/lib/security";
 import { sendInvitationWhatsApp } from "@/lib/server/whatsapp";
+import { normalizeMeetingUrl } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,20 @@ const createSchema = z
     purpose: z.string().trim().min(2).max(160),
     notes: z.string().trim().max(500).optional(),
     accessRequirements: z.string().trim().max(500).optional(),
+    internalPlace: z.string().trim().max(160).optional(),
+    meetingUrl: z
+      .string()
+      .trim()
+      .max(500)
+      .optional()
+      .refine((value) => {
+        if (!value) return true;
+        try {
+          return Boolean(normalizeMeetingUrl(value));
+        } catch {
+          return false;
+        }
+      }, "El enlace de la junta no es válido"),
     sendEmail: z.boolean().default(false),
     sendWhatsApp: z.boolean().default(false),
   })
@@ -145,6 +161,8 @@ export async function POST(request: Request) {
         ends_at: input.endsAt,
         internal_notes: input.notes || null,
         access_requirements: input.accessRequirements || null,
+        internal_place: input.internalPlace || null,
+        meeting_url: normalizeMeetingUrl(input.meetingUrl) ?? null,
         created_by: userId,
       })
       .select(visitSelect)
@@ -187,20 +205,47 @@ export async function POST(request: Request) {
     });
 
     const invitationUrl = `${appUrl()}/visit/${invitationToken}`;
+    const hostName = hostProfile?.full_name ?? displayName;
+    const dateLabel = new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "full",
+      timeStyle: "short",
+    }).format(new Date(input.startsAt));
+    const meetingUrl = normalizeMeetingUrl(input.meetingUrl);
+    const calendar = visitCalendarEvent({
+      id: visitId,
+      title: input.visitorName
+        ? `Visita de ${input.visitorName} · ${organizationName}`
+        : `Visita · ${organizationName}`,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      organizationName,
+      locationName: location.name,
+      internalPlace: input.internalPlace,
+      meetingUrl,
+      purpose: input.purpose,
+      invitationUrl,
+      organizerName: hostName,
+      organizerEmail: hostProfile?.email ?? undefined,
+    });
 
+    let emailDelivery: "sent" | "development" | "failed" | "skipped" = "skipped";
     if (input.sendEmail && input.email) {
       const delivery = await sendInvitationEmail({
         to: input.email,
         visitorName: input.visitorName,
-        hostName: hostProfile?.full_name ?? displayName,
+        hostName,
         organizationName,
         locationName: location.name,
-        dateLabel: new Intl.DateTimeFormat("es-MX", {
-          dateStyle: "full",
-          timeStyle: "short",
-        }).format(new Date(input.startsAt)),
+        internalPlace: input.internalPlace,
+        meetingUrl,
+        dateLabel,
         invitationUrl,
+        calendar: {
+          ...calendar,
+          title: `${hostName} te espera en ${organizationName}`,
+        },
       }).catch(() => ({ status: "failed" as const }));
+      emailDelivery = delivery.status;
 
       await writeNotification({
         organizationId,
@@ -211,12 +256,32 @@ export async function POST(request: Request) {
       });
     }
 
+    const hostEmail = hostProfile?.email;
+    if (hostEmail && hostEmail.toLowerCase() !== input.email.toLowerCase()) {
+      const delivery = await sendHostCalendarEmail({
+        to: hostEmail,
+        hostName,
+        visitorName: input.visitorName,
+        organizationName,
+        dateLabel,
+        locationName: location.name,
+        calendar,
+      }).catch(() => ({ status: "failed" as const }));
+      await writeNotification({
+        organizationId,
+        visitId,
+        recipientMasked: maskEmail(hostEmail),
+        template: "host_calendar",
+        status: delivery.status,
+      }).catch(() => undefined);
+    }
+
     const mapped = mapVisit(visit as unknown as Record<string, unknown>);
     if (input.sendWhatsApp && input.phone) {
       const delivery = await sendInvitationWhatsApp({
         to: input.phone,
         visitorName: input.visitorName,
-        hostName: hostProfile?.full_name ?? displayName,
+        hostName,
         organizationName,
         dateLabel: new Intl.DateTimeFormat("es-MX", {
           dateStyle: "long",
@@ -251,6 +316,7 @@ export async function POST(request: Request) {
         },
         invitationToken,
         invitationUrl,
+        emailDelivery,
       },
       { status: 201 },
     );

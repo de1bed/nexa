@@ -82,9 +82,12 @@ export function HostDashboard() {
   async function share(visitId: string, visitorName: string) {
     setBusyId(visitId);
     try {
-      const url = await resendLink(visitId, "invitation", false);
+      const { url, delivery } = await resendLink(visitId, "invitation", true);
       if (!url) throw new Error(t("host.linkFail"));
       setShareUrl(url);
+      if (delivery === "sent") toast.success(t("visits.alsoEmailed"));
+      else if (delivery === "failed" || delivery === "development")
+        toast.error(t("visits.emailNotDelivered"));
       setShareName(visitorName);
     } catch (reason) {
       toast.error(

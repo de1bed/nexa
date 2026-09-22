@@ -3,11 +3,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { sendInvitationEmail, sendPassEmail } from "@/lib/server/email";
+import { visitCalendarEvent } from "@/lib/calendar";
+import { appUrl } from "@/lib/config";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
 import { getOrIssueStaffPass } from "@/lib/server/pass-issue";
 import { createAdminClient } from "@/lib/server/supabase-admin";
-import { appUrl } from "@/lib/config";
 import { maskEmail } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,7 @@ export async function POST(
       timeStyle: "short",
     }).format(new Date(visit.startsAt));
     const recipient = visit.email || visit.inviteeEmail || "";
+    let delivery: "sent" | "development" | "failed" | "skipped" = "skipped";
 
     if (input.mode === "pass") {
       const { passToken, passUrl } = await getOrIssueStaffPass({
@@ -69,19 +71,20 @@ export async function POST(
         rotate: true,
       });
       if (input.notify && recipient) {
-        const delivery = await sendPassEmail({
+        const result = await sendPassEmail({
           to: recipient,
           visitorName: visit.visitorName,
           organizationName,
           dateLabel,
           passUrl,
         }).catch(() => ({ status: "failed" as const }));
+        delivery = result.status;
         await writeNotification({
           organizationId,
           visitId: id,
           recipientMasked: maskEmail(recipient),
           template: "visitor_pass",
-          status: delivery.status,
+          status: result.status,
         }).catch(() => undefined);
       }
 
@@ -92,7 +95,7 @@ export async function POST(
         eventType: "pass_reissued",
       });
 
-      return NextResponse.json({ mode: "pass", passToken, passUrl });
+      return NextResponse.json({ mode: "pass", passToken, passUrl, delivery });
     }
 
     // Enlace de registro: se rota el token y se reabre el formulario para que
@@ -119,21 +122,39 @@ export async function POST(
 
     const invitationUrl = `${appUrl()}/visit/${invitationToken}`;
     if (input.notify && recipient) {
-      const delivery = await sendInvitationEmail({
+      const result = await sendInvitationEmail({
         to: recipient,
         visitorName: visit.visitorName,
         hostName: visit.hostName,
         organizationName,
         locationName: visit.location,
+        internalPlace: visit.internalPlace,
+        meetingUrl: visit.meetingUrl,
         dateLabel,
         invitationUrl,
+        calendar: visitCalendarEvent({
+          id: visit.id,
+          title: `${visit.hostName} te espera en ${organizationName}`,
+          startsAt: visit.startsAt,
+          endsAt: visit.endsAt,
+          organizationName,
+          locationName: visit.location,
+          locationAddress: visit.locationAddress,
+          internalPlace: visit.internalPlace,
+          meetingUrl: visit.meetingUrl,
+          purpose: visit.purpose,
+          invitationUrl,
+          organizerName: visit.hostName,
+          organizerEmail: visit.hostEmail,
+        }),
       }).catch(() => ({ status: "failed" as const }));
+      delivery = result.status;
       await writeNotification({
         organizationId,
         visitId: id,
         recipientMasked: maskEmail(recipient),
         template: "visitor_invitation",
-        status: delivery.status,
+        status: result.status,
       }).catch(() => undefined);
     }
 
@@ -148,6 +169,7 @@ export async function POST(
       mode: "invitation",
       invitationToken,
       invitationUrl,
+      delivery,
     });
   } catch (error) {
     if (error instanceof z.ZodError)

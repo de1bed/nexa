@@ -4,6 +4,30 @@ import { z } from "zod";
 
 const optionalText = (max: number) => z.string().trim().max(max).optional();
 
+/** Acepta un enlace con o sin https y lo deja listo para guardar. */
+export function normalizeMeetingUrl(value: string | undefined): string | undefined {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return undefined;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const url = new URL(withScheme);
+  if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+  return url.toString();
+}
+
+const optionalMeetingUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .refine((value) => {
+    if (!value) return true;
+    try {
+      return Boolean(normalizeMeetingUrl(value));
+    } catch {
+      return false;
+    }
+  }, "El enlace de la junta no es válido");
+
 export const invitationSchema = z
   .object({
     visitorName: z.string().trim().max(120),
@@ -11,6 +35,8 @@ export const invitationSchema = z
     phone: z.string().trim().max(30),
     company: z.string().trim().max(120),
     locationId: z.string().min(1, "Elige una ubicación"),
+    internalPlace: optionalText(160),
+    meetingUrl: optionalMeetingUrl,
     hostId: optionalText(80),
     date: z.string().min(1, "Elige una fecha"),
     startTime: z.string().min(1),

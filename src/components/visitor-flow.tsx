@@ -17,6 +17,7 @@ import {
   BadgeCheck,
   Building2,
   CalendarClock,
+  Link2,
   Check,
   ChevronRight,
   Clock3,
@@ -31,6 +32,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { AddToCalendar } from "./add-to-calendar";
+import { visitCalendarEvent } from "@/lib/calendar";
 import { Button, Callout, Field, cn, fieldClass } from "./ui";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./i18n-provider";
@@ -87,6 +90,8 @@ type Invitation = {
   organizationName: string;
   locationName: string;
   locationAddress: string;
+  internalPlace: string;
+  meetingUrl: string;
   hostName: string;
   startsAt: string;
   endsAt: string;
@@ -147,6 +152,7 @@ export function VisitorFlow({ token }: { token: string }) {
   const [capturing, setCapturing] = useState<CaptureTarget | null>(null);
   const [consent, setConsent] = useState(false);
   const [passToken, setPassToken] = useState("");
+  const [invitationUrl, setInvitationUrl] = useState("");
   const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
 
   const invitation: Invitation | null = useMemo(() => {
@@ -167,6 +173,8 @@ export function VisitorFlow({ token }: { token: string }) {
       organizationName: showcaseOrganization.name,
       locationName: showcaseVisit.location,
       locationAddress: showcaseVisit.locationAddress ?? "",
+      internalPlace: showcaseVisit.internalPlace ?? "",
+      meetingUrl: showcaseVisit.meetingUrl ?? "",
       hostName: showcaseVisit.hostName,
       startsAt: showcaseVisit.startsAt,
       endsAt: showcaseVisit.endsAt,
@@ -187,6 +195,10 @@ export function VisitorFlow({ token }: { token: string }) {
   const hasIdentityPhotos = Boolean(files.front || files.back);
   const path = registrationPath(flow, hasIdentityPhotos);
   const totalSteps = Math.max(1, path.length);
+
+  useEffect(() => {
+    setInvitationUrl(`${window.location.origin}/visit/${token}`);
+  }, [token]);
 
   useEffect(() => {
     if (!live) return;
@@ -211,6 +223,8 @@ export function VisitorFlow({ token }: { token: string }) {
           organizationName: String(row.organization_name ?? ""),
           locationName: String(row.location_name ?? ""),
           locationAddress: String(row.location_address ?? ""),
+          internalPlace: String(row.internal_place ?? ""),
+          meetingUrl: String(row.meeting_url ?? ""),
           hostName: String(row.host_name ?? ""),
           startsAt: String(row.starts_at ?? ""),
           endsAt: String(row.ends_at ?? ""),
@@ -538,6 +552,21 @@ export function VisitorFlow({ token }: { token: string }) {
               value={invitation.locationName}
               hint={invitation.locationAddress}
             />
+            {invitation.internalPlace && (
+              <SummaryRow
+                icon={Building2}
+                label={t("visitor.internalPlace")}
+                value={invitation.internalPlace}
+              />
+            )}
+            {invitation.meetingUrl && (
+              <SummaryRow
+                icon={Link2}
+                label={t("visitor.meetingLink")}
+                value={t("visitor.openMeeting")}
+                href={invitation.meetingUrl}
+              />
+            )}
             <SummaryRow icon={FileCheck2} label={t("visitor.purpose")} value={invitation.purpose} />
             {invitation.accessRequirements && (
               <SummaryRow
@@ -547,6 +576,27 @@ export function VisitorFlow({ token }: { token: string }) {
               />
             )}
           </div>
+
+          {invitation && (
+            <div className="mt-6 text-left">
+              <AddToCalendar
+                event={visitCalendarEvent({
+                  id: invitation.visitId,
+                  title: `${invitation.hostName} te espera en ${invitation.organizationName}`,
+                  startsAt: invitation.startsAt,
+                  endsAt: invitation.endsAt,
+                  organizationName: invitation.organizationName,
+                  locationName: invitation.locationName,
+                  locationAddress: invitation.locationAddress,
+                  internalPlace: invitation.internalPlace,
+                  meetingUrl: invitation.meetingUrl,
+                  purpose: invitation.purpose,
+                  invitationUrl,
+                  organizerName: invitation.hostName,
+                })}
+              />
+            </div>
+          )}
 
           <div className="mt-7 space-y-4">
             <Button
@@ -1077,6 +1127,8 @@ export function VisitorFlow({ token }: { token: string }) {
                 }).expires_at
               }
               accessRequirements={invitation.accessRequirements || undefined}
+              internalPlace={invitation.internalPlace || undefined}
+              meetingUrl={invitation.meetingUrl || undefined}
             />
           </div>
 
@@ -1103,9 +1155,11 @@ export function VisitorFlow({ token }: { token: string }) {
               {t("visitor.openPass")}
               <ChevronRight size={18} />
             </Link>
-            <p className="mx-auto max-w-xs text-xs leading-5 text-slate-400">
-              {t("visitor.emailAlso")}
-            </p>
+            {(value("email") || invitation.visitorEmail) && (
+              <p className="mx-auto max-w-xs text-xs leading-5 text-slate-400">
+                {t("visitor.emailAlso")}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -1424,11 +1478,13 @@ function SummaryRow({
   label,
   value,
   hint,
+  href,
 }: {
   icon: typeof MapPin;
   label: string;
   value: string;
   hint?: string;
+  href?: string;
 }) {
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4">
@@ -1439,7 +1495,18 @@ function SummaryRow({
         <p className="text-[11px] uppercase tracking-wide text-slate-400">
           {label}
         </p>
-        <p className="mt-0.5 text-sm font-semibold leading-5">{value}</p>
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-0.5 block break-all text-sm font-semibold leading-5 text-[#0d9d99] underline"
+          >
+            {value}
+          </a>
+        ) : (
+          <p className="mt-0.5 text-sm font-semibold leading-5">{value}</p>
+        )}
         {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
       </div>
     </div>

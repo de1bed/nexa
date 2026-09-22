@@ -22,10 +22,14 @@ import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, Card, Field, cn, fieldClass } from "./ui";
 import { CopyField, ShareButton } from "./ui-client";
-import { invitationSchema } from "@/lib/schemas";
+import { invitationSchema, normalizeMeetingUrl } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
 import { visitPurposeMessageKey } from "@/lib/i18n";
+import { parseVisitorFlow } from "@/lib/visitor-flow";
 import { useI18n } from "./i18n-provider";
+import { InvitationPreview } from "./invitation-preview";
+import { AddToCalendar } from "./add-to-calendar";
+import { visitCalendarEvent } from "@/lib/calendar";
 
 /** Una vía de envío. Solo se muestra si la instalación la tiene configurada. */
 function ChannelOption({
@@ -105,8 +109,16 @@ function addMinutes(time: string, minutes: number) {
 
 export function InvitationForm() {
   const { t, intl } = useI18n();
-  const { locations, hosts, viewer, channels, createInvitation, live } =
-    useWorkspace();
+  const {
+    locations,
+    hosts,
+    viewer,
+    channels,
+    createInvitation,
+    live,
+    settings,
+    organization,
+  } = useWorkspace();
   const [created, setCreated] = useState<{ visit: Visit; url: string } | null>(
     null,
   );
@@ -118,6 +130,8 @@ export function InvitationForm() {
     phone: "",
     company: "",
     locationId: "",
+    internalPlace: "",
+    meetingUrl: "",
     hostId: "",
     date: todayPlus(1),
     startTime: "10:00",
@@ -176,6 +190,8 @@ export function InvitationForm() {
         phone: payload.phone,
         company: payload.company,
         locationId: activeLocation,
+        internalPlace: payload.internalPlace || undefined,
+        meetingUrl: normalizeMeetingUrl(payload.meetingUrl),
         hostId: canDelegate ? payload.hostId || viewer.id : undefined,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
@@ -186,11 +202,17 @@ export function InvitationForm() {
         sendWhatsApp: payload.sendWhatsApp,
       });
       setCreated({ visit: result.visit, url: result.invitationUrl });
-      toast.success(
-        payload.sendEmail || payload.sendWhatsApp
-          ? t("invite.createdSent")
-          : t("invite.created"),
-      );
+      if (payload.sendEmail && result.emailDelivery === "sent")
+        toast.success(t("invite.createdSent"));
+      else if (
+        payload.sendEmail &&
+        (result.emailDelivery === "failed" || result.emailDelivery === "development")
+      )
+        toast.error(t("visits.emailNotDelivered"));
+      else
+        toast.success(
+          payload.sendWhatsApp ? t("invite.createdSent") : t("invite.created"),
+        );
     } catch (reason) {
       toast.error(
         reason instanceof Error
@@ -222,6 +244,27 @@ export function InvitationForm() {
 
           <div className="mt-6 text-left">
             <CopyField value={created.url} />
+          </div>
+
+          <div className="mt-4 text-left">
+            <AddToCalendar
+              event={visitCalendarEvent({
+                id: created.visit.id,
+                title: created.visit.inviteeName
+                  ? `Visita de ${created.visit.inviteeName} · ${organization.name}`
+                  : `Visita · ${organization.name}`,
+                startsAt: created.visit.startsAt,
+                endsAt: created.visit.endsAt,
+                organizationName: organization.name,
+                locationName: created.visit.location,
+                locationAddress: created.visit.locationAddress,
+                internalPlace: created.visit.internalPlace,
+                meetingUrl: created.visit.meetingUrl,
+                purpose: created.visit.purpose,
+                invitationUrl: created.url,
+                organizerName: created.visit.hostName,
+              })}
+            />
           </div>
 
           <div className="mt-4">
@@ -276,9 +319,49 @@ export function InvitationForm() {
     );
 
   const noLocations = locations.length === 0;
+  const hostName = canDelegate
+    ? (hosts.find((host) => host.id === (form.hostId || viewer.id))?.name ??
+      viewer.name)
+    : viewer.name;
+  const location = locations.find((item) => item.id === activeLocation);
+  const whenLabel = form.date
+    ? `${formatDateLong(form.date, intl)} · ${form.startTime}–${form.endTime}`
+    : "";
+  let meetingUrl: string | undefined;
+  if (form.meetingUrl.trim()) {
+    try {
+      meetingUrl = normalizeMeetingUrl(form.meetingUrl);
+    } catch {
+      meetingUrl = undefined;
+    }
+  }
+  const preview = (
+    <InvitationPreview
+      variant="invitation"
+      flow={parseVisitorFlow(
+        settings.visitorFlow,
+        settings.requireIdentification,
+      )}
+      organizationName={organization.name}
+      hostName={hostName}
+      locationName={location?.name}
+      locationAddress={location?.address}
+      whenLabel={whenLabel}
+      purpose={t(visitPurposeMessageKey(form.purpose)) || form.purpose}
+      accessRequirements={form.accessRequirements}
+      internalPlace={form.internalPlace}
+      meetingUrl={meetingUrl}
+      visitorName={form.visitorName}
+      email={form.email}
+      phone={form.phone}
+      company={form.company}
+      privacyNotice={settings.privacyNotice}
+      retentionDays={settings.documentRetentionDays}
+    />
+  );
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-6xl">
       <Link
         href="/app/visits"
         className="mb-5 inline-flex items-center gap-2 text-sm text-slate-500"
@@ -307,6 +390,7 @@ export function InvitationForm() {
         </Callout>
       )}
 
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <form onSubmit={submit} className="space-y-5">
         <Card className="p-5 sm:p-6">
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -398,6 +482,35 @@ export function InvitationForm() {
                   </option>
                 ))}
               </select>
+            </Field>
+
+            <Field
+              label={t("invite.internalPlace")}
+              optional
+              hint={t("invite.internalPlaceHint")}
+            >
+              <input
+                className={fieldClass}
+                placeholder={t("invite.internalPlacePlaceholder")}
+                value={form.internalPlace}
+                onChange={(event) => update("internalPlace", event.target.value)}
+              />
+            </Field>
+
+            <Field
+              label={t("invite.meetingLink")}
+              optional
+              hint={t("invite.meetingLinkHint")}
+              error={errors.meetingUrl}
+            >
+              <input
+                type="url"
+                inputMode="url"
+                className={fieldClass}
+                placeholder={t("invite.meetingLinkPlaceholder")}
+                value={form.meetingUrl}
+                onChange={(event) => update("meetingUrl", event.target.value)}
+              />
             </Field>
 
             {canDelegate && hosts.length > 0 && (
@@ -564,6 +677,8 @@ export function InvitationForm() {
           </div>
         </Card>
 
+        <div className="lg:hidden">{preview}</div>
+
         {/* En móvil la acción queda siempre al alcance del pulgar, sobre un
             fondo sólido para que no se lea el formulario por detrás. */}
         <div className="sticky bottom-[calc(84px+env(safe-area-inset-bottom))] z-10 -mx-4 bg-gradient-to-t from-[#f4f7fb] via-[#f4f7fb] to-transparent px-4 pb-2 pt-4 lg:static lg:mx-0 lg:bg-none lg:p-0">
@@ -590,6 +705,8 @@ export function InvitationForm() {
           </Button>
         </div>
       </form>
+      <div className="hidden lg:sticky lg:top-6 lg:block">{preview}</div>
+      </div>
     </div>
   );
 }

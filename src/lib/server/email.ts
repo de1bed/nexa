@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { buildIcs, type CalendarEvent } from "@/lib/calendar";
 import { escapeHtml } from "@/lib/security";
 
 /**
@@ -67,6 +68,7 @@ async function deliver(input: {
   logLabel: string;
   logPayload: Record<string, unknown>;
   idempotencyKey?: string;
+  ics?: { filename: string; content: string; method: "REQUEST" | "PUBLISH" };
 }): Promise<DeliveryResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -85,6 +87,15 @@ async function deliver(input: {
       to: input.to,
       subject: input.subject,
       html: input.html,
+      attachments: input.ics
+        ? [
+            {
+              filename: input.ics.filename,
+              content: Buffer.from(input.ics.content, "utf8"),
+              contentType: `text/calendar; charset=utf-8; method=${input.ics.method}`,
+            },
+          ]
+        : undefined,
     },
     input.idempotencyKey
       ? { idempotencyKey: input.idempotencyKey }
@@ -101,10 +112,17 @@ export async function sendInvitationEmail(input: {
   organizationName: string;
   dateLabel: string;
   locationName: string;
+  internalPlace?: string;
+  meetingUrl?: string;
   invitationUrl: string;
+  calendar?: CalendarEvent;
 }): Promise<DeliveryResult> {
   const greeting = input.visitorName
     ? `Hola ${escapeHtml(input.visitorName)}: `
+    : "";
+  const place = [input.locationName, input.internalPlace].filter(Boolean).join(" · ");
+  const meeting = input.meetingUrl
+    ? `<br><a href="${escapeHtml(input.meetingUrl)}">Junta en línea</a>`
     : "";
   return deliver({
     to: input.to,
@@ -114,12 +132,58 @@ export async function sendInvitationEmail(input: {
     html: layout({
       preheader: `Completa tu registro para la visita del ${input.dateLabel}.`,
       title: `${escapeHtml(input.hostName)} te está esperando`,
-      body: `${greeting}completa tu registro desde el teléfono en menos de dos minutos y recibirás un pase QR para entrar sin filas.<br><br><b>${escapeHtml(input.dateLabel)}</b><br>${escapeHtml(input.organizationName)} · ${escapeHtml(input.locationName)}`,
+      body: `${greeting}completa tu registro desde el teléfono en menos de dos minutos y recibirás un pase QR para entrar sin filas.<br><br><b>${escapeHtml(input.dateLabel)}</b><br>${escapeHtml(input.organizationName)} · ${escapeHtml(place)}${meeting}`,
       ctaLabel: "Completar mi registro",
       ctaUrl: input.invitationUrl,
       footnote:
-        "El enlace es personal, vence después de la visita y no debe compartirse.",
+        "El enlace es personal, vence después de la visita y no debe compartirse. El archivo adjunto agrega la visita a tu calendario.",
     }),
+    ics: input.calendar
+      ? {
+          filename: "visita-nexa.ics",
+          content: buildIcs(
+            { ...input.calendar, attendeeEmail: input.to, attendeeName: input.visitorName },
+            "REQUEST",
+          ),
+          method: "REQUEST",
+        }
+      : undefined,
+  });
+}
+
+export async function sendHostCalendarEmail(input: {
+  to: string;
+  hostName: string;
+  visitorName: string;
+  organizationName: string;
+  dateLabel: string;
+  locationName: string;
+  calendar: CalendarEvent;
+}): Promise<DeliveryResult> {
+  const who = input.visitorName ? escapeHtml(input.visitorName) : "un visitante";
+  return deliver({
+    to: input.to,
+    subject: `Visita en tu calendario · ${input.organizationName}`,
+    logLabel: "calendario del anfitrión",
+    logPayload: { visitor: input.visitorName },
+    html: layout({
+      preheader: `La visita del ${input.dateLabel} puede agregarse a tu calendario.`,
+      title: "Esta visita quedó lista para tu agenda",
+      body: `Hola ${escapeHtml(input.hostName)}: la visita de <b>${who}</b> el <b>${escapeHtml(input.dateLabel)}</b> en ${escapeHtml(input.locationName)} va adjunta como invitación de calendario. Acéptala y se agrega sola en Outlook, Apple o Gmail.`,
+      footer: "Recibes este mensaje porque creaste una visita en NEXA VISIT.",
+    }),
+    ics: {
+      filename: "visita-nexa.ics",
+      content: buildIcs(
+        {
+          ...input.calendar,
+          attendeeEmail: input.to,
+          attendeeName: input.hostName,
+        },
+        "REQUEST",
+      ),
+      method: "REQUEST",
+    },
   });
 }
 

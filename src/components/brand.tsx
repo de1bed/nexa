@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ShieldCheck } from "lucide-react";
 import { cn } from "./ui";
 
 export function Brand({
@@ -23,12 +22,13 @@ export function Brand({
         className,
       )}
     >
-      <span className="grid size-9 place-items-center rounded-xl bg-[#10cfc9] text-[#043b39]">
-        <ShieldCheck size={19} />
-      </span>
-      <span className="text-[13px] font-semibold tracking-[.16em]">
-        NEXA VISIT
-      </span>
+      <img
+        src={dark ? "/brand/logo-on-dark.png" : "/brand/logo.png"}
+        alt="NEXA VISIT"
+        width={810}
+        height={324}
+        className="h-12 w-auto"
+      />
     </Link>
   );
 }

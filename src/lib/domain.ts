@@ -34,6 +34,10 @@ export type Visit = {
   locationId?: string;
   location: string;
   locationAddress?: string;
+  /** Sala, piso o centro de juntas dentro de la sede. */
+  internalPlace?: string;
+  /** Enlace de la junta en línea, si la visita también ocurre ahí. */
+  meetingUrl?: string;
   startsAt: string;
   endsAt: string;
   checkedInAt?: string;

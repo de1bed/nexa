@@ -10,7 +10,7 @@ import { documentFlags } from "@/lib/visitor-flow";
 export const visitSelect =
   "id,organization_id,location_id,host_id,status,origin,purpose,visitor_company," +
   "starts_at,ends_at,checked_in_at,checked_out_at,denial_reason,vehicle_plate," +
-  "internal_notes,visitor_notes,access_requirements,consented_at," +
+  "internal_notes,visitor_notes,access_requirements,internal_place,meeting_url,consented_at," +
   "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
   "host:profiles!visits_host_id_fkey(full_name,email)," +
   "location:locations(name,address)," +
@@ -84,6 +84,8 @@ export function mapVisit(row: Row): Visit {
     notes: (row.internal_notes as string) ?? undefined,
     visitorNotes: (row.visitor_notes as string) ?? undefined,
     accessRequirements: (row.access_requirements as string) ?? undefined,
+    internalPlace: (row.internal_place as string) ?? undefined,
+    meetingUrl: (row.meeting_url as string) ?? undefined,
     vehiclePlate: (row.vehicle_plate as string) ?? undefined,
     documentType: visitor?.document_type ?? undefined,
     documentMasked: visitor?.document_number_masked ?? undefined,

@@ -46,6 +46,7 @@ import {
   type OrganizationSettings,
   type TeamMember,
 } from "@/lib/domain";
+import { InvitationPreview } from "./invitation-preview";
 import {
   defaultVisitorFlow,
   parseVisitorFlow,
@@ -1180,7 +1181,8 @@ export function SettingsPage() {
           <p className="text-sm text-slate-500">{t("settings.loading")}</p>
         </Card>
       ) : (
-        <div className="max-w-3xl space-y-5">
+        <div className="max-w-6xl space-y-5">
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <IdCard size={18} />
@@ -1217,7 +1219,21 @@ export function SettingsPage() {
               ))}
             </div>
           </Card>
+          <div className="lg:sticky lg:top-6">
+            <InvitationPreview
+              variant="template"
+              flow={parseVisitorFlow(
+                settings.visitorFlow,
+                settings.requireIdentification,
+              )}
+              organizationName={organization.name}
+              privacyNotice={settings.privacyNotice}
+              retentionDays={settings.documentRetentionDays}
+            />
+          </div>
+          </div>
 
+          <div className="max-w-3xl space-y-5">
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <Shield size={18} />
@@ -1357,6 +1373,7 @@ export function SettingsPage() {
               {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
               {t("common.save")}
             </Button>
+          </div>
           </div>
         </div>
       )}

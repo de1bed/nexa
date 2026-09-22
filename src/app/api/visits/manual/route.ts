@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
-import { writeAudit } from "@/lib/server/audit";
+import { writeAudit, writeNotification } from "@/lib/server/audit";
+import { sendHostArrivalEmail } from "@/lib/server/email";
+import { maskEmail } from "@/lib/security";
 import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import {
@@ -169,9 +171,31 @@ export async function POST(request: Request) {
       .select(visitSelect)
       .eq("id", created.id)
       .maybeSingle();
+    const visit = full
+      ? mapVisit(full as unknown as Record<string, unknown>)
+      : null;
+
+    if (visit?.hostEmail) {
+      const delivery = await sendHostArrivalEmail({
+        to: visit.hostEmail,
+        hostName: visit.hostName,
+        visitorName: visit.visitorName,
+        locationName: visit.location,
+        timeLabel: new Intl.DateTimeFormat("es-MX", {
+          timeStyle: "short",
+        }).format(now),
+      }).catch(() => ({ status: "failed" as const }));
+      await writeNotification({
+        organizationId,
+        visitId: created.id,
+        recipientMasked: maskEmail(visit.hostEmail),
+        template: "host_arrival",
+        status: delivery.status,
+      }).catch(() => undefined);
+    }
 
     return NextResponse.json(
-      { visit: full ? mapVisit(full as unknown as Record<string, unknown>) : null },
+      { visit },
       { status: 201 },
     );
   } catch (error) {

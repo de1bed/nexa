@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { CalendarClock, Hourglass, MapPin, ShieldCheck, UserRound } from "lucide-react";
+import { Building2, CalendarClock, Hourglass, Link2, MapPin, ShieldCheck, UserRound } from "lucide-react";
 import { cn } from "../ui";
 import { RemainingUntil } from "../ui-client";
 import { useI18n } from "../i18n-provider";
@@ -22,6 +22,8 @@ export function PassCard({
   expiresAt,
   state = "valid",
   accessRequirements,
+  internalPlace,
+  meetingUrl,
 }: {
   token: string;
   visitorName: string;
@@ -32,6 +34,8 @@ export function PassCard({
   expiresAt?: string;
   state?: "valid" | "used" | "expired" | "revoked";
   accessRequirements?: string;
+  internalPlace?: string;
+  meetingUrl?: string;
 }) {
   const { t, formatFullDate, formatDateTime } = useI18n();
   const [qr, setQr] = useState("");
@@ -122,6 +126,17 @@ export function PassCard({
       <div className="space-y-3.5 px-6 pb-7">
         <Row icon={UserRound} label={t("pass.host")} value={hostName} />
         <Row icon={MapPin} label={t("pass.location")} value={location} />
+        {internalPlace && (
+          <Row icon={Building2} label={t("visitor.internalPlace")} value={internalPlace} />
+        )}
+        {meetingUrl && (
+          <Row
+            icon={Link2}
+            label={t("visitor.meetingLink")}
+            value={t("visitor.openMeeting")}
+            href={meetingUrl}
+          />
+        )}
         <Row icon={CalendarClock} label={t("pass.schedule")} value={dateLabel} />
         {expiresAt && (
           <div className="flex items-start gap-3">
@@ -164,10 +179,12 @@ function Row({
   icon: Icon,
   label,
   value,
+  href,
 }: {
   icon: typeof UserRound;
   label: string;
   value: string;
+  href?: string;
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -178,9 +195,20 @@ function Row({
         <p className="text-[11px] uppercase tracking-wide text-slate-400">
           {label}
         </p>
-        <p className="mt-0.5 text-sm font-medium leading-5 text-[#071426]">
-          {value}
-        </p>
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-0.5 block break-all text-sm font-medium leading-5 text-[#0d9d99] underline"
+          >
+            {value}
+          </a>
+        ) : (
+          <p className="mt-0.5 text-sm font-medium leading-5 text-[#071426]">
+            {value}
+          </p>
+        )}
       </div>
     </div>
   );

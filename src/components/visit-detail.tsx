@@ -33,6 +33,8 @@ import {
 } from "./ui";
 import { LiveDuration, Sheet, ShareButton } from "./ui-client";
 import { StaffPassPanel } from "./staff-pass";
+import { AddToCalendar } from "./add-to-calendar";
+import { visitCalendarEvent } from "@/lib/calendar";
 import { timeInsideMs } from "@/lib/domain";
 import { documentTypeMessageKey, visitPurposeMessageKey } from "@/lib/i18n";
 import { useI18n } from "./i18n-provider";
@@ -87,9 +89,12 @@ export function VisitDetail({ id }: { id: string }) {
   async function link(kind: "invitation" | "pass") {
     setBusy(kind);
     try {
-      const url = await resendLink(id, kind, false);
+      const { url, delivery } = await resendLink(id, kind, true);
       if (!url) throw new Error(t("visits.linkFail"));
       setShare({ url, kind });
+      if (delivery === "sent") toast.success(t("visits.alsoEmailed"));
+      else if (delivery === "failed" || delivery === "development")
+        toast.error(t("visits.emailNotDelivered"));
       if (kind === "pass") setPassNonce((value) => value + 1);
     } catch (reason) {
       toast.error(
@@ -217,6 +222,8 @@ export function VisitDetail({ id }: { id: string }) {
           location={visit.location}
           startsAt={visit.startsAt}
           endsAt={visit.endsAt}
+          internalPlace={visit.internalPlace}
+          meetingUrl={visit.meetingUrl}
         />
       )}
 
@@ -235,6 +242,21 @@ export function VisitDetail({ id }: { id: string }) {
               value={visit.location}
               hint={visit.locationAddress}
             />
+            {visit.internalPlace && (
+              <Detail
+                icon={MapPin}
+                label={t("invite.internalPlace")}
+                value={visit.internalPlace}
+              />
+            )}
+            {visit.meetingUrl && (
+              <Detail
+                icon={Link2}
+                label={t("invite.meetingLink")}
+                value={t("visitor.openMeeting")}
+                href={visit.meetingUrl}
+              />
+            )}
             <Detail icon={UserRound} label={t("visits.host")} value={visit.hostName} />
             <Detail
               icon={ShieldCheck}
@@ -282,6 +304,27 @@ export function VisitDetail({ id }: { id: string }) {
               <b>{t("visits.accessReq")}</b> {visit.accessRequirements}
             </Callout>
           )}
+
+          <div className="mt-5">
+            <AddToCalendar
+              event={visitCalendarEvent({
+                id: visit.id,
+                title: visit.visitorName
+                  ? `Visita de ${visit.visitorName} · ${organization.name}`
+                  : `Visita · ${organization.name}`,
+                startsAt: visit.startsAt,
+                endsAt: visit.endsAt,
+                organizationName: organization.name,
+                locationName: visit.location,
+                locationAddress: visit.locationAddress,
+                internalPlace: visit.internalPlace,
+                meetingUrl: visit.meetingUrl,
+                purpose: visit.purpose,
+                organizerName: visit.hostName,
+                organizerEmail: visit.hostEmail,
+              })}
+            />
+          </div>
 
           {live &&
             (viewer.role !== "host" || visit.hostId === viewer.id) &&
@@ -507,11 +550,13 @@ function Detail({
   label,
   value,
   hint,
+  href,
 }: {
   icon: typeof MapPin;
   label: string;
   value: string;
   hint?: string;
+  href?: string;
 }) {
   return (
     <div className="flex gap-3">
@@ -520,7 +565,18 @@ function Detail({
       </span>
       <div className="min-w-0">
         <p className="text-xs text-slate-500">{label}</p>
-        <p className="mt-0.5 text-sm font-medium leading-5">{value}</p>
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-0.5 block break-all text-sm font-medium leading-5 text-[#0d9d99] underline"
+          >
+            {value}
+          </a>
+        ) : (
+          <p className="mt-0.5 text-sm font-medium leading-5">{value}</p>
+        )}
         {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
       </div>
     </div>
