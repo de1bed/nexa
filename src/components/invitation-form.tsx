@@ -236,10 +236,13 @@ export function InvitationForm() {
             {t("invite.ready")}
           </h1>
           <p className="mx-auto mt-2 max-w-sm text-[15px] leading-6 text-slate-500">
-            {created.visit.inviteeName
-              ? t("invite.guestWill", { name: created.visit.inviteeName })
-              : t("invite.guestWillAnon")}{" "}
-            {t("invite.guestWillRest")}
+            {!live
+              ? t("invite.demoSame")
+              : `${
+                  created.visit.inviteeName
+                    ? t("invite.guestWill", { name: created.visit.inviteeName })
+                    : t("invite.guestWillAnon")
+                } ${t("invite.guestWillRest")}`}
           </p>
 
           <div className="mt-6 text-left">

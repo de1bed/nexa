@@ -49,16 +49,14 @@ import { WalletButtons } from "./visitor/wallet-buttons";
 import { isLiveMode } from "@/lib/config";
 import { documentTypes } from "@/lib/domain";
 import { passValidityWindow } from "@/lib/pass-window";
-import { randomToken } from "@/lib/security";
+import { DEMO_PASS_TOKEN } from "@/lib/demo-public";
 import { showcaseOrganization, showcaseSettings } from "@/lib/demo-data";
 import {
   getShowcaseServerSnapshot,
   getShowcaseSnapshot,
-  patchShowcaseVisit,
   subscribeShowcase,
 } from "@/lib/showcase-store";
 import {
-  documentFlags,
   extrasShowsNotes,
   extrasShowsVehicle,
   firstRegistrationStep,
@@ -343,12 +341,6 @@ export function VisitorFlow({
     setError("");
 
     try {
-      const flags = documentFlags([
-        files.front ? "identity_front" : null,
-        files.back ? "identity_back" : null,
-        ...vehiclePhotos.map(() => "vehicle_plate"),
-        ...attachmentPhotos.map(() => "attachment"),
-      ]);
       if (live) {
         const form = new FormData();
         const fields: Array<[string, string]> = [
@@ -396,29 +388,7 @@ export function VisitorFlow({
         setWallet(payload.wallet);
         window.history.replaceState(null, "", `/pass/${payload.qrToken}`);
       } else {
-        const generated = randomToken(24);
-        const documentNumber = value("documentNumber");
-        patchShowcaseVisit(
-          invitation!.visitId,
-          {
-            visitorName: fullName,
-            email: value("email"),
-            phone: value("phone"),
-            company: value("company"),
-            documentType: value("documentType"),
-            documentMasked: documentNumber
-              ? `•••• ${documentNumber.slice(-4)}`
-              : undefined,
-            vehiclePlate: value("vehiclePlate") || undefined,
-            visitorNotes: value("visitorNotes") || undefined,
-            status: "pre_registered",
-            ...flags,
-            consentedAt: consent ? new Date().toISOString() : undefined,
-            qrToken: generated,
-          },
-          { type: "pre_registered", actor: fullName },
-        );
-        setPassToken(generated);
+        setPassToken(DEMO_PASS_TOKEN);
       }
       go("done");
     } catch (reason) {

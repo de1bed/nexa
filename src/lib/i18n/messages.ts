@@ -764,6 +764,8 @@ export const es = {
     whatsapp: "Enviar por WhatsApp",
     create: "Crear invitación",
     ready: "Invitación lista",
+    demoSame:
+      "En la demostración el enlace y el QR son siempre los mismos. No se guarda una visita nueva.",
     linkLabel: "Enlace de invitación",
     eyebrow: "Nueva visita",
     heading: "Crear invitación",
@@ -1741,6 +1743,8 @@ export const en: DeepStringify<typeof es> = {
     whatsapp: "Send by WhatsApp",
     create: "Create invitation",
     ready: "Invitation ready",
+    demoSame:
+      "In the demo the link and the QR are always the same. A new visit is not saved.",
     linkLabel: "Invitation link",
     eyebrow: "New visit",
     heading: "Create invitation",

@@ -24,7 +24,7 @@ import {
   subscribeShowcase,
   upsertShowcaseVisit,
 } from "@/lib/showcase-store";
-import { randomToken } from "@/lib/security";
+import { DEMO_INVITE_TOKEN, DEMO_PASS_TOKEN } from "@/lib/demo-public";
 import type {
   AccessEventType,
   Location,
@@ -287,62 +287,18 @@ export function WorkspaceProvider({
         };
       }
 
-      const location =
-        showcaseLocations.find((item) => item.id === draft.locationId) ??
-        showcaseLocations[0];
-      const host =
-        showcaseHosts.find((item) => item.id === (draft.hostId ?? viewer.id)) ??
-        showcaseHosts.find((item) => item.id === viewer.id) ??
-        showcaseHosts[0];
-      const token = randomToken(24);
-
-      const visit: Visit = {
-        id: crypto.randomUUID(),
-        visitorName: draft.visitorName || "Por confirmar",
-        email: draft.email,
-        phone: draft.phone || undefined,
-        company: draft.company || "",
-        hostId: host?.id ?? viewer.id,
-        hostName: host?.name ?? viewer.name,
-        hostEmail: host?.email,
-        locationId: location.id,
-        location: location.name,
-        locationAddress: location.address,
-        internalPlace: draft.internalPlace,
-        meetingUrl: draft.meetingUrl,
-        startsAt: draft.startsAt,
-        endsAt: draft.endsAt,
-        purpose: draft.purpose,
-        status: "invited",
-        origin: "host_invitation",
-        notes: draft.notes,
-        accessRequirements: draft.accessRequirements,
-        documentCaptured: false,
-        identityCaptured: false,
-        vehiclePhotosCaptured: false,
-        attachmentsCaptured: false,
-        invitationToken: token,
-        inviteeName: draft.visitorName || undefined,
-        inviteeEmail: draft.email || undefined,
-        inviteePhone: draft.phone || undefined,
-        inviteeCompany: draft.company || undefined,
-      };
-
-      upsertShowcaseVisit(visit, {
-        id: crypto.randomUUID(),
-        visitId: visit.id,
-        type: "invitation_created",
-        at: new Date().toISOString(),
-        actor: visit.hostName,
-      });
+      const visit = loadShowcaseState().visits.find(
+        (item) => item.invitationToken === DEMO_INVITE_TOKEN,
+      );
+      if (!visit) throw new Error("No fue posible abrir la invitación de demostración");
 
       return {
         visit,
-        invitationUrl: `${window.location.origin}/visit/${token}`,
+        invitationUrl: `${window.location.origin}/visit/${DEMO_INVITE_TOKEN}`,
         emailDelivery: "skipped",
       };
     },
-    [live, viewer],
+    [live],
   );
 
   const createManualVisit = useCallback<WorkspaceValue["createManualVisit"]>(
@@ -528,32 +484,19 @@ export function WorkspaceProvider({
         };
       }
 
-      const current = loadShowcaseState().visits.find(
-        (visit) => visit.id === id,
-      );
-      if (!current) return { url: "", delivery: "skipped" };
-
       if (mode === "pass") {
-        const passToken = current.qrToken ?? randomToken(24);
-        patchShowcaseVisit(id, { qrToken: passToken });
         return {
-          url: `${window.location.origin}/pass/${passToken}`,
+          url: `${window.location.origin}/pass/${DEMO_PASS_TOKEN}`,
           delivery: "skipped",
         };
       }
 
-      const token = current.invitationToken ?? randomToken(24);
-      patchShowcaseVisit(
-        id,
-        { invitationToken: token },
-        { type: "invitation_resent", actor: viewer.name },
-      );
       return {
-        url: `${window.location.origin}/visit/${token}`,
+        url: `${window.location.origin}/visit/${DEMO_INVITE_TOKEN}`,
         delivery: "skipped",
       };
     },
-    [live, viewer],
+    [live],
   );
 
   const value = useMemo<WorkspaceValue>(
