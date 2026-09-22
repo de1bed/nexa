@@ -120,8 +120,14 @@ const invalidInvitation = {
   visitorFlow: parseVisitorFlow(undefined, true),
 } as Invitation;
 
-export function VisitorFlow({ token }: { token: string }) {
-  const live = isLiveMode();
+export function VisitorFlow({
+  token,
+  sandbox = false,
+}: {
+  token: string;
+  sandbox?: boolean;
+}) {
+  const live = isLiveMode() && !sandbox;
   const { t, formatFullDate } = useI18n();
 
   const showcaseState = useSyncExternalStore(
@@ -1129,6 +1135,7 @@ export function VisitorFlow({ token }: { token: string }) {
               accessRequirements={invitation.accessRequirements || undefined}
               internalPlace={invitation.internalPlace || undefined}
               meetingUrl={invitation.meetingUrl || undefined}
+              publicQr={!live}
             />
           </div>
 
@@ -1145,6 +1152,7 @@ export function VisitorFlow({ token }: { token: string }) {
               location={invitation.locationName}
               startsAt={invitation.startsAt}
               promptOnMount
+              publicQr={!live}
             />
             <WalletButtons token={passToken} available={wallet} />
 

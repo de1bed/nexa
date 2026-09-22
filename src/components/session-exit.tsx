@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient, isLiveMode } from "@/lib/supabase/client";
+import { clearDemoSession, readDemoCookie } from "@/lib/demo-public";
 import { cn } from "./ui";
 import { useI18n } from "./i18n-provider";
 
@@ -17,6 +18,12 @@ export function SessionExit({
   const { t } = useI18n();
 
   async function exit() {
+    if (readDemoCookie()) {
+      clearDemoSession();
+      router.replace("/demo");
+      router.refresh();
+      return;
+    }
     if (isLiveMode()) {
       try {
         await fetch("/api/session", { method: "DELETE" });

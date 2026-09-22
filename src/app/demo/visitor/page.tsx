@@ -8,7 +8,6 @@ import {
   Smartphone,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
-import { isLiveMode } from "@/lib/config";
 
 export const metadata = { title: "Recorrido del visitante" };
 
@@ -21,8 +20,6 @@ const steps = [
 
 /** Entrada demostrativa para conocer el flujo público sin una invitación real. */
 export default function Page() {
-  const live = isLiveMode();
-
   return (
     <main className="safe-top min-h-screen bg-[#f4f7fb] text-[#071426]">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
@@ -65,14 +62,6 @@ export default function Page() {
               Ver un pase
             </Link>
           </div>
-
-          {live && (
-            <p className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-              Esta plataforma ya opera contra su base de datos: los enlaces
-              demostrativos de arriba solo funcionan en el modo de evaluación.
-              Pide a tu anfitrión una invitación real.
-            </p>
-          )}
 
           <p className="mt-5 flex items-center gap-2 text-xs text-slate-500">
             <ShieldCheck size={15} className="text-[#0d9d99]" />
@@ -120,8 +109,8 @@ export default function Page() {
       <section className="safe-bottom mx-auto max-w-6xl px-5 pb-16">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
           <CheckCircle2 className="mr-2 inline" size={17} />
-          <b>Demostración:</b> usa únicamente datos ficticios. El aviso de
-          privacidad definitivo debe revisarse legalmente antes de producción.
+          <b>Demostración:</b> datos de ejemplo. Lo que llenes se queda en este
+          navegador y no entra a ninguna empresa.
         </div>
       </section>
     </main>

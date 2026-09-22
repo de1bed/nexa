@@ -50,9 +50,15 @@ type Pass = {
   wallet?: { apple?: boolean; google?: boolean };
 };
 
-export function PublicPass({ token }: { token: string }) {
+export function PublicPass({
+  token,
+  sandbox = false,
+}: {
+  token: string;
+  sandbox?: boolean;
+}) {
   const { t } = useI18n();
-  const live = isLiveMode();
+  const live = isLiveMode() && !sandbox;
 
   /* En vitrina el pase refleja en vivo lo que hace el guardia en otra pestaña. */
   const showcaseState = useSyncExternalStore(
@@ -200,6 +206,7 @@ export function PublicPass({ token }: { token: string }) {
         accessRequirements={pass.accessRequirements || undefined}
         internalPlace={pass.internalPlace || undefined}
         meetingUrl={pass.meetingUrl || undefined}
+        publicQr={!live}
       />
 
       <div className="mx-auto mt-6 max-w-sm space-y-4">
@@ -210,6 +217,7 @@ export function PublicPass({ token }: { token: string }) {
           hostName={pass.hostName}
           location={pass.location}
           startsAt={pass.startsAt}
+          publicQr={!live}
           promptOnMount
         />
         <WalletButtons token={token} available={pass.wallet} />

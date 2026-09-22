@@ -163,12 +163,15 @@ export function WorkspaceProvider({
   children,
   viewer,
   organization: initialOrganization,
+  sandbox = false,
 }: {
   children: React.ReactNode;
   viewer: Viewer;
   organization: { id: string; name: string };
+  /** Recorrido de demostración: datos de ejemplo, sin escribir en la base. */
+  sandbox?: boolean;
 }) {
-  const live = isLiveMode();
+  const live = isLiveMode() && !sandbox;
 
   // En vitrina el estado vive en el store local y se comparte entre pestañas.
   const showcaseState = useSyncExternalStore(

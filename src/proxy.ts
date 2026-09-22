@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isLiveMode, supabaseAnonKey, supabaseUrl } from "@/lib/config";
+import { DEMO_COOKIE } from "@/lib/session-constants";
 
 /**
  * Proxy (antes Middleware). Cumple dos funciones:
@@ -59,7 +60,12 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && isProtected(request.nextUrl.pathname)) {
+  const demo = request.cookies.get(DEMO_COOKIE)?.value === "1";
+  const pathname = request.nextUrl.pathname;
+  const demoPortal =
+    demo && (pathname.startsWith("/app") || pathname.startsWith("/guard"));
+
+  if (!user && isProtected(pathname) && !demoPortal) {
     const login = request.nextUrl.clone();
     login.pathname = "/login";
     login.search = `?next=${encodeURIComponent(request.nextUrl.pathname)}`;

@@ -17,7 +17,8 @@ import { AccessCodeStep, accessRequestError } from "./access-code";
 import { ChoosePasswordStep } from "./choose-password";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./i18n-provider";
-import { Button, Callout, Field, fieldClass } from "./ui";
+import { Button, Field, fieldClass } from "./ui";
+import { clearDemoSession } from "@/lib/demo-public";
 import { createClient } from "@/lib/supabase/client";
 import { destinationAfterLogin, isLiveMode, roleHome } from "@/lib/config";
 import { accessEmailSchema, signInSchema } from "@/lib/schemas";
@@ -135,6 +136,7 @@ export function LoginForm() {
   }
 
   async function finishSignIn() {
+    clearDemoSession();
     const next = params.get("next");
     try {
       await createClient().auth.getSession();
@@ -238,10 +240,6 @@ export function LoginForm() {
                       <ArrowRight size={19} className="shrink-0 text-slate-300" />
                     </button>
                   ))}
-
-                  <Callout tone="neutral" className="mt-5">
-                    {t("login.showcaseCallout")}
-                  </Callout>
                 </div>
               ) : (
                 <>

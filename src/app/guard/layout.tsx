@@ -6,6 +6,7 @@ export default async function Layout({ children }: LayoutProps<"/guard">) {
   const context = await requirePortalRole(["superadmin", "admin", "guard"]);
   return (
     <WorkspaceProvider
+      sandbox={!context.live}
       viewer={{ id: context.userId, name: context.displayName, role: context.role }}
       organization={{ id: context.organizationId, name: context.organizationName }}
     >

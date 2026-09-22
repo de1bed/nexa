@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabase } from "./supabase";
 import { isLiveMode, roleHome } from "@/lib/config";
-import { ORG_COOKIE, SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
+import { DEMO_COOKIE, ORG_COOKIE, SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
 import type { MemberRole } from "@/lib/domain";
 
 export { ORG_COOKIE, SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
@@ -129,7 +129,8 @@ function showcaseIdentity(role: MemberRole) {
 export async function requirePortalRole(
   roles: MemberRole[],
 ): Promise<PortalContext> {
-  if (!isLiveMode()) {
+  const demo = (await cookies()).get(DEMO_COOKIE)?.value === "1";
+  if (!isLiveMode() || demo) {
     const stored = (await cookies()).get(SHOWCASE_ROLE_COOKIE)?.value;
     const role = (showcaseRoles as string[]).includes(stored ?? "")
       ? (stored as MemberRole)

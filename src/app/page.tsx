@@ -110,10 +110,10 @@ export default function Home() {
               <ArrowRight size={19} />
             </Link>
             <Link
-              href="/demo/visitor"
+              href={live ? "/demo" : "/demo/visitor"}
               className="inline-flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 font-medium text-[#071426] transition hover:bg-slate-50"
             >
-              {t("landing.visitorTour")}
+              {live ? t("landing.tryDemo") : t("landing.visitorTour")}
             </Link>
           </div>
 

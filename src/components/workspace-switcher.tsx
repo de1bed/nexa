@@ -14,11 +14,29 @@ export function WorkspaceSwitcher({
   compact?: boolean;
   dark?: boolean;
 }) {
-  const { organization, viewer } = useWorkspace();
+  const { organization, viewer, live } = useWorkspace();
   const { t } = useI18n();
 
   function forgetStickyOrg() {
     void fetch("/api/session", { method: "DELETE" });
+  }
+
+  if (!live) {
+    return (
+      <div className={compact ? "flex min-w-0 items-center gap-3" : "flex min-w-0 items-center gap-3 px-1"}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#071426] text-white">
+          <ChevronsUpDown size={16} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[15px] font-semibold leading-tight">
+            {organization.name}
+          </span>
+          <span className="text-[11px] leading-tight text-slate-500">
+            {t(`roles.${viewer.role}`)}
+          </span>
+        </span>
+      </div>
+    );
   }
 
   if (compact) {

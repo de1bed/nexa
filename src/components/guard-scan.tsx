@@ -26,6 +26,7 @@ import { Button, Callout, EmptyState, StatusPill, cn } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
 import { accessWindow, type Visit } from "@/lib/domain";
 import { visitPurposeMessageKey } from "@/lib/i18n";
+import { tokenFromScan } from "@/lib/demo-public";
 import { findShowcaseVisit } from "@/lib/showcase-store";
 import { useI18n } from "./i18n-provider";
 
@@ -73,7 +74,7 @@ export function GuardScan() {
 
   const resolve = useCallback(
     async (rawToken: string) => {
-      const token = rawToken.trim();
+      const token = tokenFromScan(rawToken);
       if (!token || resolvingRef.current) return;
       resolvingRef.current = true;
       setResolving(true);

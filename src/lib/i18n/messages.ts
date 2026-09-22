@@ -129,6 +129,7 @@ export const es = {
     ctaCompany: "Registrar mi empresa",
     ctaDemo: "Elegir portal demo",
     visitorTour: "Ver el recorrido del visitante",
+    tryDemo: "Probar la demo",
     stat1v: "2 min",
     stat1: "Registro del visitante",
     stat2v: "1 toque",
@@ -203,7 +204,7 @@ export const es = {
     showcaseExplore:
       "Explora los tres portales sin credenciales. Los datos viven solo en este navegador.",
     showcaseCallout:
-      "Al conectar Supabase, esta pantalla pasa automáticamente a autenticación real.",
+      "Los cambios se quedan en este navegador. No se guardan en ninguna empresa.",
     firstAccess: "Es mi primer acceso o olvidé la contraseña",
     noCompany: "¿Tu empresa ya tiene clave?",
     createAccount: "Crear cuenta",
@@ -223,6 +224,16 @@ export const es = {
     sendFail: "No pudimos enviar el código.",
     enterFail: "No pudimos entrar.",
     emailPlaceholder: "tu@empresa.com",
+  },
+  demo: {
+    banner: "Demostración con datos de ejemplo. Lo que hagas se queda en este navegador.",
+    reset: "Reiniciar datos",
+    title: "Prueba NEXA antes de contratar",
+    lead: "Entras a Nova Logistics, una empresa de ejemplo con gente, visitas y un pase. Nada se guarda en una cuenta real.",
+    pick: "Elige un perfil",
+    pass: "Ver el pase y descargar el QR",
+    register: "Probar el preregistro",
+    qrNote: "Ese QR abre el pase en el teléfono. Desde el pase puedes guardarlo como imagen.",
   },
   calendar: {
     title: "Agrégalo a tu calendario",
@@ -1065,6 +1076,7 @@ export const en: DeepStringify<typeof es> = {
     ctaCompany: "Register my company",
     ctaDemo: "Choose a demo portal",
     visitorTour: "See the visitor walkthrough",
+    tryDemo: "Try the demo",
     stat1v: "2 min",
     stat1: "Visitor registration",
     stat2v: "1 tap",
@@ -1139,7 +1151,7 @@ export const en: DeepStringify<typeof es> = {
     showcaseExplore:
       "Explore the three portals without credentials. Data lives only in this browser.",
     showcaseCallout:
-      "When you connect Supabase, this screen switches automatically to real authentication.",
+      "Changes stay in this browser. They are not saved to any company.",
     firstAccess: "This is my first sign-in or I forgot my password",
     noCompany: "Does your company already have a key?",
     createAccount: "Create account",
@@ -1159,6 +1171,16 @@ export const en: DeepStringify<typeof es> = {
     sendFail: "We couldn’t send the code.",
     enterFail: "We couldn’t sign you in.",
     emailPlaceholder: "you@company.com",
+  },
+  demo: {
+    banner: "Demo with sample data. What you do stays in this browser.",
+    reset: "Reset data",
+    title: "Try NEXA before you buy",
+    lead: "You enter Nova Logistics, a sample company with people, visits, and a pass. Nothing is saved to a real account.",
+    pick: "Choose a profile",
+    pass: "View the pass and download the QR",
+    register: "Try preregistration",
+    qrNote: "That QR opens the pass on a phone. From the pass you can save it as an image.",
   },
   calendar: {
     title: "Add it to your calendar",

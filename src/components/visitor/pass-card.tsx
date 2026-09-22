@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Building2, CalendarClock, Hourglass, Link2, MapPin, ShieldCheck, UserRound } from "lucide-react";
+import { isKnownDemoToken } from "@/lib/demo-public";
 import { cn } from "../ui";
 import { RemainingUntil } from "../ui-client";
 import { useI18n } from "../i18n-provider";
@@ -24,6 +25,7 @@ export function PassCard({
   accessRequirements,
   internalPlace,
   meetingUrl,
+  publicQr = false,
 }: {
   token: string;
   visitorName: string;
@@ -36,13 +38,19 @@ export function PassCard({
   accessRequirements?: string;
   internalPlace?: string;
   meetingUrl?: string;
+  /** El código abre la página del pase, para escanearlo con la cámara del teléfono. */
+  publicQr?: boolean;
 }) {
   const { t, formatFullDate, formatDateTime } = useI18n();
   const [qr, setQr] = useState("");
 
   useEffect(() => {
     let active = true;
-    QRCode.toDataURL(token, {
+    const payload =
+      publicQr || isKnownDemoToken(token)
+        ? `${window.location.origin}/pass/${encodeURIComponent(token)}`
+        : token;
+    QRCode.toDataURL(payload, {
       width: 520,
       margin: 1,
       errorCorrectionLevel: "M",
@@ -55,7 +63,7 @@ export function PassCard({
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [publicQr, token]);
 
   const dateLabel = formatFullDate(startsAt);
 

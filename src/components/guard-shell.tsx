@@ -7,12 +7,13 @@ import { Brand } from "./brand";
 import { SessionExit } from "./session-exit";
 import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
+import { DemoBanner } from "./demo-banner";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
 
 export function GuardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { visits, organization, viewer } = useWorkspace();
+  const { visits, organization, viewer, live } = useWorkspace();
   const { t } = useI18n();
   const inside = visits.filter((visit) => visit.status === "checked_in").length;
   const isAdmin = viewer.role === "admin" || viewer.role === "superadmin";
@@ -39,17 +40,24 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
             <Brand dark />
           )}
           <div className="flex items-center gap-2">
-            <Link
-              href="/select-organization"
-              onClick={() => {
-                void fetch("/api/session", { method: "DELETE" });
-              }}
-              className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium transition hover:bg-white/15 sm:flex"
-              title="Cambiar de empresa"
-            >
-              <span className="size-1.5 rounded-full bg-emerald-400" />
-              {organization.name}
-            </Link>
+            {live ? (
+              <Link
+                href="/select-organization"
+                onClick={() => {
+                  void fetch("/api/session", { method: "DELETE" });
+                }}
+                className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium transition hover:bg-white/15 sm:flex"
+                title="Cambiar de empresa"
+              >
+                <span className="size-1.5 rounded-full bg-emerald-400" />
+                {organization.name}
+              </Link>
+            ) : (
+              <span className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium sm:flex">
+                <span className="size-1.5 rounded-full bg-emerald-400" />
+                {organization.name}
+              </span>
+            )}
             <LanguageSwitcher dark compact />
             <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium">
               {t("nav.insideCount", { n: inside })}
@@ -60,6 +68,7 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="pb-dock mx-auto max-w-3xl px-4 pt-6 sm:px-6">
+        <DemoBanner dark />
         {children}
       </main>
 

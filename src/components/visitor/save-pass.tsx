@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { isKnownDemoToken } from "@/lib/demo-public";
 import { Check, Download, ImageDown, Loader2, Share2 } from "lucide-react";
 import { Button } from "../ui";
 import { Sheet } from "../ui-client";
@@ -19,6 +20,7 @@ export function SavePassButton({
   location,
   startsAt,
   promptOnMount = false,
+  publicQr = false,
 }: {
   token: string;
   visitorName: string;
@@ -27,6 +29,7 @@ export function SavePassButton({
   location: string;
   startsAt: string;
   promptOnMount?: boolean;
+  publicQr?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -49,7 +52,11 @@ export function SavePassButton({
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(startsAt));
-    const qr = await QRCode.toDataURL(token, {
+    const payload =
+      publicQr || isKnownDemoToken(token)
+        ? `${window.location.origin}/pass/${encodeURIComponent(token)}`
+        : token;
+    const qr = await QRCode.toDataURL(payload, {
       width: 640,
       margin: 1,
       errorCorrectionLevel: "M",
