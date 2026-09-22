@@ -48,7 +48,7 @@ export async function getSessionContext(): Promise<SessionContext> {
     db
       .from("organization_members")
       .select(
-        "organization_id,role,organization:organizations!organization_members_organization_id_fkey(name,slug,service_status)",
+        "organization_id,role,organization:organizations!organization_members_organization_id_fkey(name,slug,service_status,archived_at)",
       )
       .eq("profile_id", user.id)
       .eq("active", true),
@@ -60,6 +60,7 @@ export async function getSessionContext(): Promise<SessionContext> {
       name?: string;
       slug?: string;
       service_status?: string;
+      archived_at?: string | null;
     } | null;
     return {
       organizationId: row.organization_id as string,
@@ -67,7 +68,9 @@ export async function getSessionContext(): Promise<SessionContext> {
       organizationName: organization?.name ?? "Organización",
       organizationSlug: organization?.slug ?? "",
       serviceStatus:
-        organization?.service_status === "suspended" ? "suspended" : "active",
+        organization?.archived_at || organization?.service_status === "suspended"
+          ? "suspended"
+          : "active",
     };
   });
 

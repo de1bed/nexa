@@ -17,7 +17,7 @@ export default async function Page() {
   if (!allowed) redirect("/espera");
   return (
     <main className="min-h-screen bg-[#f4f7fb] px-4 py-8 sm:px-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <PlatformConsole />
       </div>
     </main>
