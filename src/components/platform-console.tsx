@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, Field, fieldClass } from "./ui";
@@ -98,6 +99,9 @@ export function PlatformConsole() {
     <div className="space-y-6">
       <header>
         <p className="text-sm font-semibold text-[#0d9d99]">Consola NEXA</p>
+        <Link href="/app" className="mt-2 inline-block text-sm font-semibold text-blue-600">
+          Volver a tu empresa
+        </Link>
         <h1 className="mt-1 text-3xl font-semibold tracking-[-.03em]">Empresas</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
           Aquí se activa el servicio después del pago. La clave es para que el

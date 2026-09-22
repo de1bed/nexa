@@ -1,16 +1,18 @@
 import "server-only";
 import { createAdminClient } from "./supabase-admin";
 
-/** Correos que pueden abrir la consola. Se definen en el servidor, nunca en el cliente. */
+/** Única cuenta que abre la consola. No se amplía desde el cliente ni con variables. */
+const PLATFORM_OWNER_EMAIL = "davidrocha0520@gmail.com";
+const PLATFORM_OWNER_ID = "4f2eee67-0d2d-4041-bb07-a1b9e65bb227";
+
 export function platformAdminEmails() {
-  return (process.env.PLATFORM_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
+  return [PLATFORM_OWNER_EMAIL];
 }
 
 export async function isPlatformAdmin(userId: string, email: string) {
   const normalized = email.trim().toLowerCase();
+  if (normalized !== PLATFORM_OWNER_EMAIL || userId !== PLATFORM_OWNER_ID)
+    return false;
   const admin = createAdminClient();
   if (normalized && platformAdminEmails().includes(normalized)) {
     const { data: profile } = await admin
@@ -30,10 +32,5 @@ export async function isPlatformAdmin(userId: string, email: string) {
       .upsert({ profile_id: userId, email: normalized }, { onConflict: "profile_id" });
     return true;
   }
-  const { data } = await admin
-    .from("platform_admins")
-    .select("profile_id")
-    .eq("profile_id", userId)
-    .maybeSingle();
-  return Boolean(data);
+  return false;
 }

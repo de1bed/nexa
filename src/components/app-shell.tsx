@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
@@ -11,6 +12,7 @@ import {
   Plus,
   ScanLine,
   Settings,
+  Shield,
   UserRoundCheck,
   Users,
 } from "lucide-react";
@@ -27,8 +29,24 @@ type NavItem = { href: Route; labelKey: string; shortKey: string; icon: LucideIc
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { viewer } = useWorkspace();
+  const { viewer, live } = useWorkspace();
   const { t } = useI18n();
+  const [platformAdmin, setPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!live) return;
+    let active = true;
+    void fetch("/api/session", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const payload = (await response.json()) as { platformAdmin?: boolean };
+        if (active) setPlatformAdmin(Boolean(payload.platformAdmin));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [live]);
   const isHost = viewer.role === "host";
   const adminNav = [
     { href: "/app/dashboard", labelKey: "nav.summary", shortKey: "nav.summary", icon: LayoutDashboard },
@@ -99,6 +117,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   label={t(item.labelKey)}
                 />
               ))}
+              {platformAdmin && (
+                <NavLink
+                  item={{
+                    href: "/platform",
+                    labelKey: "nav.platform",
+                    shortKey: "nav.platform",
+                    icon: Shield,
+                  }}
+                  active={isActive(pathname, "/platform")}
+                  label={t("nav.platform")}
+                />
+              )}
             </>
           )}
         </nav>
