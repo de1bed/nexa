@@ -73,6 +73,7 @@ export async function GET(request: Request) {
     { data: areas },
     { data: sites },
     { data: visits },
+    { data: visitRows },
     { data: accounts },
     { data: payments },
     { data: events },
@@ -96,6 +97,13 @@ export async function GET(request: Request) {
     admin.from("departments").select("id,organization_id,name,active"),
     admin.from("locations").select("id,organization_id,name,address,active"),
     admin.rpc("platform_visit_counts"),
+    admin
+      .from("visits")
+      .select(
+        "id,organization_id,purpose,status,starts_at,visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name)",
+      )
+      .order("starts_at", { ascending: false })
+      .limit(200),
     admin
       .from("platform_accounts")
       .select("organization_id,plan_name,monthly_amount,currency,billing_email,notes"),
@@ -154,6 +162,21 @@ export async function GET(request: Request) {
       visitsThisMonth: Number(orgVisits?.visits_this_month ?? 0),
       visitsToday: Number(orgVisits?.visits_today ?? 0),
       lastVisitAt: (orgVisits?.last_visit as string | null) ?? null,
+      recentVisits: (visitRows ?? [])
+        .filter((visit) => visit.organization_id === org.id)
+        .slice(0, 12)
+        .map((visit) => {
+          const visitor = visit.visitor as unknown as { full_name?: string } | null;
+          const host = visit.host as unknown as { full_name?: string } | null;
+          return {
+            id: visit.id as string,
+            visitor: visitor?.full_name ?? "Visitante",
+            host: host?.full_name ?? "",
+            purpose: (visit.purpose as string) ?? "",
+            status: visit.status as string,
+            startsAt: visit.starts_at as string,
+          };
+        }),
       invitePending: people.some(
         (member) =>
           member.status === "invited" &&

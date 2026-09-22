@@ -37,6 +37,7 @@ type AccessRequest = {
 
 type LogEvent = {
   id: string;
+  organizationId: string;
   organizationName: string;
   actorName: string;
   summary: string;
@@ -58,6 +59,14 @@ type Company = {
   visitsToday: number;
   lastVisitAt: string | null;
   invitePending: boolean;
+  recentVisits: Array<{
+    id: string;
+    visitor: string;
+    host: string;
+    purpose: string;
+    status: string;
+    startsAt: string;
+  }>;
   planName: string;
   monthlyAmount: number | null;
   currency: string;
@@ -80,11 +89,16 @@ const statusLabel: Record<string, string> = {
   suspended: "Suspendido",
 };
 
-const methodLabel: Record<string, string> = {
-  transfer: "Transferencia",
-  cash: "Efectivo",
-  card: "Tarjeta",
-  other: "Otro",
+const visitStatusLabel: Record<string, string> = {
+  draft: "Borrador",
+  invited: "Invitada",
+  pre_registered: "Preregistro",
+  approved: "Aprobada",
+  checked_in: "Dentro",
+  checked_out: "Salió",
+  denied: "Negada",
+  cancelled: "Cancelada",
+  expired: "Vencida",
 };
 
 function todayKey() {
@@ -368,23 +382,134 @@ export function PlatformConsole() {
       <Card className="p-5">
         <h2 className="font-semibold">Bitácora</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Pausas, claves nuevas y pagos, con quién lo hizo y cuándo.
+          Los datos de cada empresa: gente, sedes, visitas y el día en que pagó.
         </p>
-        {events.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">Todavía no hay movimientos.</p>
+        <div className="mt-4 space-y-4">
+          {companies.map((company) => {
+            const companyEvents = events.filter(
+              (item) => item.organizationId === company.id,
+            );
+            return (
+              <article key={company.id} className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold">{company.name}</h3>
+                    <p className="text-sm text-slate-500">
+                      {company.archivedAt
+                        ? "Archivada"
+                        : company.serviceStatus === "active"
+                          ? "Activa"
+                          : "En pausa"}
+                      {activityLabel(company) ? ` · ${activityLabel(company)}` : ""} ·{" "}
+                      {company.visits} visitas · última {when(company.lastVisitAt)}
+                    </p>
+                  </div>
+                  <p className="font-mono text-sm text-[#0d9d99]">{company.accessKey}</p>
+                </div>
+                <p className="mt-3 text-sm text-slate-600">
+                  {company.locations.length
+                    ? company.locations
+                        .map((site) => `${site.name} · ${site.address}`)
+                        .join(" / ")
+                    : "Sin sede"}
+                  {company.departments.length
+                    ? ` · Áreas: ${company.departments.join(", ")}`
+                    : ""}
+                </p>
+                <div className="mt-3 grid gap-4 lg:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Gente
+                    </p>
+                    <ul className="mt-1 space-y-1 text-sm">
+                      {company.members.length === 0 && (
+                        <li className="text-slate-500">Sin personas</li>
+                      )}
+                      {company.members.map((member) => (
+                        <li key={member.id}>
+                          {member.name}
+                          {member.department ? ` · ${member.department}` : ""}
+                          <span className="block text-slate-500">
+                            {member.email} · {roleLabel[member.role] ?? member.role} ·{" "}
+                            {statusLabel[member.status] ?? member.status}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Visitas
+                    </p>
+                    <ul className="mt-1 space-y-1 text-sm">
+                      {company.recentVisits.length === 0 && (
+                        <li className="text-slate-500">Sin visitas</li>
+                      )}
+                      {company.recentVisits.map((visit) => (
+                        <li key={visit.id}>
+                          {visit.visitor}
+                          {visit.host ? ` · con ${visit.host}` : ""}
+                          <span className="block text-slate-500">
+                            {stamp(visit.startsAt)} · {visit.purpose} ·{" "}
+                            {visitStatusLabel[visit.status] ?? visit.status}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Pagos y movimientos
+                    </p>
+                    <ul className="mt-1 space-y-1 text-sm">
+                      {company.payments.length === 0 && companyEvents.length === 0 && (
+                        <li className="text-slate-500">Sin pagos anotados</li>
+                      )}
+                      {company.payments.map((item) => (
+                        <li key={item.id}>
+                          El {when(item.paidOn)} pagó {money(item.amount, item.currency)}
+                          {item.concept ? ` · ${item.concept}` : ""}
+                        </li>
+                      ))}
+                      {companyEvents.map((item) => (
+                        <li key={item.id} className="text-slate-500">
+                          {stamp(item.createdAt)} · {item.actorName}: {item.summary}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="font-semibold">Registro de pagos</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Solo un apunte: qué empresa pagó y qué día. No cobra solo.
+        </p>
+        {companies.every((company) => company.payments.length === 0) ? (
+          <p className="mt-3 text-sm text-slate-500">
+            Cuando anotes un pago en una empresa, aparece aquí con la fecha.
+          </p>
         ) : (
           <ul className="mt-3 divide-y divide-slate-100 text-sm">
-            {events.map((item) => (
-              <li key={item.id} className="flex flex-wrap justify-between gap-2 py-2">
-                <span>
-                  {item.summary}
-                  <span className="block text-slate-500">
-                    {item.actorName} · {item.organizationName}
+            {companies
+              .flatMap((company) =>
+                company.payments.map((item) => ({ ...item, company: company.name })),
+              )
+              .sort((a, b) => b.paidOn.localeCompare(a.paidOn))
+              .map((item) => (
+                <li key={item.id} className="flex justify-between gap-3 py-2">
+                  <span>
+                    El {when(item.paidOn)} {item.company} pagó
+                    {item.concept ? ` · ${item.concept}` : ""}
                   </span>
-                </span>
-                <span className="text-slate-500">{stamp(item.createdAt)}</span>
-              </li>
-            ))}
+                  <b>{money(item.amount, item.currency)}</b>
+                </li>
+              ))}
           </ul>
         )}
       </Card>
@@ -827,21 +952,15 @@ export function PlatformConsole() {
                   </form>
 
                   <div>
-                    <h3 className="text-sm font-semibold">Pagos</h3>
+                    <h3 className="text-sm font-semibold">Anotar un pago</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      El día en que pagaron y el monto. Queda en el registro.
+                    </p>
                     <ul className="mt-2 space-y-2 text-sm">
-                      {company.payments.length === 0 && (
-                        <li className="text-slate-500">Todavía no hay pagos de esta empresa.</li>
-                      )}
                       {company.payments.map((item) => (
-                        <li key={item.id} className="flex justify-between gap-3">
-                          <span>
-                            {when(item.paidOn)} · {methodLabel[item.method] ?? item.method}
-                            {item.concept ? ` · ${item.concept}` : ""}
-                            {item.reference ? (
-                              <span className="block text-slate-500">{item.reference}</span>
-                            ) : null}
-                          </span>
-                          <b>{money(item.amount, item.currency)}</b>
+                        <li key={item.id}>
+                          El {when(item.paidOn)} pagó {money(item.amount, item.currency)}
+                          {item.concept ? ` · ${item.concept}` : ""}
                         </li>
                       ))}
                     </ul>
@@ -881,7 +1000,7 @@ export function PlatformConsole() {
                           }
                         />
                       </Field>
-                      <Field label="Fecha">
+                      <Field label="Día en que pagó">
                         <input
                           required
                           type="date"
@@ -928,7 +1047,7 @@ export function PlatformConsole() {
                           placeholder="Folio o últimos dígitos"
                         />
                       </Field>
-                      <Field label="Concepto">
+                      <Field label="Nota">
                         <input
                           className={fieldClass}
                           value={payment.concept}
@@ -939,7 +1058,7 @@ export function PlatformConsole() {
                         />
                       </Field>
                       <div className="sm:col-span-2">
-                        <Button type="submit">Registrar pago</Button>
+                        <Button type="submit">Anotar pago</Button>
                       </div>
                     </form>
                   </div>
