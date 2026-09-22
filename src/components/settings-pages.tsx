@@ -47,6 +47,7 @@ import {
   type TeamMember,
 } from "@/lib/domain";
 import { InvitationPreview } from "./invitation-preview";
+import { OrgAccessPanel, type AreaOption } from "./org-access-panel";
 import {
   defaultVisitorFlow,
   parseVisitorFlow,
@@ -115,10 +116,21 @@ export function TeamPage() {
     delivery: "sent" | "development" | "failed";
     inviteUrl: string;
   } | null>(null);
+  const [departments, setDepartments] = useState<AreaOption[]>(
+    live
+      ? []
+      : [
+          { id: "area-direccion", name: "Dirección" },
+          { id: "area-operaciones", name: "Operaciones" },
+          { id: "area-comercial", name: "Comercial" },
+          { id: "area-caseta", name: "Caseta" },
+        ],
+  );
   const [form, setForm] = useState({
     fullName: "",
     email: "",
     role: "host" as MemberRole,
+    departmentId: "",
   });
   const [codeForm, setCodeForm] = useState({
     role: "host" as MemberRole,
@@ -169,7 +181,12 @@ export function TeamPage() {
         const response = await fetch("/api/team", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            fullName: form.fullName,
+            email: form.email,
+            role: form.role,
+            departmentId: form.departmentId || null,
+          }),
         });
         if (!response.ok)
           throw new Error(await readError(response, "No fue posible invitar"));
@@ -192,6 +209,8 @@ export function TeamPage() {
           name: form.fullName,
           email: form.email,
           role: form.role,
+          departmentId: form.departmentId || undefined,
+          department: departments.find((area) => area.id === form.departmentId)?.name,
           active: false,
           status: "invited",
           invitedAt: new Date().toISOString(),
@@ -204,7 +223,7 @@ export function TeamPage() {
           inviteUrl: `${window.location.origin}/invite/demo`,
         });
       }
-      setForm({ fullName: "", email: "", role: "host" });
+      setForm({ fullName: "", email: "", role: "host", departmentId: "" });
       if (live) void reload();
     } catch (reason) {
       toast.error(
@@ -264,7 +283,10 @@ export function TeamPage() {
     toast.success("Enlace copiado");
   }
 
-  async function updateMember(member: TeamMember, patch: Partial<TeamMember>) {
+  async function updateMember(
+    member: TeamMember,
+    patch: Partial<Omit<TeamMember, "departmentId">> & { departmentId?: string | null },
+  ) {
     setBusy(true);
     try {
       if (live) {
@@ -275,6 +297,7 @@ export function TeamPage() {
             role: patch.role,
             active: patch.active,
             status: patch.status,
+            departmentId: patch.departmentId,
           }),
         });
         if (!response.ok)
@@ -283,7 +306,11 @@ export function TeamPage() {
       setMembers((current) =>
         current.map((item) => {
           if (item.id !== member.id) return item;
-          const next = { ...item, ...patch };
+          const next = { ...item, ...patch, departmentId: patch.departmentId ?? item.departmentId };
+          if (patch.departmentId === null) {
+            next.departmentId = undefined;
+            next.department = undefined;
+          }
           if (patch.status) {
             next.active = patch.status === "active";
           } else if (patch.active !== undefined) {
@@ -413,6 +440,12 @@ export function TeamPage() {
         }
       />
 
+      <OrgAccessPanel
+        live={live}
+        departments={departments}
+        onDepartments={setDepartments}
+      />
+
       {loading ? (
         <Card>
           <p className="text-sm text-slate-500">{t("common.loading")}</p>
@@ -465,7 +498,8 @@ export function TeamPage() {
                   )}
                 </p>
                 <p className="truncate text-sm text-slate-500">
-                  {t(`roles.${member.role}`)} · {member.email}
+                  {t(`roles.${member.role}`)}
+                  {member.department ? ` · ${member.department}` : ""} · {member.email}
                 </p>
               </div>
               <button
@@ -584,7 +618,7 @@ export function TeamPage() {
               block
               onClick={() => {
                 setResult(null);
-                setForm({ fullName: "", email: "", role: "host" });
+                setForm({ fullName: "", email: "", role: "host", departmentId: "" });
               }}
             >
               Invitar a otra persona
@@ -613,6 +647,24 @@ export function TeamPage() {
               }
             />
           </Field>
+          {departments.length > 0 && (
+            <Field label="Área">
+              <select
+                className={fieldClass}
+                value={form.departmentId}
+                onChange={(event) =>
+                  setForm({ ...form, departmentId: event.target.value })
+                }
+              >
+                <option value="">Sin área</option>
+                {departments.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Rol">
             <select
               className={fieldClass}
@@ -787,6 +839,31 @@ export function TeamPage() {
                 ))}
               </div>
             </div>
+
+            {departments.length > 0 && (
+              <Field label="Área">
+                <select
+                  className={fieldClass}
+                  value={editing.departmentId ?? ""}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const departmentId = event.target.value;
+                    const department = departments.find((area) => area.id === departmentId)?.name;
+                    void updateMember(editing, {
+                      departmentId: departmentId || null,
+                      department,
+                    });
+                  }}
+                >
+                  <option value="">Sin área</option>
+                  {departments.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
             {editing.id !== viewer.id && (
               <div className="space-y-2">

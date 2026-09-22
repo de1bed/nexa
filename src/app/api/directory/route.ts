@@ -31,7 +31,7 @@ export async function GET() {
       db
         .from("organization_members")
         .select(
-          "profile_id,role,profile:profiles!organization_members_profile_id_fkey(full_name,email)",
+          "profile_id,role,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name)",
         )
         .eq("organization_id", organizationId)
         .eq("active", true)
@@ -51,10 +51,12 @@ export async function GET() {
         full_name?: string;
         email?: string;
       } | null;
+      const department = row.department as unknown as { name?: string } | null;
       return {
         id: row.profile_id as string,
         name: profile?.full_name ?? "Anfitrión",
         email: profile?.email ?? "",
+        department: department?.name ?? "",
         role: row.role as string,
       };
     })

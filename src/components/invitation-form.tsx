@@ -525,7 +525,7 @@ export function InvitationForm() {
                 >
                   {hosts.map((host) => (
                     <option key={host.id} value={host.id}>
-                      {host.name}
+                      {host.department ? `${host.name} · ${host.department}` : host.name}
                       {host.id === viewer.id ? ` ${t("invite.me")}` : ""}
                     </option>
                   ))}

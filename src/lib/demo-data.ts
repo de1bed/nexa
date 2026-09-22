@@ -45,6 +45,7 @@ export const showcaseTeam: TeamMember[] = [
     role: "admin",
     active: true,
     status: "active",
+    department: "Dirección",
   },
   {
     id: "host-mateo",
@@ -53,6 +54,7 @@ export const showcaseTeam: TeamMember[] = [
     role: "host",
     active: true,
     status: "active",
+    department: "Operaciones",
   },
   {
     id: "host-valeria",
@@ -61,6 +63,7 @@ export const showcaseTeam: TeamMember[] = [
     role: "host",
     active: true,
     status: "active",
+    department: "Comercial",
   },
   {
     id: "demo-guard",
@@ -69,6 +72,7 @@ export const showcaseTeam: TeamMember[] = [
     role: "guard",
     active: true,
     status: "active",
+    department: "Caseta",
   },
   {
     id: "guard-lucia",
@@ -77,6 +81,7 @@ export const showcaseTeam: TeamMember[] = [
     role: "guard",
     active: true,
     status: "active",
+    department: "Caseta",
   },
 ];
 

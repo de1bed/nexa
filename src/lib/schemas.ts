@@ -103,12 +103,14 @@ export const teamInviteSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.email("Correo inválido"),
   role: z.enum(["admin", "host", "guard"]),
+  departmentId: z.uuid().nullable().optional(),
 });
 
 export const teamUpdateSchema = z.object({
   role: z.enum(["admin", "host", "guard"]).optional(),
   active: z.boolean().optional(),
   status: z.enum(["invited", "active", "suspended"]).optional(),
+  departmentId: z.uuid().nullable().optional(),
 });
 
 export const teamAcceptSchema = z.object({

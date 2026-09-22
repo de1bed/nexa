@@ -139,13 +139,16 @@ export function LoginForm() {
     try {
       await createClient().auth.getSession();
       let memberships: Array<{ role: MemberRole }> | null = null;
+      let platformAdmin = false;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const response = await fetch("/api/session", { cache: "no-store" });
         if (response.ok) {
           const payload = (await response.json()) as {
             memberships?: Array<{ role: MemberRole }>;
+            platformAdmin?: boolean;
           };
           memberships = payload.memberships ?? [];
+          platformAdmin = Boolean(payload.platformAdmin);
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -155,7 +158,10 @@ export function LoginForm() {
         router.refresh();
         return;
       }
-      const destination = destinationAfterLogin({ memberships, next });
+      const destination =
+        memberships.length === 0 && platformAdmin
+          ? "/platform"
+          : destinationAfterLogin({ memberships, next });
       if (destination === "/select-organization") {
         await fetch("/api/session", { method: "DELETE" });
       }
@@ -304,6 +310,9 @@ export function LoginForm() {
                     <Link href="/signup" className="font-semibold text-blue-600">
                       {t("login.createAccount")}
                     </Link>
+                  </p>
+                  <p className="mt-2 text-center text-xs leading-5 text-slate-400">
+                    {t("login.companyKeyHint")}
                   </p>
                 </>
               )}

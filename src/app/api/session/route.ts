@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { getSessionContext, ORG_COOKIE } from "@/lib/server/session";
+import { isPlatformAdmin } from "@/lib/server/platform-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,19 @@ export async function GET() {
     const context = await getSessionContext();
     if (!context.user)
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const platformAdmin =
+      context.memberships.length === 0
+        ? await isPlatformAdmin(
+            context.user.id,
+            context.profile?.email ?? context.user.email ?? "",
+          ).catch(() => false)
+        : false;
     return NextResponse.json(
       {
         viewer: context.profile,
         memberships: context.memberships,
         selected: context.selected,
+        platformAdmin,
       },
       { headers: { "Cache-Control": "no-store" } },
     );

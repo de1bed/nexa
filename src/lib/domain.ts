@@ -105,6 +105,8 @@ export type TeamMember = {
   role: MemberRole;
   active: boolean;
   status: MemberStatus;
+  departmentId?: string;
+  department?: string;
   joinedAt?: string;
   invitedAt?: string;
   inviteDelivery?: "sent" | "failed" | "development";

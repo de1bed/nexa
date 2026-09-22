@@ -204,8 +204,10 @@ export const es = {
     showcaseCallout:
       "Al conectar Supabase, esta pantalla pasa automáticamente a autenticación real.",
     firstAccess: "Es mi primer acceso o olvidé la contraseña",
-    noCompany: "¿Tu empresa aún no está aquí?",
+    noCompany: "¿Tu empresa ya tiene clave?",
     createAccount: "Crear cuenta",
+    companyKeyHint:
+      "La clave de la empresa se escribe al crear la cuenta, no en cada inicio de sesión.",
     quote: "“Una recepción más ágil empieza antes de que llegue el visitante.”",
     tagline: "NEXA VISIT · Control inteligente de accesos",
     codeTitle: "Escribe tu código",
@@ -1137,8 +1139,10 @@ export const en: DeepStringify<typeof es> = {
     showcaseCallout:
       "When you connect Supabase, this screen switches automatically to real authentication.",
     firstAccess: "This is my first sign-in or I forgot my password",
-    noCompany: "Is your company not here yet?",
+    noCompany: "Does your company already have a key?",
     createAccount: "Create account",
+    companyKeyHint:
+      "The company key is entered when you create the account, not on every sign-in.",
     quote: "“A faster reception starts before the visitor arrives.”",
     tagline: "NEXA VISIT · Intelligent access control",
     codeTitle: "Enter your code",

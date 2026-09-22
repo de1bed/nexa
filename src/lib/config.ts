@@ -71,7 +71,7 @@ export function destinationAfterLogin(options: {
   const hasSpecificNext = Boolean(requested) && !genericHomes.has(requested);
 
   if (hasSpecificNext) return requested;
-  if (options.memberships.length === 0) return "/onboarding";
+  if (options.memberships.length === 0) return "/espera";
   if (options.memberships.length > 1) return "/select-organization";
   return roleHome[options.memberships[0].role];
 }

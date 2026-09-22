@@ -230,7 +230,7 @@ export function ManualAccess() {
           >
             {hosts.map((host) => (
               <option key={host.id} value={host.id} className="text-black">
-                {host.name}
+                {host.department ? `${host.name} · ${host.department}` : host.name}
               </option>
             ))}
           </select>

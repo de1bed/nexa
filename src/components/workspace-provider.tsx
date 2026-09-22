@@ -35,7 +35,12 @@ import type {
   WorkspaceState,
 } from "@/lib/domain";
 
-export type HostOption = { id: string; name: string; email: string };
+export type HostOption = {
+  id: string;
+  name: string;
+  email: string;
+  department?: string;
+};
 
 export type Viewer = { id: string; name: string; role: MemberRole };
 
@@ -117,7 +122,7 @@ const emptyState: WorkspaceState = { visits: [], events: [] };
 
 const showcaseHosts: HostOption[] = showcaseTeam
   .filter((member) => member.role === "host" || member.role === "admin")
-  .map(({ id, name, email }) => ({ id, name, email }));
+  .map(({ id, name, email, department }) => ({ id, name, email, department }));
 
 async function readError(response: Response, fallback: string) {
   try {

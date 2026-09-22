@@ -18,7 +18,7 @@ const benefits = [
   "Bitácora, aforo y reportes en tiempo real",
 ];
 
-/** Alta de una empresa nueva: crea la cuenta y encadena con el onboarding. */
+/** Crea la cuenta personal. La clave de empresa se pide en el siguiente paso. */
 export function SignUpForm() {
   const router = useRouter();
   const live = isLiveMode();
@@ -72,7 +72,7 @@ export function SignUpForm() {
           title="Crea tu contraseña"
           description="El código ya confirmó tu correo. De ahora en adelante entras con esta contraseña."
           onSaved={() => {
-            router.push("/onboarding");
+            router.push("/solicitar");
             router.refresh();
           }}
         />
@@ -102,11 +102,12 @@ export function SignUpForm() {
       <header className="mt-9">
         <p className="text-sm font-semibold text-[#0d9d99]">Crear cuenta</p>
         <h1 className="mt-2 text-[30px] font-semibold leading-tight tracking-[-.035em]">
-          Registra tu empresa
+          Crea tu cuenta
         </h1>
         <p className="mt-3 text-[15px] leading-6 text-slate-500">
-          En dos minutos tendrás tu recepción digital funcionando. El código
-          confirma tu correo una vez; después entras con tu contraseña.
+          Primero confirmas tu correo y eliges contraseña. Después escribes la
+          clave de tu empresa y eliges el rol. Tu administrador tiene que
+          aceptarte para que puedas entrar.
         </p>
       </header>
 

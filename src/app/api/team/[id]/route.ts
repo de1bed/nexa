@@ -21,12 +21,18 @@ export async function PATCH(
     if (
       input.role === undefined &&
       input.active === undefined &&
-      input.status === undefined
+      input.status === undefined &&
+      input.departmentId === undefined
     )
       return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
 
+    const departmentOnly =
+      input.departmentId !== undefined &&
+      input.role === undefined &&
+      input.active === undefined &&
+      input.status === undefined;
     // Nadie puede quitarse a sí mismo la administración y dejar la empresa huérfana.
-    if (id === userId)
+    if (id === userId && !departmentOnly)
       return NextResponse.json(
         { error: "No puedes modificar tu propio acceso" },
         { status: 400 },
@@ -59,6 +65,20 @@ export async function PATCH(
     }
 
     const payload: Record<string, unknown> = {};
+    if (input.departmentId !== undefined) {
+      if (input.departmentId) {
+        const { data: area } = await db
+          .from("departments")
+          .select("id")
+          .eq("id", input.departmentId)
+          .eq("organization_id", organizationId)
+          .eq("active", true)
+          .maybeSingle();
+        if (!area)
+          return NextResponse.json({ error: "Esa área no existe" }, { status: 400 });
+      }
+      payload.department_id = input.departmentId;
+    }
     if (input.role !== undefined) payload.role = input.role;
     if (input.status !== undefined) payload.status = input.status;
     else if (input.active !== undefined) payload.active = input.active;

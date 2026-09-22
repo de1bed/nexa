@@ -14,6 +14,7 @@ export type Membership = {
   organizationName: string;
   organizationSlug: string;
   role: MemberRole;
+  serviceStatus: "active" | "suspended";
 };
 
 export type SessionProfile = {
@@ -47,7 +48,7 @@ export async function getSessionContext(): Promise<SessionContext> {
     db
       .from("organization_members")
       .select(
-        "organization_id,role,organization:organizations!organization_members_organization_id_fkey(name,slug)",
+        "organization_id,role,organization:organizations!organization_members_organization_id_fkey(name,slug,service_status)",
       )
       .eq("profile_id", user.id)
       .eq("active", true),
@@ -58,12 +59,15 @@ export async function getSessionContext(): Promise<SessionContext> {
     const organization = row.organization as unknown as {
       name?: string;
       slug?: string;
+      service_status?: string;
     } | null;
     return {
       organizationId: row.organization_id as string,
       role: row.role as MemberRole,
       organizationName: organization?.name ?? "Organización",
       organizationSlug: organization?.slug ?? "",
+      serviceStatus:
+        organization?.service_status === "suspended" ? "suspended" : "active",
     };
   });
 
@@ -142,8 +146,18 @@ export async function requirePortalRole(
 
   const context = await getSessionContext();
   if (!context.user) redirect("/login");
-  if (context.memberships.length === 0) redirect("/onboarding");
+  if (context.memberships.length === 0) redirect("/espera");
   if (!context.selected) redirect("/select-organization");
+  if (
+    context.selected.serviceStatus === "suspended" &&
+    !context.memberships.some((item) => item.serviceStatus === "active")
+  )
+    redirect("/servicio-pausado");
+  if (
+    context.selected.serviceStatus === "suspended" &&
+    context.memberships.some((item) => item.serviceStatus === "active")
+  )
+    redirect("/select-organization");
   if (!roles.includes(context.selected.role))
     redirect(roleHome[context.selected.role]);
 
@@ -186,6 +200,12 @@ export async function requireApiContext(
     return { ok: false, status: 403, error: "Sin organización asignada" };
   if (!context.selected)
     return { ok: false, status: 409, error: "Selecciona una organización" };
+  if (context.selected.serviceStatus === "suspended")
+    return {
+      ok: false,
+      status: 403,
+      error: "El servicio de esta empresa está en pausa",
+    };
   if (roles && !roles.includes(context.selected.role))
     return { ok: false, status: 403, error: "Acceso denegado" };
 

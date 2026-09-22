@@ -19,7 +19,7 @@ export async function GET() {
   const { data, error } = await db
     .from("organization_members")
     .select(
-      "profile_id,role,active,status,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email)",
+      "profile_id,role,active,status,department_id,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name)",
     )
     .eq("organization_id", organizationId)
     .order("created_at");
@@ -37,12 +37,15 @@ export async function GET() {
           full_name?: string;
           email?: string;
         } | null;
+        const department = row.department as unknown as { name?: string } | null;
         const status = (row.status as MemberStatus) ?? (row.active ? "active" : "suspended");
         return {
           id: row.profile_id as string,
           role: row.role as MemberRole,
           active: row.active as boolean,
           status,
+          departmentId: (row.department_id as string | null) ?? undefined,
+          department: department?.name ?? undefined,
           name: profile?.full_name ?? "Usuario",
           email: profile?.email ?? "",
           joinedAt: (row.joined_at as string | null) ?? undefined,
@@ -141,6 +144,7 @@ export async function POST(request: Request) {
           role: input.role,
           status: "invited",
           active: false,
+          department_id: input.departmentId ?? null,
           invited_by: userId,
         },
         { onConflict: "organization_id,profile_id" },
@@ -184,6 +188,7 @@ export async function POST(request: Request) {
           role: input.role,
           active: false,
           status: "invited",
+          departmentId: input.departmentId ?? undefined,
           invitedAt: new Date().toISOString(),
           inviteDelivery: issued.delivery.status,
         },
