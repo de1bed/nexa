@@ -206,10 +206,10 @@ export const es = {
     showcaseCallout:
       "Los cambios se quedan en este navegador. No se guardan en ninguna empresa.",
     firstAccess: "Es mi primer acceso o olvidé la contraseña",
-    noCompany: "¿Tu empresa ya tiene clave?",
-    createAccount: "Crear cuenta",
+    noCompany: "¿Tu empresa te dio una clave?",
+    createAccount: "Regístrate con la clave",
     companyKeyHint:
-      "La clave de la empresa se escribe al crear la cuenta, no en cada inicio de sesión.",
+      "Sin la clave de tu empresa, o sin una invitación, no se abre una cuenta.",
     quote: "“Una recepción más ágil empieza antes de que llegue el visitante.”",
     tagline: "NEXA VISIT · Control inteligente de accesos",
     codeTitle: "Escribe tu código",
@@ -1155,10 +1155,10 @@ export const en: DeepStringify<typeof es> = {
     showcaseCallout:
       "Changes stay in this browser. They are not saved to any company.",
     firstAccess: "This is my first sign-in or I forgot my password",
-    noCompany: "Does your company already have a key?",
-    createAccount: "Create account",
+    noCompany: "Did your company give you a key?",
+    createAccount: "Register with the key",
     companyKeyHint:
-      "The company key is entered when you create the account, not on every sign-in.",
+      "Without your company key, or an invitation, an account is not opened.",
     quote: "“A faster reception starts before the visitor arrives.”",
     tagline: "NEXA VISIT · Intelligent access control",
     codeTitle: "Enter your code",

@@ -72,14 +72,6 @@ export default function Home() {
             >
               {t("landing.enter")}
             </Link>
-            {live && (
-              <Link
-                href="/signup"
-                className="hidden rounded-full bg-[#10cfc9] px-4 py-2.5 text-sm font-semibold text-[#043b39] sm:block"
-              >
-                {t("landing.createAccount")}
-              </Link>
-            )}
           </div>
         </div>
       </nav>
@@ -103,10 +95,10 @@ export default function Home() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href={live ? "/signup" : "/login"}
+              href="/login"
               className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#071426] px-6 font-semibold text-white shadow-[0_18px_45px_-20px_#071426] transition active:scale-[.98]"
             >
-              {live ? t("landing.ctaCompany") : t("landing.ctaDemo")}
+              {live ? t("landing.enter") : t("landing.ctaDemo")}
               <ArrowRight size={19} />
             </Link>
             <Link
@@ -243,10 +235,10 @@ export default function Home() {
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-slate-300">{t("landing.closeSub")}</p>
           <Link
-            href={live ? "/signup" : "/login"}
+            href="/login"
             className="mt-8 inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#10cfc9] px-7 font-semibold text-[#043b39] transition active:scale-[.98]"
           >
-            {live ? t("landing.closeLive") : t("landing.closeDemo")}
+            {live ? t("landing.enter") : t("landing.closeDemo")}
             <ArrowRight size={19} />
           </Link>
         </div>

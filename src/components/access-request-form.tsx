@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Loader2 } from "lucide-react";
@@ -26,6 +26,11 @@ export function AccessRequestForm() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem("nexa-signup-key");
+    if (stored) setKey(stored);
+  }, []);
 
   async function lookup(event: React.FormEvent) {
     event.preventDefault();

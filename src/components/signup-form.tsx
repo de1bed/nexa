@@ -24,6 +24,8 @@ export function SignUpForm() {
   const router = useRouter();
   const live = isLiveMode();
   const [form, setForm] = useState({ fullName: "", email: "" });
+  const [companyKey, setCompanyKey] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [sentTo, setSentTo] = useState("");
   const [choosePassword, setChoosePassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,6 +55,10 @@ export function SignUpForm() {
     setError("");
     try {
       const address = parsed.data.email.toLowerCase();
+      if (!organizationName) {
+        setError("Primero escribe la clave de tu empresa.");
+        return;
+      }
       clearDemoSession();
       const existing = await fetch("/api/auth/account", {
         method: "POST",
@@ -85,6 +91,7 @@ export function SignUpForm() {
           description="El código ya confirmó tu correo. De ahora en adelante entras con esta contraseña."
           onSaved={() => {
             clearDemoSession();
+            if (companyKey) sessionStorage.setItem("nexa-signup-key", companyKey);
             router.push("/solicitar");
             router.refresh();
           }}
@@ -113,29 +120,80 @@ export function SignUpForm() {
     <Shell>
       <Brand />
       <header className="mt-9">
-        <p className="text-sm font-semibold text-[#0d9d99]">Crear cuenta</p>
+        <p className="text-sm font-semibold text-[#0d9d99]">Clave de empresa</p>
         <h1 className="mt-2 text-[30px] font-semibold leading-tight tracking-[-.035em]">
-          Crea tu cuenta
+          Regístrate con la clave
         </h1>
         <p className="mt-3 text-[15px] leading-6 text-slate-500">
-          Primero confirmas tu correo y eliges contraseña. Después escribes la
-          clave de tu empresa y eliges el rol. Tu administrador tiene que
-          aceptarte para que puedas entrar.
+          La empresa la da de alta NEXA. Tú entras con la clave que te
+          compartieron, o con la invitación de tu administrador. Sin eso no se
+          abre una cuenta.
         </p>
       </header>
 
       {!live && (
         <Callout tone="warning" icon={ShieldCheck} className="mt-6">
-          El registro de empresas requiere Supabase conectado. Mientras tanto,
-          explora la plataforma desde{" "}
-          <Link href="/login" className="font-semibold underline">
-            el modo demostración
+          El registro requiere la plataforma conectada. Mientras tanto, explora
+          desde{" "}
+          <Link href="/demo" className="font-semibold underline">
+            la demostración
           </Link>
           .
         </Callout>
       )}
 
+      {!organizationName ? (
+        <form
+          className="mt-7 space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setBusy(true);
+            setError("");
+            void fetch("/api/public/access-key", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ key: companyKey }),
+            })
+              .then(async (response) => {
+                const payload = (await response.json()) as {
+                  organizationName?: string;
+                  error?: string;
+                };
+                if (!response.ok || !payload.organizationName) {
+                  throw new Error(payload.error ?? "Clave inválida");
+                }
+                setOrganizationName(payload.organizationName);
+              })
+              .catch((reason) => {
+                setError(reason instanceof Error ? reason.message : "Clave inválida");
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          <Field label="Clave de tu empresa">
+            <input
+              required
+              className={fieldClass}
+              autoComplete="off"
+              placeholder="NEXA-XXXX-XXXX"
+              value={companyKey}
+              onChange={(event) => setCompanyKey(event.target.value)}
+            />
+          </Field>
+          {error && (
+            <p role="alert" className="rounded-2xl bg-red-50 p-3.5 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          <Button type="submit" size="lg" block disabled={busy || !live}>
+            {busy ? <Loader2 size={19} className="animate-spin" /> : "Continuar"}
+          </Button>
+        </form>
+      ) : (
       <form onSubmit={submit} className="mt-7 space-y-4">
+        <p className="text-sm text-slate-500">
+          Empresa: <b className="text-[#071426]">{organizationName}</b>
+        </p>
         <Field label="Tu nombre">
           <input
             required
@@ -178,6 +236,7 @@ export function SignUpForm() {
           )}
         </Button>
       </form>
+      )}
 
       <ul className="mt-7 space-y-2.5">
         {benefits.map((benefit) => (
