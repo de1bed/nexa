@@ -7,6 +7,7 @@ import { Brand } from "./brand";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./i18n-provider";
 import { roleHome } from "@/lib/config";
+import { createClient } from "@/lib/supabase/client";
 import { DEMO_INVITE_TOKEN, DEMO_PASS_TOKEN, writeDemoSession } from "@/lib/demo-public";
 import type { MemberRole } from "@/lib/domain";
 
@@ -24,7 +25,17 @@ export function DemoEntry() {
   const router = useRouter();
   const { t } = useI18n();
 
-  function enter(role: Exclude<MemberRole, "superadmin">) {
+  async function enter(role: Exclude<MemberRole, "superadmin">) {
+    try {
+      await createClient().auth.signOut();
+    } catch {
+      // La demo no usa la sesión real.
+    }
+    try {
+      await fetch("/api/session", { method: "DELETE" });
+    } catch {
+      // Si no había empresa elegida, la demo sigue.
+    }
     writeDemoSession(role);
     router.push(roleHome[role]);
     router.refresh();

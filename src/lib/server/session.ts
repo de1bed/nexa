@@ -126,29 +126,33 @@ function showcaseIdentity(role: MemberRole) {
  * Redirige siempre a `roleHome[rol]`, que por construcción es una ruta que ese
  * rol sí puede abrir: eso hace imposible el bucle de redirección.
  */
+function showcasePortal(roles: MemberRole[], stored: string | undefined): PortalContext {
+  const role = (showcaseRoles as string[]).includes(stored ?? "")
+    ? (stored as MemberRole)
+    : "admin";
+  if (!roles.includes(role)) redirect(roleHome[role]);
+  const identity = showcaseIdentity(role);
+  return {
+    role,
+    organizationId: "org-nova",
+    organizationName: "Nova Logistics",
+    userId: identity.id,
+    displayName: identity.name,
+    email: identity.email,
+    live: false,
+  };
+}
+
 export async function requirePortalRole(
   roles: MemberRole[],
 ): Promise<PortalContext> {
-  const demo = (await cookies()).get(DEMO_COOKIE)?.value === "1";
-  if (!isLiveMode() || demo) {
-    const stored = (await cookies()).get(SHOWCASE_ROLE_COOKIE)?.value;
-    const role = (showcaseRoles as string[]).includes(stored ?? "")
-      ? (stored as MemberRole)
-      : "admin";
-    if (!roles.includes(role)) redirect(roleHome[role]);
-    const identity = showcaseIdentity(role);
-    return {
-      role,
-      organizationId: "org-nova",
-      organizationName: "Nova Logistics",
-      userId: identity.id,
-      displayName: identity.name,
-      email: identity.email,
-      live: false,
-    };
-  }
+  const jar = await cookies();
+  const demo = jar.get(DEMO_COOKIE)?.value === "1";
+  if (!isLiveMode()) return showcasePortal(roles, jar.get(SHOWCASE_ROLE_COOKIE)?.value);
 
   const context = await getSessionContext();
+  if (demo && !context.user)
+    return showcasePortal(roles, jar.get(SHOWCASE_ROLE_COOKIE)?.value);
   if (!context.user) redirect("/login");
   if (context.memberships.length === 0) redirect("/espera");
   if (!context.selected) redirect("/select-organization");

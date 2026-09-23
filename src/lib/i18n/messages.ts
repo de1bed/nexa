@@ -126,7 +126,7 @@ export const es = {
     heroAccent: "Sin fricción.",
     heroBody:
       "Tu anfitrión comparte un enlace. El visitante llega registrado, con su pase QR listo. Tu equipo deja de capturar datos en papel.",
-    ctaCompany: "Registrar mi empresa",
+    ctaCompany: "Crear cuenta",
     ctaDemo: "Elegir portal demo",
     visitorTour: "Ver el recorrido del visitante",
     tryDemo: "Probar la demo",
@@ -1075,7 +1075,7 @@ export const en: DeepStringify<typeof es> = {
     heroAccent: "No friction.",
     heroBody:
       "Your host shares a link. The visitor arrives already registered, QR pass ready. Your team stops capturing data on paper.",
-    ctaCompany: "Register my company",
+    ctaCompany: "Create account",
     ctaDemo: "Choose a demo portal",
     visitorTour: "See the visitor walkthrough",
     tryDemo: "Try the demo",

@@ -10,6 +10,7 @@ import { ChoosePasswordStep } from "./choose-password";
 import { Button, Callout, Field, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { isLiveMode } from "@/lib/config";
+import { clearDemoSession } from "@/lib/demo-public";
 import { signUpSchema } from "@/lib/schemas";
 
 const benefits = [
@@ -52,6 +53,17 @@ export function SignUpForm() {
     setError("");
     try {
       const address = parsed.data.email.toLowerCase();
+      clearDemoSession();
+      const existing = await fetch("/api/auth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: address }),
+      });
+      const account = (await existing.json()) as { exists?: boolean };
+      if (account.exists) {
+        setError("Esta cuenta ya existe. Inicia sesión.");
+        return;
+      }
       await sendCode(address, parsed.data.fullName);
       setSentTo(address);
     } catch (reason) {
@@ -72,6 +84,7 @@ export function SignUpForm() {
           title="Crea tu contraseña"
           description="El código ya confirmó tu correo. De ahora en adelante entras con esta contraseña."
           onSaved={() => {
+            clearDemoSession();
             router.push("/solicitar");
             router.refresh();
           }}
