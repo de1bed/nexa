@@ -109,7 +109,6 @@ export function TeamPage() {
   const [loading, setLoading] = useState(live);
   const [open, setOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
-  const [platform, setPlatform] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [result, setResult] = useState<{
@@ -145,12 +144,10 @@ export function TeamPage() {
 
     void (async () => {
       try {
-        const [teamRes, codesRes, platformRes] = await Promise.all([
+        const [teamRes, codesRes] = await Promise.all([
           fetch("/api/team", { cache: "no-store" }),
           fetch("/api/join-codes", { cache: "no-store" }),
-          fetch("/api/platform?probe=1", { cache: "no-store" }),
         ]);
-        if (active) setPlatform(platformRes.ok);
         if (!teamRes.ok) throw new Error(await readError(teamRes, "Error"));
         const teamPayload = (await teamRes.json()) as { members: TeamMember[] };
         if (active) setMembers(teamPayload.members ?? []);
@@ -426,17 +423,15 @@ export function TeamPage() {
                 {t("dashboard.openBooth")}
               </Button>
             </Link>
-            {(!live || platform) && (
-              <Button
-                onClick={() => {
-                  setResult(null);
-                  setOpen(true);
-                }}
-              >
-                <UserPlus size={17} />
-                {t("nav.invite")}
-              </Button>
-            )}
+            <Button
+              onClick={() => {
+                setResult(null);
+                setOpen(true);
+              }}
+            >
+              <UserPlus size={17} />
+              {t("nav.invite")}
+            </Button>
           </div>
         }
       />
@@ -455,13 +450,8 @@ export function TeamPage() {
         <EmptyState
           icon={Users}
           title={t("team.alone")}
-          description={
-            !live || platform
-              ? t("team.aloneHint")
-              : "NEXA invita a la gente de esta empresa."
-          }
+          description={t("team.aloneHint")}
           action={
-            (!live || platform) ? (
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="accent"
@@ -474,7 +464,6 @@ export function TeamPage() {
                 Invitar por correo
               </Button>
             </div>
-            ) : undefined
           }
         />
       ) : (
