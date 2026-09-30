@@ -64,16 +64,14 @@ export function AccessHold({ initial }: { initial: Gate }) {
         </h1>
         <p className="mt-3 text-[15px] leading-6 text-slate-500">
           {pending
-            ? `${gate.organizationName ?? "Tu administrador"} tiene que recibirte para que puedas usar la plataforma. En cuanto te acepte, entras solo. Mientras tanto no puedes hacer nada más. Si urge, habla con tu asesor.`
+            ? "Esa solicitud ya no abre acceso. Pide que te inviten por correo."
             : rejected
-              ? "Habla con tu asesor o con el administrador de la empresa. Puedes volver a solicitar el acceso con la misma clave."
-              : "Para entrar necesitas la clave de tu empresa. Sin esa solicitud no hay acceso."}
+              ? "Esa solicitud no abre acceso. Entras cuando te llega una invitación."
+              : "Para entrar necesitas una invitación por correo."}
         </p>
-        {!pending && (
-          <Link href="/solicitar" className="mt-6 inline-block text-sm font-semibold text-blue-600">
-            Solicitar acceso
-          </Link>
-        )}
+        <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-blue-600">
+          Volver a entrar
+        </Link>
       </div>
     </main>
   );

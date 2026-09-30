@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -43,37 +42,9 @@ export async function GET() {
   });
 }
 
-const reviewSchema = z.object({
-  id: z.uuid(),
-  decision: z.enum(["approve", "reject"]),
-  role: z.enum(["admin", "host", "guard"]).optional(),
-  departmentId: z.uuid().nullable().optional(),
-});
-
-export async function POST(request: Request) {
-  const guard = await requireApiContext(["superadmin", "admin"]);
-  if (!guard.ok)
-    return NextResponse.json({ error: guard.error }, { status: guard.status });
-
-  try {
-    const input = reviewSchema.parse(await request.json());
-    const { data, error } = await guard.context.db.rpc("review_access_request", {
-      p_request: input.id,
-      p_decision: input.decision,
-      p_role: input.role ?? null,
-      p_department: input.departmentId ?? null,
-    });
-    if (error) throw error;
-    const result = data as { state?: string };
-    if (result?.state === "forbidden")
-      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
-    if (result?.state === "missing")
-      return NextResponse.json({ error: "La solicitud ya no está" }, { status: 404 });
-    return NextResponse.json(result);
-  } catch {
-    return NextResponse.json(
-      { error: "No fue posible actualizar la solicitud" },
-      { status: 400 },
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "El acceso es solo por invitación. Invítalos por correo." },
+    { status: 403 },
+  );
 }

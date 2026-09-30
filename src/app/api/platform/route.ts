@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAccessKey } from "@/lib/access-key";
 import { getSessionContext } from "@/lib/server/session";
-import { isPlatformAdmin } from "@/lib/server/platform-admin";
+import { isPlatformAdmin, platformAdminEmails } from "@/lib/server/platform-admin";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { issueTeamInvite } from "@/lib/server/team-invite";
 
@@ -401,6 +401,21 @@ const patchSchema = z.object({
     .optional(),
   archive: z.boolean().optional(),
   restore: z.boolean().optional(),
+  newLocation: z
+    .object({
+      name: z.string().trim().min(2).max(120),
+      address: z.string().trim().min(2).max(300),
+    })
+    .optional(),
+  inviteMember: z
+    .object({
+      name: z.string().trim().min(2).max(120),
+      email: z.email(),
+      role: z.enum(["admin", "host", "guard"]),
+    })
+    .optional(),
+  removeMemberId: z.uuid().optional(),
+  dismissRequestId: z.uuid().optional(),
   payment: z
     .object({
       amount: z.number().positive().max(100000000),
@@ -501,6 +516,40 @@ export async function PATCH(request: Request) {
         summary: "Generó una clave nueva",
       });
 
+    let location: { id: string; name: string; address: string } | undefined;
+    if (input.newLocation) {
+      const { data: site, error } = await admin
+        .from("locations")
+        .insert({
+          organization_id: input.organizationId,
+          name: input.newLocation.name,
+          address: input.newLocation.address,
+          timezone: "America/Mexico_City",
+        })
+        .select("id,name,address")
+        .single();
+      if (error || !site) {
+        const code = error && "code" in error ? String(error.code) : "";
+        if (code === "23505")
+          return NextResponse.json(
+            { error: "Ya existe una sede con ese nombre" },
+            { status: 400 },
+          );
+        throw error ?? new Error("sede");
+      }
+      location = {
+        id: site.id as string,
+        name: site.name as string,
+        address: site.address as string,
+      };
+      await logPlatformEvent({
+        organizationId: input.organizationId,
+        actorId: actor.id,
+        eventType: "company_updated",
+        summary: `Agregó la sede ${input.newLocation.name}`,
+      });
+    }
+
     if (input.locations?.length) {
       for (const site of input.locations) {
         const { data: saved, error } = await admin
@@ -570,6 +619,177 @@ export async function PATCH(request: Request) {
 
     let inviteUrl: string | undefined;
     let delivery: string | undefined;
+    let accountRemoved = false;
+    if (input.inviteMember) {
+      const email = input.inviteMember.email.toLowerCase();
+      const { data: org } = await admin
+        .from("organizations")
+        .select("name")
+        .eq("id", input.organizationId)
+        .maybeSingle();
+      const { data: existing } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      let profileId = existing?.id as string | undefined;
+      if (profileId) {
+        const { data: membership } = await admin
+          .from("organization_members")
+          .select("status")
+          .eq("organization_id", input.organizationId)
+          .eq("profile_id", profileId)
+          .maybeSingle();
+        if (membership?.status === "active")
+          return NextResponse.json(
+            { error: "Esa persona ya está en la empresa" },
+            { status: 409 },
+          );
+      }
+      if (!profileId) {
+        const created = await admin.auth.admin.createUser({
+          email,
+          email_confirm: false,
+          user_metadata: { full_name: input.inviteMember.name },
+        });
+        profileId = created.data.user?.id;
+        if (!profileId) {
+          const { data: byEmail } = await admin
+            .from("profiles")
+            .select("id")
+            .eq("email", email)
+            .maybeSingle();
+          profileId = byEmail?.id as string | undefined;
+        }
+      }
+      if (!profileId)
+        return NextResponse.json(
+          { error: "No fue posible crear la cuenta de esa persona" },
+          { status: 400 },
+        );
+      await admin.from("profiles").upsert(
+        { id: profileId, full_name: input.inviteMember.name, email },
+        { onConflict: "id" },
+      );
+      const { error: memberError } = await admin.from("organization_members").upsert(
+        {
+          organization_id: input.organizationId,
+          profile_id: profileId,
+          role: input.inviteMember.role,
+          status: "invited",
+          active: false,
+          invited_by: actor.id,
+        },
+        { onConflict: "organization_id,profile_id" },
+      );
+      if (memberError) throw memberError;
+      const issued = await issueTeamInvite({
+        organizationId: input.organizationId,
+        organizationName: (org?.name as string) ?? "NEXA",
+        inviterId: actor.id,
+        inviterName: guard.context.profile?.fullName ?? "NEXA",
+        profileId,
+        email,
+        fullName: input.inviteMember.name,
+        role: input.inviteMember.role,
+      });
+      inviteUrl = issued.inviteUrl;
+      delivery = issued.delivery.status;
+      await logPlatformEvent({
+        organizationId: input.organizationId,
+        actorId: actor.id,
+        eventType: "company_updated",
+        summary: `Invitó a ${input.inviteMember.name} como ${input.inviteMember.role}`,
+      });
+    }
+
+    if (input.removeMemberId) {
+      if (input.removeMemberId === actor.id)
+        return NextResponse.json(
+          { error: "No puedes borrar tu propia cuenta desde aquí" },
+          { status: 400 },
+        );
+      const { data: person } = await admin
+        .from("profiles")
+        .select("full_name,email")
+        .eq("id", input.removeMemberId)
+        .maybeSingle();
+      const email = ((person?.email as string | null) ?? "").toLowerCase();
+      if (platformAdminEmails().includes(email))
+        return NextResponse.json(
+          { error: "Esa cuenta opera la consola" },
+          { status: 400 },
+        );
+      const { data: membership } = await admin
+        .from("organization_members")
+        .select("profile_id")
+        .eq("organization_id", input.organizationId)
+        .eq("profile_id", input.removeMemberId)
+        .maybeSingle();
+      if (!membership)
+        return NextResponse.json(
+          { error: "Esa persona no está en la empresa" },
+          { status: 404 },
+        );
+      const { error: requestError } = await admin
+        .from("access_requests")
+        .delete()
+        .eq("organization_id", input.organizationId)
+        .eq("profile_id", input.removeMemberId);
+      if (requestError) throw requestError;
+      const { error: inviteError } = await admin
+        .from("team_invitations")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("organization_id", input.organizationId)
+        .eq("profile_id", input.removeMemberId)
+        .is("revoked_at", null);
+      if (inviteError) throw inviteError;
+      const { error: removed } = await admin
+        .from("organization_members")
+        .delete()
+        .eq("organization_id", input.organizationId)
+        .eq("profile_id", input.removeMemberId);
+      if (removed) throw removed;
+      const { count } = await admin
+        .from("organization_members")
+        .select("profile_id", { count: "exact", head: true })
+        .eq("profile_id", input.removeMemberId);
+      if ((count ?? 0) === 0) {
+        const deleted = await admin.auth.admin.deleteUser(input.removeMemberId);
+        accountRemoved = !deleted.error;
+      }
+      await logPlatformEvent({
+        organizationId: input.organizationId,
+        actorId: actor.id,
+        eventType: "company_updated",
+        summary: accountRemoved
+          ? `Borró a ${person?.full_name ?? "una persona"} y su cuenta`
+          : `Sacó a ${person?.full_name ?? "una persona"} de la empresa`,
+      });
+    }
+
+    if (input.dismissRequestId) {
+      const { data: requestRow, error } = await admin
+        .from("access_requests")
+        .delete()
+        .eq("id", input.dismissRequestId)
+        .eq("organization_id", input.organizationId)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!requestRow)
+        return NextResponse.json(
+          { error: "Esa solicitud ya no está" },
+          { status: 404 },
+        );
+      await logPlatformEvent({
+        organizationId: input.organizationId,
+        actorId: actor.id,
+        eventType: "company_updated",
+        summary: "Descartó una solicitud de acceso",
+      });
+    }
+
     if (input.resendAdmin) {
       const { data: org } = await admin
         .from("organizations")
@@ -620,7 +840,11 @@ export async function PATCH(request: Request) {
       !commercial &&
       !input.payment &&
       !input.resendAdmin &&
-      !input.locations?.length
+      !input.locations?.length &&
+      !input.newLocation &&
+      !input.inviteMember &&
+      !input.removeMemberId &&
+      !input.dismissRequestId
     )
       return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
 
@@ -630,6 +854,8 @@ export async function PATCH(request: Request) {
       serviceStatus,
       inviteUrl,
       delivery,
+      location,
+      accountRemoved,
     });
   } catch {
     return NextResponse.json({ error: "No fue posible actualizar la empresa" }, { status: 400 });

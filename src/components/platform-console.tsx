@@ -92,6 +92,32 @@ const statusLabel: Record<string, string> = {
   suspended: "Suspendido",
 };
 
+const methodLabel: Record<string, string> = {
+  transfer: "Transferencia",
+  cash: "Efectivo",
+  card: "Tarjeta",
+  other: "Otro",
+};
+
+type Focus =
+  | "todas"
+  | "hoy"
+  | "quietas"
+  | "pausa"
+  | "invitacion"
+  | "solicitudes"
+  | "cobrar";
+
+const focusOptions: Array<{ id: Focus; label: string }> = [
+  { id: "todas", label: "Todas" },
+  { id: "hoy", label: "En uso hoy" },
+  { id: "quietas", label: "Quietas" },
+  { id: "pausa", label: "En pausa" },
+  { id: "invitacion", label: "Invitación pendiente" },
+  { id: "solicitudes", label: "Con solicitudes" },
+  { id: "cobrar", label: "Por cobrar" },
+];
+
 const visitStatusLabel: Record<string, string> = {
   draft: "Borrador",
   invited: "Invitada",
@@ -157,6 +183,48 @@ function monthKey() {
   return todayKey().slice(0, 7);
 }
 
+function monthName() {
+  const [year, month] = monthKey().split("-").map(Number);
+  return new Date(year, (month ?? 1) - 1, 1).toLocaleDateString("es-MX", {
+    month: "long",
+  });
+}
+
+function owesThisMonth(company: Company) {
+  if (company.archivedAt) return false;
+  if (company.monthlyAmount == null || company.monthlyAmount <= 0) return false;
+  return !company.payments.some((item) => item.paidOn.startsWith(monthKey()));
+}
+
+function paidThisMonth(company: Company) {
+  return company.payments.some((item) => item.paidOn.startsWith(monthKey()));
+}
+
+function matchesFocus(company: Company, focus: Focus) {
+  switch (focus) {
+    case "hoy":
+      return company.visitsToday > 0;
+    case "quietas":
+      return isQuiet(company);
+    case "pausa":
+      return company.serviceStatus !== "active";
+    case "invitacion":
+      return company.invitePending;
+    case "solicitudes":
+      return company.pendingRequests > 0;
+    case "cobrar":
+      return owesThisMonth(company);
+    default:
+      return true;
+  }
+}
+
+function formatTotals(totals: Record<string, number>) {
+  const entries = Object.entries(totals);
+  if (!entries.length) return "$0";
+  return entries.map(([currency, amount]) => money(amount, currency)).join(" · ");
+}
+
 export function PlatformConsole() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
@@ -166,7 +234,12 @@ export function PlatformConsole() {
   const [panel, setPanel] = useState<Panel>("datos");
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState("");
+  const [focus, setFocus] = useState<Focus>("todas");
   const [showArchived, setShowArchived] = useState(false);
+  const [siteDraft, setSiteDraft] = useState<{ name: string; address: string } | null>(
+    null,
+  );
+  const [invite, setInvite] = useState({ name: "", email: "", role: "host" });
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -217,9 +290,10 @@ export function PlatformConsole() {
       .finally(() => setLoading(false));
   }, []);
 
-  function openCompany(company: Company) {
+  function openCompany(company: Company, nextPanel: Panel = "datos") {
     setOpen(company.id);
-    setPanel("datos");
+    setPanel(nextPanel);
+    setSiteDraft(null);
     setFile({
       name: company.name,
       locations: company.locations.map((site) => ({ ...site })),
@@ -287,6 +361,8 @@ export function PlatformConsole() {
       accessKey?: string;
       inviteUrl?: string;
       delivery?: string;
+      location?: { id: string; name: string; address: string };
+      accountRemoved?: boolean;
     };
     if (!response.ok) {
       toast.error(payload.error ?? "No fue posible actualizar");
@@ -305,11 +381,33 @@ export function PlatformConsole() {
   const archived = companies.filter((company) => company.archivedAt);
   const listed = showArchived ? archived : operating;
   const visible = listed.filter((company) => {
-    const haystack = `${company.name} ${company.billingEmail} ${company.members
+    const haystack = `${company.name} ${company.billingEmail} ${company.planName} ${company.members
       .map((member) => `${member.name} ${member.email}`)
       .join(" ")}`.toLowerCase();
-    return haystack.includes(query.trim().toLowerCase());
+    if (!haystack.includes(query.trim().toLowerCase())) return false;
+    if (showArchived) return true;
+    return matchesFocus(company, focus);
   });
+  const quoted = operating.filter(
+    (company) => company.monthlyAmount != null && company.monthlyAmount > 0,
+  );
+  const owing = quoted.filter((company) => owesThisMonth(company));
+  const owingTotals = owing.reduce<Record<string, number>>((totals, company) => {
+    const currency = company.currency || "MXN";
+    totals[currency] = (totals[currency] ?? 0) + (company.monthlyAmount ?? 0);
+    return totals;
+  }, {});
+
+  function chooseFocus(next: Focus) {
+    setShowArchived(false);
+    setFocus((current) => (next !== "todas" && current === next ? "todas" : next));
+    setOpen(null);
+  }
+
+  function openById(organizationId: string, nextPanel: Panel) {
+    const company = companies.find((item) => item.id === organizationId);
+    if (company) openCompany(company, nextPanel);
+  }
   const paused = operating.filter((company) => company.serviceStatus !== "active").length;
   const usingToday = operating.filter((company) => company.visitsToday > 0).length;
   const quiet = operating.filter((company) => isQuiet(company)).length;
@@ -358,37 +456,59 @@ export function PlatformConsole() {
         </Link>
         <h1 className="mt-1 text-3xl font-semibold tracking-[-.03em]">Empresas</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Elige una empresa. Su gente, visitas y pagos se abren aparte.
+          Revisa quién debe, quién pidió acceso y qué empresa está quieta. Abre una
+          para ver su gente y sus pagos.
         </p>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4">
+        <button
+          type="button"
+          onClick={() => chooseFocus("todas")}
+          className={`card-surface cursor-pointer p-4 text-left transition hover:border-[#0d9d99] ${
+            !showArchived && focus === "todas" ? "ring-2 ring-[#0d9d99]" : ""
+          }`}
+        >
           <p className="text-sm text-slate-500">Empresas</p>
           <p className="mt-1 text-2xl font-semibold">{operating.length}</p>
           <p className="text-sm text-slate-500">
             {paused} en pausa · {archived.length} archivadas
           </p>
-        </Card>
-        <Card className="p-4">
+        </button>
+        <button
+          type="button"
+          onClick={() => chooseFocus("hoy")}
+          className={`card-surface cursor-pointer p-4 text-left transition hover:border-[#0d9d99] ${
+            !showArchived && focus === "hoy" ? "ring-2 ring-[#0d9d99]" : ""
+          }`}
+        >
           <p className="text-sm text-slate-500">Actividad</p>
           <p className="mt-1 text-2xl font-semibold">{usingToday} en uso hoy</p>
           <p className="text-sm text-slate-500">{quiet} quietas</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Cobrado este mes</p>
-          <p className="mt-1 text-2xl font-semibold">
-            {Object.keys(collected).length
-              ? Object.entries(collected)
-                  .map(([currency, amount]) => money(amount, currency))
-                  .join(" · ")
-              : "$0"}
+        </button>
+        <button
+          type="button"
+          onClick={() => chooseFocus("cobrar")}
+          className={`card-surface cursor-pointer p-4 text-left transition hover:border-[#0d9d99] ${
+            !showArchived && focus === "cobrar" ? "ring-2 ring-[#0d9d99]" : ""
+          }`}
+        >
+          <p className="text-sm text-slate-500">Por cobrar en {monthName()}</p>
+          <p className="mt-1 text-2xl font-semibold">{owing.length}</p>
+          <p className="text-sm text-slate-500">
+            {formatTotals(owingTotals)} · cobrado {formatTotals(collected)}
           </p>
-        </Card>
-        <Card className="p-4">
+        </button>
+        <button
+          type="button"
+          onClick={() => chooseFocus("solicitudes")}
+          className={`card-surface cursor-pointer p-4 text-left transition hover:border-[#0d9d99] ${
+            !showArchived && focus === "solicitudes" ? "ring-2 ring-[#0d9d99]" : ""
+          }`}
+        >
           <p className="text-sm text-slate-500">Solicitudes en espera</p>
           <p className="mt-1 text-2xl font-semibold">{requests.length}</p>
-        </Card>
+        </button>
       </div>
 
       {created && (
@@ -493,7 +613,14 @@ export function PlatformConsole() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <Button variant="outline" onClick={() => setShowArchived((current) => !current)}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setShowArchived((current) => !current);
+            setFocus("todas");
+            setOpen(null);
+          }}
+        >
           {showArchived ? "Ver activas" : `Ver archivadas (${archived.length})`}
         </Button>
         {!creating && (
@@ -501,13 +628,35 @@ export function PlatformConsole() {
             Activar empresa
           </Button>
         )}
+        {!showArchived && (
+          <div className="flex w-full gap-2 overflow-x-auto">
+            {focusOptions.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => chooseFocus(item.id)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${
+                  focus === item.id
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className={selected ? "hidden space-y-2 lg:block" : "space-y-2"}>
           {visible.length === 0 && (
             <p className="text-sm text-slate-500">
-              {showArchived ? "No hay empresas archivadas." : "No hay empresas con esa búsqueda."}
+              {showArchived
+                ? "No hay empresas archivadas."
+                : query.trim()
+                  ? "No hay empresas con esa búsqueda."
+                  : "No hay empresas en este filtro."}
             </p>
           )}
           {visible.map((company) => {
@@ -541,19 +690,107 @@ export function PlatformConsole() {
                   {note ? ` · ${note}` : ""}
                 </span>
                 <span className="mt-1 block text-sm text-slate-500">
-                  {company.members.length} en el equipo · {company.visits} visitas ·{" "}
-                  {company.payments.length} pagos
+                  {company.members.length} en el equipo · {company.visits} visitas
+                  {company.monthlyAmount != null
+                    ? ` · ${money(company.monthlyAmount, company.currency)}`
+                    : ` · ${company.payments.length} pagos`}
                 </span>
+                {owesThisMonth(company) && (
+                  <span className="mt-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                    Por cobrar
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
-        <div className={selected ? "block" : "hidden lg:block"}>
+        <div>
           {!selected ? (
-            <Card className="p-5 text-sm text-slate-500">
-              Elige una empresa de la lista para ver sus datos.
-            </Card>
+            <div className="space-y-4">
+              <Card className="p-5">
+                <h2 className="font-semibold">Por cobrar en {monthName()}</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Empresas con cuota y sin un pago anotado este mes. La cuota se escribe en la ficha.
+                </p>
+                <ul className="mt-3 divide-y divide-slate-100 text-sm">
+                  {owing.length === 0 && (
+                    <li className="py-2 text-slate-500">
+                      {quoted.length === 0
+                        ? "Ninguna empresa tiene cuota en su ficha."
+                        : "Nadie tiene cuota pendiente."}
+                    </li>
+                  )}
+                  {owing.map((company) => (
+                    <li key={company.id} className="flex items-center justify-between gap-3 py-2">
+                      <span>
+                        <b>{company.name}</b>
+                        <span className="block text-slate-500">
+                          {company.planName || "Cuota"} · {money(company.monthlyAmount ?? 0, company.currency)}
+                        </span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openCompany(company, "pagos")}
+                      >
+                        Anotar pago
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+              <Card className="p-5">
+                <h2 className="font-semibold">Solicitudes en espera</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Ya no abren acceso. Ábrelas en la empresa para descartarlas.
+                </p>
+                <ul className="mt-3 divide-y divide-slate-100 text-sm">
+                  {requests.length === 0 && (
+                    <li className="py-2 text-slate-500">No hay solicitudes en espera.</li>
+                  )}
+                  {requests.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3 py-2">
+                      <span>
+                        <b>{item.name}</b> · {item.email}
+                        <span className="block text-slate-500">
+                          {item.organizationName} · pide ser {roleLabel[item.role] ?? item.role}
+                        </span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openById(item.organizationId, "solicitudes")}
+                      >
+                        Abrir
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+              <Card className="p-5">
+                <h2 className="font-semibold">Últimos movimientos</h2>
+                <ul className="mt-3 divide-y divide-slate-100 text-sm">
+                  {events.length === 0 && (
+                    <li className="py-2 text-slate-500">Todavía no hay movimientos.</li>
+                  )}
+                  {events.slice(0, 8).map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className="w-full py-2 text-left"
+                        onClick={() => openById(item.organizationId, "movimientos")}
+                      >
+                        {item.summary}
+                        <span className="block text-slate-500">
+                          {item.organizationName} · {stamp(item.createdAt)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </div>
           ) : (
             <Card className="p-5">
               <button
@@ -650,6 +887,17 @@ export function PlatformConsole() {
                     Última visita: {when(selected.lastVisitAt)}
                     {selected.invitePending ? " · el administrador no ha abierto la invitación" : ""}
                   </p>
+                  {selected.monthlyAmount != null && (
+                    <p className={owesThisMonth(selected) ? "font-semibold text-amber-800" : "text-slate-600"}>
+                      {selected.planName || "Cuota"}{" "}
+                      {money(selected.monthlyAmount, selected.currency)}
+                      {owesThisMonth(selected)
+                        ? " · por cobrar este mes"
+                        : paidThisMonth(selected)
+                          ? " · pago anotado este mes"
+                          : ""}
+                    </p>
+                  )}
                   <div>
                     <h3 className="font-semibold">Sedes</h3>
                     <ul className="mt-1 space-y-1 text-slate-600">
@@ -668,8 +916,8 @@ export function PlatformConsole() {
                     </p>
                   </div>
                   <p className="text-slate-500">
-                    Pausar cierra la entrada. Las visitas y la gente se quedan. Una clave nueva
-                    solo deja de servir para solicitudes nuevas.
+                    Pausar cierra la entrada. Las visitas se quedan. La clave ya no mete a
+                    nadie: la gente entra solo con invitación.
                   </p>
                   <Button
                     variant="outline"
@@ -714,26 +962,114 @@ export function PlatformConsole() {
                       </Button>
                     )}
                   </div>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Nadie entra con la clave. Aquí invitas y, si hace falta, borras a la persona
+                    de la base.
+                  </p>
                   <ul className="mt-2 divide-y divide-slate-100 text-sm">
                     {selected.members.length === 0 && (
                       <li className="py-2 text-slate-500">Sin personas</li>
                     )}
                     {selected.members.map((member) => (
-                      <li key={member.id} className="flex justify-between gap-3 py-2">
+                      <li key={member.id} className="flex items-center justify-between gap-3 py-2">
                         <span>
                           {member.name}
                           {member.department ? ` · ${member.department}` : ""}
                           <span className="block text-slate-500">{member.email}</span>
                         </span>
-                        <span className="text-right text-slate-500">
-                          {roleLabel[member.role] ?? member.role}
-                          <span className="block">
-                            {statusLabel[member.status] ?? member.status}
+                        <span className="flex items-center gap-3 text-right text-slate-500">
+                          <span>
+                            {roleLabel[member.role] ?? member.role}
+                            <span className="block">
+                              {statusLabel[member.status] ?? member.status}
+                            </span>
                           </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const accepted = window.confirm(
+                                `Se borra a ${member.name} de ${selected.name}. Si no está en otra empresa, también se borra su cuenta. Las visitas que atendió se quedan. ¿Borrar?`,
+                              );
+                              if (!accepted) return;
+                              void patch(selected.id, { removeMemberId: member.id }).then(
+                                (result) => {
+                                  if (!result) return;
+                                  toast.success(
+                                    result.accountRemoved
+                                      ? "Persona y cuenta borradas"
+                                      : "Ya no puede entrar. El historial de visitas se quedó",
+                                  );
+                                },
+                              );
+                            }}
+                          >
+                            Borrar
+                          </Button>
                         </span>
                       </li>
                     ))}
                   </ul>
+                  <form
+                    className="mt-4 grid gap-3 sm:grid-cols-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void patch(selected.id, {
+                        inviteMember: {
+                          name: invite.name.trim(),
+                          email: invite.email.trim(),
+                          role: invite.role,
+                        },
+                      }).then((result) => {
+                        if (!result) return;
+                        toast.success(
+                          result.delivery === "sent"
+                            ? "Invitación enviada"
+                            : "Invitación lista para compartir",
+                        );
+                        if (result.inviteUrl) void copy(result.inviteUrl);
+                        setInvite({ name: "", email: "", role: invite.role });
+                      });
+                    }}
+                  >
+                    <Field label="Nombre">
+                      <input
+                        required
+                        className={fieldClass}
+                        value={invite.name}
+                        onChange={(event) =>
+                          setInvite({ ...invite, name: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Correo">
+                      <input
+                        required
+                        type="email"
+                        className={fieldClass}
+                        value={invite.email}
+                        onChange={(event) =>
+                          setInvite({ ...invite, email: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Rol">
+                      <select
+                        className={fieldClass}
+                        value={invite.role}
+                        onChange={(event) =>
+                          setInvite({ ...invite, role: event.target.value })
+                        }
+                      >
+                        <option value="admin">Administrador</option>
+                        <option value="host">Anfitrión</option>
+                        <option value="guard">Guardia</option>
+                      </select>
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="submit">Invitar</Button>
+                    </div>
+                  </form>
                 </div>
               )}
 
@@ -775,6 +1111,10 @@ export function PlatformConsole() {
                         <span>
                           El {when(item.paidOn)} pagó
                           {item.concept ? ` · ${item.concept}` : ""}
+                          <span className="block text-slate-500">
+                            {methodLabel[item.method] ?? item.method}
+                            {item.reference ? ` · ${item.reference}` : ""}
+                          </span>
                         </span>
                         <b>{money(item.amount, item.currency)}</b>
                       </li>
@@ -884,21 +1224,37 @@ export function PlatformConsole() {
                 <div className="mt-5">
                   <h3 className="text-sm font-semibold">Solicitudes</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    Las aprueba el administrador de esta empresa.
+                    Ya no abren acceso. Descártalas o invita a la persona.
                   </p>
                   <ul className="mt-3 divide-y divide-slate-100 text-sm">
                     {companyRequests.length === 0 && (
                       <li className="py-2 text-slate-500">No hay solicitudes en espera.</li>
                     )}
                     {companyRequests.map((item) => (
-                      <li key={item.id} className="flex justify-between gap-3 py-2">
+                      <li key={item.id} className="flex items-center justify-between gap-3 py-2">
                         <span>
                           <b>{item.name}</b> · {item.email}
                           <span className="block text-slate-500">
                             Pide ser {roleLabel[item.role] ?? item.role}
                           </span>
                         </span>
-                        <span className="text-slate-500">{stamp(item.createdAt)}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const accepted = window.confirm(
+                              `Se borra la solicitud de ${item.name}. No entra con ella. ¿Descartar?`,
+                            );
+                            if (!accepted) return;
+                            void patch(selected.id, { dismissRequestId: item.id }).then(
+                              (result) => {
+                                if (result) toast.success("Solicitud descartada");
+                              },
+                            );
+                          }}
+                        >
+                          Descartar
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -949,6 +1305,73 @@ export function PlatformConsole() {
                       onChange={(event) => setFile({ ...file, name: event.target.value })}
                     />
                   </Field>
+                  <div className="sm:col-span-2">
+                    {siteDraft ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="Nueva sede">
+                          <input
+                            className={fieldClass}
+                            value={siteDraft.name}
+                            onChange={(event) =>
+                              setSiteDraft({ ...siteDraft, name: event.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="Dirección">
+                          <input
+                            className={fieldClass}
+                            value={siteDraft.address}
+                            onChange={(event) =>
+                              setSiteDraft({ ...siteDraft, address: event.target.value })
+                            }
+                          />
+                        </Field>
+                        <div className="flex flex-wrap gap-2 sm:col-span-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              const name = siteDraft.name.trim();
+                              const address = siteDraft.address.trim();
+                              if (name.length < 2 || address.length < 2) {
+                                toast.error("Escribe el nombre y la dirección de la sede");
+                                return;
+                              }
+                              void patch(selected.id, { newLocation: { name, address } }).then(
+                                (result) => {
+                                  if (!result?.location) return;
+                                  const location = result.location;
+                                  setFile((current) => ({
+                                    ...current,
+                                    locations: [...current.locations, location],
+                                  }));
+                                  setSiteDraft(null);
+                                  toast.success("Sede agregada");
+                                },
+                              );
+                            }}
+                          >
+                            Guardar sede
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setSiteDraft(null)}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSiteDraft({ name: "", address: "" })}
+                      >
+                        Agregar sede
+                      </Button>
+                    )}
+                  </div>
                   {file.locations.map((site, index) => (
                     <div key={site.id} className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
                       <Field label="Sede">

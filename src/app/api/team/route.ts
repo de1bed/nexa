@@ -4,6 +4,7 @@ import { requireApiContext } from "@/lib/server/session";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { issueTeamInvite } from "@/lib/server/team-invite";
+import { isPlatformAdmin } from "@/lib/server/platform-admin";
 import { teamInviteSchema } from "@/lib/schemas";
 import { maskEmail } from "@/lib/security";
 import type { MemberRole, MemberStatus } from "@/lib/domain";
@@ -66,8 +67,13 @@ export async function POST(request: Request) {
   const guard = await requireApiContext(["superadmin", "admin"]);
   if (!guard.ok)
     return NextResponse.json({ error: guard.error }, { status: guard.status });
-  const { organizationId, organizationName, userId, displayName } =
+  const { organizationId, organizationName, userId, displayName, email: actorEmail } =
     guard.context;
+  if (!(await isPlatformAdmin(userId, actorEmail)))
+    return NextResponse.json(
+      { error: "Solo NEXA puede invitar gente." },
+      { status: 403 },
+    );
 
   try {
     const input = teamInviteSchema.parse(await request.json());

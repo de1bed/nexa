@@ -209,7 +209,7 @@ export const es = {
     noCompany: "¿Tu empresa te dio una clave?",
     createAccount: "Regístrate con la clave",
     companyKeyHint:
-      "Sin la clave de tu empresa, o sin una invitación, no se abre una cuenta.",
+      "Solo entras si NEXA o el administrador de tu empresa te invita por correo.",
     quote: "“Una recepción más ágil empieza antes de que llegue el visitante.”",
     tagline: "NEXA VISIT · Control inteligente de accesos",
     codeTitle: "Escribe tu código",
@@ -1158,7 +1158,7 @@ export const en: DeepStringify<typeof es> = {
     noCompany: "Did your company give you a key?",
     createAccount: "Register with the key",
     companyKeyHint:
-      "Without your company key, or an invitation, an account is not opened.",
+      "You can sign in only after NEXA or your company admin invites you by email.",
     quote: "“A faster reception starts before the visitor arrives.”",
     tagline: "NEXA VISIT · Intelligent access control",
     codeTitle: "Enter your code",

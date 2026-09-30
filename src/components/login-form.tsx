@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import type { Route } from "next";
 import {
   ArrowRight,
@@ -303,13 +302,7 @@ export function LoginForm() {
                     </button>
                   </form>
 
-                  <p className="mt-6 text-center text-sm text-slate-500">
-                    {t("login.noCompany")}{" "}
-                    <Link href="/signup" className="font-semibold text-blue-600">
-                      {t("login.createAccount")}
-                    </Link>
-                  </p>
-                  <p className="mt-2 text-center text-xs leading-5 text-slate-400">
+                  <p className="mt-6 text-center text-sm leading-6 text-slate-500">
                     {t("login.companyKeyHint")}
                   </p>
                 </>
