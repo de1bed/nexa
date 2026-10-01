@@ -47,6 +47,8 @@ import { PassCard } from "./visitor/pass-card";
 import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
 import { isLiveMode } from "@/lib/config";
+import { getOCRProvider } from "@/lib/ocr";
+import { readPlateText } from "@/lib/ocr/tesseract";
 import { documentTypes } from "@/lib/domain";
 import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
@@ -155,6 +157,8 @@ export function VisitorFlow({
   const [vehiclePhotos, setVehiclePhotos] = useState<PhotoItem[]>([]);
   const [attachmentPhotos, setAttachmentPhotos] = useState<PhotoItem[]>([]);
   const [capturing, setCapturing] = useState<CaptureTarget | null>(null);
+  const [reading, setReading] = useState<"" | "id" | "plate">("");
+  const [readNote, setReadNote] = useState("");
   const [consent, setConsent] = useState(false);
   const [passToken, setPassToken] = useState("");
   const [invitationUrl, setInvitationUrl] = useState("");
@@ -281,6 +285,52 @@ export function VisitorFlow({
   const set = useCallback((name: FormField, next: string) => {
     setEdits((current) => ({ ...current, [name]: next }));
   }, []);
+
+  const readIdentity = useCallback(
+    async (file: File) => {
+      if (!live) return;
+      setReading("id");
+      setReadNote("");
+      try {
+        const result = await (await getOCRProvider()).extractIdentityData(file);
+        const trusted = Boolean(result.mrz?.verified) || result.confidence >= 70;
+        if (!trusted || (!result.fullName && !result.documentNumber)) {
+          setReadNote("miss");
+          return;
+        }
+        if (result.fullName) set("fullName", result.fullName);
+        if (result.documentNumber) set("documentNumber", result.documentNumber);
+        setReadNote(result.mrz?.verified ? "verified" : "partial");
+      } catch {
+        setReadNote("miss");
+      } finally {
+        setReading("");
+      }
+    },
+    [live, set],
+  );
+
+  const readPlate = useCallback(
+    async (file: File) => {
+      if (!live) return;
+      setReading("plate");
+      setReadNote("");
+      try {
+        const plate = await readPlateText(file);
+        if (!plate) {
+          setReadNote("plate-miss");
+          return;
+        }
+        set("vehiclePlate", plate);
+        setReadNote("plate");
+      } catch {
+        setReadNote("plate-miss");
+      } finally {
+        setReading("");
+      }
+    },
+    [live, set],
+  );
 
   const go = useCallback((next: Step) => {
     setError("");
@@ -706,9 +756,11 @@ export function VisitorFlow({
               side={capturing.side}
               onCancel={() => setCapturing(null)}
               onCaptured={(captured, url) => {
-                setFiles((current) => ({ ...current, [capturing.side]: captured }));
-                setPreviews((current) => ({ ...current, [capturing.side]: url }));
+                const side = capturing.side;
+                setFiles((current) => ({ ...current, [side]: captured }));
+                setPreviews((current) => ({ ...current, [side]: url }));
                 setCapturing(null);
+                if (side === "back") void readIdentity(captured);
               }}
             />
           </div>
@@ -773,9 +825,15 @@ export function VisitorFlow({
             </div>
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
-              {flow.identification === "required"
-                ? t("visitor.idRequiredNote")
-                : t("visitor.idOptionalNote")}
+              {reading === "id"
+                ? t("visitor.readingId")
+                : readNote === "verified" || readNote === "partial"
+                  ? t("visitor.ocrVerified")
+                  : readNote === "miss"
+                    ? t("visitor.ocrMiss")
+                    : flow.identification === "required"
+                      ? t("visitor.idRequiredNote")
+                      : t("visitor.idOptionalNote")}
             </Callout>
           </StepShell>
         ))}
@@ -785,7 +843,11 @@ export function VisitorFlow({
           index={stepIndex}
           total={totalSteps}
           title={t("visitor.review")}
-          subtitle={t("visitor.reviewHint")}
+          subtitle={
+            readNote === "verified" || readNote === "partial"
+              ? t("visitor.ocrVerified")
+              : t("visitor.reviewHint")
+          }
           onBack={() => back("review")}
           onNext={() => {
             if (flow.identity === "required" && !value("fullName").trim())
@@ -856,6 +918,7 @@ export function VisitorFlow({
             onCaptured={(file, preview) => {
               setVehiclePhotos((current) => [...current, { file, preview }]);
               setCapturing(null);
+              void readPlate(file);
             }}
           />
         ) : (
@@ -877,6 +940,15 @@ export function VisitorFlow({
             }
             error={error}
           >
+            {reading === "plate" && (
+              <p className="mb-3 text-sm text-slate-500">{t("visitor.readingPlate")}</p>
+            )}
+            {readNote === "plate" && (
+              <p className="mb-3 text-sm text-[#0d9d99]">{t("visitor.plateRead")}</p>
+            )}
+            {readNote === "plate-miss" && (
+              <p className="mb-3 text-sm text-amber-700">{t("visitor.plateMiss")}</p>
+            )}
             <VehicleFields
               plate={value("vehiclePlate")}
               onPlate={(next) => set("vehiclePlate", next.toUpperCase())}
@@ -906,6 +978,7 @@ export function VisitorFlow({
             onCaptured={(file, preview) => {
               setVehiclePhotos((current) => [...current, { file, preview }]);
               setCapturing(null);
+              void readPlate(file);
             }}
           />
         ) : (
@@ -927,6 +1000,15 @@ export function VisitorFlow({
             error={error}
           >
             <div className="space-y-4">
+              {extrasShowsVehicle(flow) && reading === "plate" && (
+                <p className="text-sm text-slate-500">{t("visitor.readingPlate")}</p>
+              )}
+              {extrasShowsVehicle(flow) && readNote === "plate" && (
+                <p className="text-sm text-[#0d9d99]">{t("visitor.plateRead")}</p>
+              )}
+              {extrasShowsVehicle(flow) && readNote === "plate-miss" && (
+                <p className="text-sm text-amber-700">{t("visitor.plateMiss")}</p>
+              )}
               {extrasShowsVehicle(flow) && (
                 <VehicleFields
                   plate={value("vehiclePlate")}

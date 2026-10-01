@@ -3,18 +3,14 @@ import { MockOCRProvider } from "./mock";
 import { isLiveMode } from "@/lib/config";
 
 /**
- * En producción: Tesseract primero (gratis). Gemini Flash Lite solo si
- * la banda no se pudo comprobar. El mock es solo vitrina.
+ * La lectura corre en el teléfono con Tesseract. No llama a un modelo de pago.
+ * El mock solo existe en la vitrina, sin credenciales.
  */
 export async function getOCRProvider(): Promise<OCRProvider> {
   const forced = process.env.NEXT_PUBLIC_OCR_PROVIDER;
   if (forced === "mock" || !isLiveMode()) return new MockOCRProvider();
-  if (forced === "tesseract") {
-    const { TesseractOCRProvider } = await import("./tesseract");
-    return new TesseractOCRProvider();
-  }
-  const { CloudOCRProvider } = await import("./cloud");
-  return new CloudOCRProvider();
+  const { TesseractOCRProvider } = await import("./tesseract");
+  return new TesseractOCRProvider();
 }
 
 export { LOW_CONFIDENCE, OCR_DISCLAIMER } from "./types";

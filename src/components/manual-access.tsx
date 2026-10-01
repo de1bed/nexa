@@ -17,18 +17,20 @@ import { useI18n } from "./i18n-provider";
 import { manualVisitSchema } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
 import { compressIdentityImage, validateImage, ACCEPTED_IMAGE_TYPES } from "@/lib/image";
+import { getOCRProvider } from "@/lib/ocr";
 
 /**
  * Alta en caseta para quien llega sin invitación.
  * Anfitriones y ubicaciones salen del catálogo real de la organización.
  */
 export function ManualAccess() {
-  const { hosts, locations, createManualVisit, settings } = useWorkspace();
+  const { hosts, locations, createManualVisit, settings, live } = useWorkspace();
   const { t } = useI18n();
   const [done, setDone] = useState<Visit | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [readingId, setReadingId] = useState(false);
   const [form, setForm] = useState({
     visitorName: "",
     email: "",
@@ -72,6 +74,22 @@ export function ManualAccess() {
     }
     setDocumentFile(compressed);
     toast.success("Identificación adjuntada");
+    if (!live) return;
+    setReadingId(true);
+    try {
+      const result = await (await getOCRProvider()).extractIdentityData(compressed);
+      if (result.mrz?.verified && result.fullName) {
+        setForm((current) =>
+          current.visitorName.trim()
+            ? current
+            : { ...current, visitorName: result.fullName ?? "" },
+        );
+      }
+    } catch {
+      // La foto queda guardada aunque la banda no se lea.
+    } finally {
+      setReadingId(false);
+    }
   }
 
   async function submit(event: React.FormEvent) {
@@ -273,12 +291,12 @@ export function ManualAccess() {
               Foto de identificación
             </span>
             <span className="mt-0.5 block text-xs text-slate-400">
-              Opcional · almacenamiento privado ·{" "}
+              Opcional · el reverso llena el nombre ·{" "}
               {settings.documentRetentionDays} días de retención
             </span>
           </span>
           <span className="shrink-0 text-right text-xs font-semibold text-[#10cfc9]">
-            {documentFile ? "Adjuntada" : "Tomar foto"}
+            {readingId ? "Leyendo…" : documentFile ? "Adjuntada" : "Tomar foto"}
           </span>
           <input
             type="file"

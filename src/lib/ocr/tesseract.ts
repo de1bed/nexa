@@ -1,6 +1,7 @@
 import type { OCRField, OCRImageInput, OCRProvider, OCRResult } from "./types";
 import { isExpired, readMrz, type MrzResult } from "./mrz";
-import { prepareMrzImage } from "@/lib/image";
+import { pickPlate } from "./plate";
+import { prepareMrzImage, preparePlateImage } from "@/lib/image";
 
 function lastImage(image: OCRImageInput) {
   return Array.isArray(image) ? image[image.length - 1] : image;
@@ -22,6 +23,7 @@ const ASSET_BASE = process.env.NEXT_PUBLIC_TESSERACT_ASSETS ?? "/tesseract";
 
 /** Alfabeto de la norma ICAO 9303: sin minúsculas, signos ni acentos. */
 const MRZ_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
+const PLATE_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 type Worker = Awaited<ReturnType<typeof createMrzWorker>>;
 
@@ -76,6 +78,39 @@ function toFields(mrz: MrzResult): OCRField[] {
   if (mrz.curp) fields.push({ name: "curp", value: mrz.curp, confidence });
 
   return fields;
+}
+
+/** Lee una placa en el teléfono. Devuelve null si no aparece un patrón claro. */
+export async function readPlateText(file: File) {
+  const { createWorker, PSM } = await import("tesseract.js");
+  const worker = await createWorker("eng", 1, {
+    workerPath: `${ASSET_BASE}/worker.min.js`,
+    corePath: `${ASSET_BASE}/core`,
+    langPath: `${ASSET_BASE}/lang`,
+    gzip: true,
+  });
+
+  try {
+    await worker.setParameters({
+      tessedit_char_whitelist: PLATE_CHARSET,
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      load_system_dawg: "0",
+      load_freq_dawg: "0",
+    });
+
+    const prepared = await preparePlateImage(file).catch(() => null);
+    const first = await worker.recognize(prepared ?? file);
+    const direct = pickPlate(first.data.text ?? "");
+    if (direct) return direct;
+
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    });
+    const second = await worker.recognize(file);
+    return pickPlate(`${first.data.text ?? ""}\n${second.data.text ?? ""}`);
+  } finally {
+    await worker.terminate().catch(() => undefined);
+  }
 }
 
 export class TesseractOCRProvider implements OCRProvider {
