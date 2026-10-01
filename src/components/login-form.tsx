@@ -16,7 +16,7 @@ import { AccessCodeStep, accessRequestError } from "./access-code";
 import { ChoosePasswordStep } from "./choose-password";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./i18n-provider";
-import { Button, Field, fieldClass } from "./ui";
+import { Button, Field, PasswordInput, fieldClass } from "./ui";
 import { clearDemoSession } from "@/lib/demo-public";
 import { createClient } from "@/lib/supabase/client";
 import { destinationAfterLogin, isLiveMode, roleHome } from "@/lib/config";
@@ -260,11 +260,9 @@ export function LoginForm() {
                       />
                     </Field>
                     <Field label={t("login.password")}>
-                      <input
+                      <PasswordInput
                         required
-                        type="password"
                         autoComplete="current-password"
-                        className={fieldClass}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                       />

@@ -43,7 +43,6 @@ export function GuardScan() {
   const { t, formatDateTime } = useI18n();
   const { live, visits, decide, settings, reload } = useWorkspace();
   const [mode, setMode] = useState<Mode>("home");
-  const [manualToken, setManualToken] = useState("");
   const [visit, setVisit] = useState<Visit | null>(null);
   const [tokenState, setTokenState] = useState<string>("valid");
   const [lastDecision, setLastDecision] = useState<Decision | null>(null);
@@ -203,7 +202,6 @@ export function GuardScan() {
 
   function reset() {
     setVisit(null);
-    setManualToken("");
     setLastDecision(null);
     setDecisionError("");
     setMode("home");
@@ -254,7 +252,7 @@ export function GuardScan() {
               onClick={() => setMode("home")}
               className="mt-3 block font-semibold text-white"
             >
-              {t("guard.typeInstead")}
+              {t("guard.back")}
             </button>
           </div>
         )}
@@ -527,7 +525,7 @@ export function GuardScan() {
           {t("guard.whoArrives")}
         </h1>
         <p className="mt-1.5 text-[15px] text-slate-400">
-          {t("guard.scanOrType")}
+          {t("guard.scanOnly")}
         </p>
       </header>
 
@@ -542,42 +540,6 @@ export function GuardScan() {
         <span className="mt-5 text-xl font-semibold">{t("guard.scanQr")}</span>
         <span className="mt-1 text-sm opacity-70">{t("guard.openCamera")}</span>
       </button>
-
-      <div className="my-6 flex items-center gap-3 text-[11px] font-medium tracking-wider text-slate-500">
-        <span className="h-px flex-1 bg-white/10" />{t("guard.orType")}
-        <span className="h-px flex-1 bg-white/10" />
-      </div>
-
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!manualToken.trim()) {
-            toast.error(t("guard.codeRequired"));
-            return;
-          }
-          void resolve(manualToken);
-        }}
-        className="flex gap-2"
-      >
-        <input
-          value={manualToken}
-          onChange={(event) => setManualToken(event.target.value)}
-          aria-label={t("guard.code")}
-          placeholder={t("guard.code")}
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          className="h-14 min-w-0 flex-1 rounded-2xl border border-white/15 bg-white/[.07] px-4 text-[16px] text-white outline-none placeholder:text-slate-500 focus:border-[#10cfc9]"
-        />
-        <Button
-          type="submit"
-          size="lg"
-          disabled={resolving}
-          className="h-14 shrink-0 bg-white text-[#071426]"
-        >
-          {resolving ? "…" : t("guard.validate")}
-        </Button>
-      </form>
 
       <Link
         href="/guard/manual"

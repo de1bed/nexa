@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, Loader2, LockKeyhole, X } from "lucide-react";
-import { Button, Field, cn, fieldClass } from "./ui";
+import { Button, Field, PasswordInput, cn } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 
 const MIN_LENGTH = 8;
@@ -82,12 +82,10 @@ export function ChoosePasswordStep({
 
       <form onSubmit={save} className="mt-7 space-y-4">
         <Field label="Contraseña">
-          <input
+          <PasswordInput
             required
             autoFocus
-            type="password"
             autoComplete="new-password"
-            className={fieldClass}
             value={password}
             onChange={(event) => {
               setPassword(event.target.value);
@@ -107,11 +105,9 @@ export function ChoosePasswordStep({
         )}
 
         <Field label="Confirma tu contraseña">
-          <input
+          <PasswordInput
             required
-            type="password"
             autoComplete="new-password"
-            className={fieldClass}
             value={confirm}
             onChange={(event) => {
               setConfirm(event.target.value);

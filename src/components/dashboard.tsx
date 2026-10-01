@@ -27,11 +27,12 @@ import { useWorkspace } from "./workspace-provider";
 import { Avatar, Button, Card, EmptyState, MetricTile, StatusPill, Skeleton } from "./ui";
 import { LiveDuration } from "./ui-client";
 import { timeInsideMs } from "@/lib/domain";
+import { localDayKey } from "@/lib/local-day";
 import { useI18n } from "./i18n-provider";
 
 export function Dashboard() {
   const { visits, events, viewer, organization, loading } = useWorkspace();
-  const { t, formatTime, formatWeekday, formatDuration, intl } = useI18n();
+  const { t, formatTime, formatDateTime, formatWeekday, formatDuration, intl } = useI18n();
 
   const metrics = useMemo(() => {
     const today = new Date().toDateString();
@@ -42,9 +43,11 @@ export function Dashboard() {
     const scheduledToday = visits.filter((visit) => isToday(visit.startsAt));
     const exitsToday = visits.filter((visit) => isToday(visit.checkedOutAt));
 
-    const completed = visits.filter(
-      (visit) => visit.checkedInAt && visit.checkedOutAt,
-    );
+    const weekStart = localDayKey(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
+    const completed = visits.filter((visit) => {
+      if (!visit.checkedInAt || !visit.checkedOutAt) return false;
+      return localDayKey(visit.checkedOutAt) >= weekStart;
+    });
     const averageMs = completed.length
       ? completed.reduce((total, visit) => total + timeInsideMs(visit), 0) /
         completed.length
@@ -53,14 +56,16 @@ export function Dashboard() {
     const chart = Array.from({ length: 7 }, (_, index) => {
       const day = new Date();
       day.setDate(day.getDate() - 6 + index);
-      const label = day.toDateString();
-      const sameDay = visits.filter(
-        (visit) => new Date(visit.startsAt).toDateString() === label,
-      );
+      const label = localDayKey(day);
       return {
-        day: formatWeekday(day),
-        entradas: sameDay.filter((visit) => visit.checkedInAt).length,
-        salidas: sameDay.filter((visit) => visit.checkedOutAt).length,
+        day: `${formatWeekday(day)} ${day.getDate()}`,
+        entries: visits.filter(
+          (visit) => visit.checkedInAt && localDayKey(visit.checkedInAt) === label,
+        ).length,
+        exits: visits.filter(
+          (visit) =>
+            visit.checkedOutAt && localDayKey(visit.checkedOutAt) === label,
+        ).length,
       };
     });
 
@@ -247,9 +252,21 @@ export function Dashboard() {
 
       <section className="mt-6 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
         <Card className="p-5 sm:p-6">
-          <div className="mb-5">
-            <h2 className="font-semibold">{t("dashboard.flow")}</h2>
-            <p className="text-sm text-slate-500">{t("dashboard.weekFlowHint")}</p>
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">{t("dashboard.flow")}</h2>
+              <p className="text-sm text-slate-500">{t("dashboard.weekFlowHint")}</p>
+            </div>
+            <div className="flex gap-4 text-xs font-medium text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full bg-[#0d9d99]" />
+                {t("dashboard.entries")}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full bg-[#2563eb]" />
+                {t("dashboard.exitsChart")}
+              </span>
+            </div>
           </div>
           <div className="h-60 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -282,14 +299,16 @@ export function Dashboard() {
                   }}
                 />
                 <Area
-                  dataKey="entradas"
+                  dataKey="entries"
+                  name={t("dashboard.entries")}
                   type="monotone"
                   stroke="#0d9d99"
                   fill="url(#entradas)"
                   strokeWidth={2.4}
                 />
                 <Area
-                  dataKey="salidas"
+                  dataKey="exits"
+                  name={t("dashboard.exitsChart")}
                   type="monotone"
                   stroke="#2563eb"
                   fill="transparent"
@@ -378,7 +397,7 @@ export function Dashboard() {
                         {visit?.visitorName ?? t("common.visit")}
                       </p>
                       <p className="truncate text-xs text-slate-500">
-                        {t(`events.${event.type}`)} · {formatTime(event.at)} ·{" "}
+                        {t(`events.${event.type}`)} · {formatDateTime(event.at)} ·{" "}
                         {event.actor}
                       </p>
                     </div>

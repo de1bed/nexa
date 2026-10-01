@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Loader2, LockKeyhole } from "lucide-react";
 import { Brand } from "./brand";
-import { Button, Field, fieldClass } from "./ui";
+import { Button, Field, PasswordInput, fieldClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { roleHome } from "@/lib/config";
 import { passwordSchema } from "@/lib/schemas";
@@ -161,22 +161,18 @@ export function TeamInviteForm({ token }: { token: string }) {
                   />
                 </Field>
                 <Field label="Contraseña" hint="Mínimo 8 caracteres.">
-                  <input
+                  <PasswordInput
                     required
                     autoFocus
-                    type="password"
                     autoComplete="new-password"
-                    className={fieldClass}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                   />
                 </Field>
                 <Field label="Confírmala">
-                  <input
+                  <PasswordInput
                     required
-                    type="password"
                     autoComplete="new-password"
-                    className={fieldClass}
                     value={confirm}
                     onChange={(event) => setConfirm(event.target.value)}
                   />

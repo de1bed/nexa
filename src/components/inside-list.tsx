@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Clock3, LogOut, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Clock3, LogOut, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
-import { Button, EmptyState } from "./ui";
+import { Button, EmptyState, cn, fieldClass } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
 import type { Visit } from "@/lib/domain";
 import { useI18n } from "./i18n-provider";
@@ -15,8 +15,25 @@ export function InsideList() {
   const { t, formatTime } = useI18n();
   const [confirm, setConfirm] = useState<Visit | null>(null);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [location, setLocation] = useState("all");
 
   const inside = visits.filter((visit) => visit.status === "checked_in");
+  const locations = useMemo(
+    () => [...new Set(inside.map((visit) => visit.location).filter(Boolean))].sort(),
+    [inside],
+  );
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return inside.filter((visit) => {
+      if (location !== "all" && visit.location !== location) return false;
+      if (!needle) return true;
+      return [visit.visitorName, visit.company, visit.hostName, visit.location]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [inside, location, query]);
 
   async function checkOut(visit: Visit) {
     setBusy(true);
@@ -48,6 +65,55 @@ export function InsideList() {
         </h1>
       </header>
 
+      {inside.length > 0 && (
+        <div className="mb-4 space-y-3">
+          <label className="relative block">
+            <Search
+              size={18}
+              className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={t("people.searchAria")}
+              placeholder={t("people.searchPlaceholder")}
+              className={cn(fieldClass, "pl-11")}
+            />
+          </label>
+          {locations.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setLocation("all")}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
+                  location === "all"
+                    ? "bg-[#10cfc9] text-[#043b39]"
+                    : "bg-white/10 text-slate-200",
+                )}
+              >
+                {t("common.all")}
+              </button>
+              {locations.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setLocation(name)}
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
+                    location === name
+                      ? "bg-[#10cfc9] text-[#043b39]"
+                      : "bg-white/10 text-slate-200",
+                  )}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {inside.length === 0 ? (
         <EmptyState
           dark
@@ -55,9 +121,16 @@ export function InsideList() {
           title={t("guard.emptyInside")}
           description={t("guard.emptyInsideHint")}
         />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          dark
+          icon={Search}
+          title={t("people.noMatches")}
+          description={t("people.noMatchesHint")}
+        />
       ) : (
         <div className="space-y-3">
-          {inside.map((visit) => (
+          {visible.map((visit) => (
             <article
               key={visit.id}
               className="rounded-3xl bg-white p-5 text-[#071426]"

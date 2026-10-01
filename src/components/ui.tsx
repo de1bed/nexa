@@ -1,9 +1,9 @@
 "use client";
 
-import type { ComponentProps, ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { LucideIcon } from "lucide-react";
+import { Eye, EyeOff, type LucideIcon } from "lucide-react";
 import { statusLabels, type VisitStatus } from "@/lib/domain";
 import { translate } from "@/lib/i18n";
 import { useLocale } from "@/lib/i18n/store";
@@ -201,6 +201,39 @@ export const fieldClass =
 
 export const fieldDarkClass =
   "h-13 w-full rounded-2xl border border-white/15 bg-white/[.07] px-4 text-[16px] text-white outline-none transition placeholder:text-slate-500 focus:border-[#10cfc9] focus:ring-4 focus:ring-[#10cfc9]/15";
+
+export function PasswordInput({
+  className,
+  ...props
+}: Omit<ComponentProps<"input">, "type">) {
+  const [visible, setVisible] = useState(false);
+  const locale = useLocale();
+  const label = translate(
+    visible ? "login.hidePassword" : "login.showPassword",
+    undefined,
+    locale,
+  );
+
+  return (
+    <span className="relative block">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        className={cn(fieldClass, "pr-12", className)}
+      />
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={visible}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setVisible((current) => !current)}
+        className="absolute top-1/2 right-1.5 grid size-10 -translate-y-1/2 place-items-center rounded-xl text-slate-400 transition hover:text-[#071426]"
+      >
+        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </span>
+  );
+}
 
 export function Field({
   label,

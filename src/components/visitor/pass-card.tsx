@@ -114,14 +114,6 @@ export function PassCard({
           )}
         </div>
 
-        {/* Código textual para entrada manual */}
-        <p className="mt-4 font-mono text-sm tracking-wider text-slate-300">
-          {token.slice(0, 4).toUpperCase()}-{token.slice(4, 8).toUpperCase()}-{token.slice(8, 12).toUpperCase()}
-        </p>
-        <p className="mt-0.5 text-[10px] text-slate-400">
-          {t("pass.manualCode")}
-        </p>
-
         <p className="mt-4 text-xl font-semibold tracking-[-.02em]">
           {visitorName}
         </p>

@@ -15,6 +15,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -27,6 +28,13 @@ import { Button, Card, EmptyState, Field, MetricTile, fieldClass } from "./ui";
 import { LiveDuration, Sheet, useNow } from "./ui-client";
 import { safeCsvCell } from "@/lib/security";
 import { timeInsideMs, type Visit, type VisitStatus } from "@/lib/domain";
+import {
+  localDayKey,
+  localMonthKey,
+  localWeekKey,
+  parseLocalDay,
+  shiftLocalDay,
+} from "@/lib/local-day";
 import { visitPurposeMessageKey } from "@/lib/i18n";
 import { useI18n } from "./i18n-provider";
 
@@ -34,10 +42,24 @@ type Period = "daily" | "weekly" | "monthly";
 
 const palette = ["#10cfc9", "#2563eb", "#071426", "#f59e0b", "#8b5cf6", "#059669"];
 
-function isoDay(offsetDays: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
+function formatLocalDay(key: string, locale: string, style: "medium" | "short") {
+  const date = parseLocalDay(key);
+  if (!date) return key;
+  if (style === "short")
+    return new Intl.DateTimeFormat(locale, {
+      day: "numeric",
+      month: "short",
+    }).format(date);
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
+}
+
+function formatLocalMonth(key: string, locale: string) {
+  const [year, month] = key.split("-").map(Number);
+  if (!year || !month) return key;
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1));
 }
 
 function downloadCsv(filename: string, lines: string[][]) {
@@ -61,13 +83,13 @@ function stayLabel(
 
 export function Reports() {
   const { organization, viewer, syncedAt, live } = useWorkspace();
-  const { t, formatDateTime, formatDuration } = useI18n();
+  const { t, formatDateTime, formatDuration, intl } = useI18n();
   const visits = useMyVisits();
   const hostView = viewer.role === "host";
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
-    from: isoDay(-30),
-    to: isoDay(1),
+    from: shiftLocalDay(-29),
+    to: shiftLocalDay(0),
     location: "all",
     host: "all",
     company: "all",
@@ -110,13 +132,21 @@ export function Reports() {
     [scoped],
   );
 
+  const inRange = (value?: string) => {
+    if (!value) return false;
+    const day = localDayKey(value);
+    return day >= filters.from && day <= filters.to;
+  };
+
   const rows = useMemo(
     () =>
       scoped.filter((visit) => {
-        const day = visit.startsAt.slice(0, 10);
+        const touchesRange =
+          inRange(visit.startsAt) ||
+          inRange(visit.checkedInAt) ||
+          inRange(visit.checkedOutAt);
         return (
-          day >= filters.from &&
-          day <= filters.to &&
+          touchesRange &&
           (filters.purpose === "all" || visit.purpose === filters.purpose) &&
           (filters.status === "all" || visit.status === filters.status)
         );
@@ -125,10 +155,16 @@ export function Reports() {
   );
 
   const stats = useMemo(() => {
-    const entered = rows.filter((visit) => visit.checkedInAt);
-    const completed = rows.filter(
-      (visit) => visit.checkedInAt && visit.checkedOutAt,
-    );
+    const entered = rows.filter((visit) => {
+      if (!visit.checkedInAt) return false;
+      const day = localDayKey(visit.checkedInAt);
+      return day >= filters.from && day <= filters.to;
+    });
+    const completed = rows.filter((visit) => {
+      if (!visit.checkedInAt || !visit.checkedOutAt) return false;
+      const day = localDayKey(visit.checkedOutAt);
+      return day >= filters.from && day <= filters.to;
+    });
     const averageMs = completed.length
       ? completed.reduce((total, visit) => total + timeInsideMs(visit), 0) /
         completed.length
@@ -145,22 +181,35 @@ export function Reports() {
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
-    const timeline = Object.entries(
-      rows.reduce<Record<string, number>>((acc, visit) => {
-        const date = new Date(visit.checkedInAt ?? visit.startsAt);
-        let key = date.toISOString().slice(0, 10);
-        if (period === "monthly") key = key.slice(0, 7);
-        if (period === "weekly") {
-          const monday = new Date(date);
-          monday.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
-          key = monday.toISOString().slice(0, 10);
-        }
-        acc[key] = (acc[key] ?? 0) + 1;
-        return acc;
-      }, {}),
-    )
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const buckets = new Map<string, { entries: number; exits: number }>();
+    const bump = (iso: string | undefined, field: "entries" | "exits") => {
+      if (!iso) return;
+      const day = localDayKey(iso);
+      if (day < filters.from || day > filters.to) return;
+      const key =
+        period === "monthly"
+          ? localMonthKey(iso)
+          : period === "weekly"
+            ? localWeekKey(iso)
+            : day;
+      const current = buckets.get(key) ?? { entries: 0, exits: 0 };
+      current[field] += 1;
+      buckets.set(key, current);
+    };
+    for (const visit of rows) {
+      bump(visit.checkedInAt, "entries");
+      bump(visit.checkedOutAt, "exits");
+    }
+    const timeline = [...buckets.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, counts]) => ({
+        name:
+          period === "monthly"
+            ? formatLocalMonth(key, intl)
+            : formatLocalDay(key, intl, "short"),
+        entries: counts.entries,
+        exits: counts.exits,
+      }));
 
     return {
       entered,
@@ -172,13 +221,13 @@ export function Reports() {
       companies: count((visit) => visit.company).slice(0, 6),
       timeline,
     };
-  }, [rows, period, t]);
+  }, [rows, period, t, filters.from, filters.to, intl]);
 
   const clock = useNow();
   const generatedAt = formatDateTime(
     syncedAt ?? (clock ? new Date(clock).toISOString() : new Date().toISOString()),
   );
-  const periodLabel = `${filters.from} a ${filters.to}`;
+  const periodLabel = `${formatLocalDay(filters.from, intl, "medium")} a ${formatLocalDay(filters.to, intl, "medium")}`;
 
   function exportCsv() {
     const header = [
@@ -400,8 +449,9 @@ export function Reports() {
         <div className="mb-3">
           <h2 className="text-lg font-semibold">{t("reports.periodLog")}</h2>
           <p className="text-sm text-slate-500">
-            {rows.length} visita{rows.length === 1 ? "" : "s"} entre {filters.from} y{" "}
-            {filters.to}
+            {rows.length} visita{rows.length === 1 ? "" : "s"} entre{" "}
+            {formatLocalDay(filters.from, intl, "medium")} y{" "}
+            {formatLocalDay(filters.to, intl, "medium")}
           </p>
         </div>
 
@@ -419,14 +469,26 @@ export function Reports() {
       {rows.length > 0 && (
         <section className="no-print mt-8 grid gap-5 xl:grid-cols-2">
           <ChartCard
-            title={`Visitas por periodo (${period === "daily" ? "día" : period === "weekly" ? "semana" : "mes"})`}
+            title={`${t("reports.movement")} (${period === "daily" ? t("reports.daily") : period === "weekly" ? t("reports.weekly") : t("reports.monthly")})`}
           >
             <BarChart data={stats.timeline}>
               <CartesianGrid vertical={false} stroke="#edf0f4" />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} />
               <YAxis allowDecimals={false} width={28} tick={{ fontSize: 11 }} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="value" fill="#2563eb" radius={[8, 8, 0, 0]} />
+              <Legend />
+              <Bar
+                dataKey="entries"
+                name={t("dashboard.entries")}
+                fill="#10aaa5"
+                radius={[8, 8, 0, 0]}
+              />
+              <Bar
+                dataKey="exits"
+                name={t("dashboard.exitsChart")}
+                fill="#2563eb"
+                radius={[8, 8, 0, 0]}
+              />
             </BarChart>
           </ChartCard>
 
