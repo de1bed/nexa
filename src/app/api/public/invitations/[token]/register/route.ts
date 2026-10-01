@@ -11,7 +11,7 @@ import {
   identityFileMeta,
   isAllowedIdentityUpload,
 } from "@/lib/identity-file";
-import { passValidityWindow } from "@/lib/pass-window";
+import { clampPassDays, passValidityWindow } from "@/lib/pass-window";
 import {
   parseVisitorFlow,
   resolvedVisitorName,
@@ -113,7 +113,7 @@ export async function POST(
 
     const { data: visit } = await db
       .from("visits")
-      .select("id,organization_id,visitor_id,starts_at,ends_at")
+      .select("id,organization_id,visitor_id,starts_at,ends_at,pass_valid_days")
       .eq("id", resolved.visit_id)
       .maybeSingle();
     if (!visit)
@@ -254,6 +254,7 @@ export async function POST(
       ...passValidityWindow({
         startsAt: String(visit.starts_at),
         endsAt: String(visit.ends_at),
+        validDays: clampPassDays(visit.pass_valid_days),
       }),
     });
     if (tokenError) throw tokenError;

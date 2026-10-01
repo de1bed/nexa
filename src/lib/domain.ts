@@ -40,6 +40,8 @@ export type Visit = {
   meetingUrl?: string;
   startsAt: string;
   endsAt: string;
+  /** Días que el QR permanece vigente desde el inicio de la visita. */
+  passValidDays?: number;
   checkedInAt?: string;
   checkedOutAt?: string;
   purpose: string;
@@ -218,14 +220,20 @@ export function formatDateTimeMx(value?: string | null) {
 
 /** Estado de la ventana de acceso de una visita respecto a un instante dado. */
 export function accessWindow(
-  visit: Pick<Visit, "startsAt" | "endsAt">,
+  visit: Pick<Visit, "startsAt" | "endsAt" | "passValidDays">,
   options: { earlyMinutes?: number; lateMinutes?: number; now?: Date } = {},
 ) {
   const early = options.earlyMinutes ?? 15;
   const late = options.lateMinutes ?? 30;
   const now = (options.now ?? new Date()).getTime();
   const opens = new Date(visit.startsAt).getTime() - early * 60000;
-  const closes = new Date(visit.endsAt).getTime() + late * 60000;
+  const scheduledClose = new Date(visit.endsAt).getTime() + late * 60000;
+  const passDays = visit.passValidDays;
+  const passClose =
+    passDays && passDays > 0
+      ? new Date(visit.startsAt).getTime() + passDays * 24 * 60 * 60 * 1000
+      : scheduledClose;
+  const closes = Math.max(scheduledClose, passClose);
   if (now < opens) return "early" as const;
   if (now > closes) return "late" as const;
   return "valid" as const;

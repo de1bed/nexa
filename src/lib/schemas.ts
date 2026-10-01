@@ -41,6 +41,7 @@ export const invitationSchema = z
     date: z.string().min(1, "Elige una fecha"),
     startTime: z.string().min(1),
     endTime: z.string().min(1),
+    passValidDays: z.number().int().min(1).max(365),
     purpose: z.string().trim().min(2, "Describe el motivo").max(160),
     notes: optionalText(500),
     accessRequirements: optionalText(500),

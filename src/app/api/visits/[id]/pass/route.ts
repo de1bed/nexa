@@ -30,7 +30,7 @@ export async function GET(
     const admin = createAdminClient();
     const { data: visit } = await admin
       .from("visits")
-      .select("id,host_id,status,starts_at,ends_at")
+      .select("id,host_id,status,starts_at,ends_at,pass_valid_days")
       .eq("id", id)
       .eq("organization_id", organizationId)
       .maybeSingle();
@@ -52,6 +52,7 @@ export async function GET(
       organizationId,
       startsAt: visit.starts_at as string,
       endsAt: visit.ends_at as string,
+      validDays: Number(visit.pass_valid_days ?? 1),
     });
 
     return NextResponse.json(pass, {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PASS_GRACE_AFTER_END_MS, passValidityWindow } from "../pass-window";
+import { passValidityWindow } from "../pass-window";
 
 describe("ventana del QR", () => {
   it("empieza a valer en el instante de emisión, no una hora antes de la visita", () => {
@@ -16,7 +16,20 @@ describe("ventana del QR", () => {
     );
   });
 
-  it("vence un día después del fin programado", () => {
+  it("dura los días elegidos, contados desde el inicio de la visita", () => {
+    const window = passValidityWindow({
+      startsAt: "2026-09-08T18:00:00.000Z",
+      endsAt: "2026-09-08T19:00:00.000Z",
+      validDays: 2,
+      issuedAt: "2026-09-08T12:00:00.000Z",
+    });
+
+    expect(new Date(window.expires_at).getTime()).toBe(
+      new Date("2026-09-10T18:00:00.000Z").getTime(),
+    );
+  });
+
+  it("sin elección explícita dura un día desde el inicio", () => {
     const window = passValidityWindow({
       startsAt: "2026-09-08T18:00:00.000Z",
       endsAt: "2026-09-08T19:00:00.000Z",
@@ -24,7 +37,7 @@ describe("ventana del QR", () => {
     });
 
     expect(new Date(window.expires_at).getTime()).toBe(
-      new Date("2026-09-08T19:00:00.000Z").getTime() + PASS_GRACE_AFTER_END_MS,
+      new Date("2026-09-09T18:00:00.000Z").getTime(),
     );
   });
 

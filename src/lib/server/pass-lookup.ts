@@ -42,6 +42,7 @@ type Row = {
     status: string;
     starts_at: string;
     ends_at: string;
+    pass_valid_days: number | null;
     purpose: string;
     checked_in_at: string | null;
     checked_out_at: string | null;
@@ -64,7 +65,7 @@ export async function resolvePassByToken(
     .from("qr_tokens")
     .select(
       "valid_from,expires_at,revoked_at," +
-        "visit:visits!qr_tokens_visit_id_fkey(id,status,starts_at,ends_at,purpose,checked_in_at,checked_out_at,access_requirements,internal_place,meeting_url," +
+        "visit:visits!qr_tokens_visit_id_fkey(id,status,starts_at,ends_at,pass_valid_days,purpose,checked_in_at,checked_out_at,access_requirements,internal_place,meeting_url," +
         "organization:organizations(name),visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name),location:locations(name,address))",
     )
     .eq("token_hash", hash)
@@ -89,6 +90,7 @@ export async function resolvePassByToken(
         visitId: visit.id,
         startsAt: visit.starts_at,
         endsAt: visit.ends_at,
+        validDays: visit.pass_valid_days ?? 1,
         validFrom,
         expiresAt,
       });

@@ -9,7 +9,7 @@ import { documentFlags } from "@/lib/visitor-flow";
  */
 export const visitSelect =
   "id,organization_id,location_id,host_id,status,origin,purpose,visitor_company," +
-  "starts_at,ends_at,checked_in_at,checked_out_at,denial_reason,vehicle_plate," +
+  "starts_at,ends_at,pass_valid_days,checked_in_at,checked_out_at,denial_reason,vehicle_plate," +
   "internal_notes,visitor_notes,access_requirements,internal_place,meeting_url,consented_at," +
   "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
   "host:profiles!visits_host_id_fkey(full_name,email)," +
@@ -76,6 +76,7 @@ export function mapVisit(row: Row): Visit {
     locationAddress: location?.address ?? undefined,
     startsAt: String(row.starts_at),
     endsAt: String(row.ends_at),
+    passValidDays: Number(row.pass_valid_days ?? 1),
     checkedInAt: (row.checked_in_at as string) ?? undefined,
     checkedOutAt: (row.checked_out_at as string) ?? undefined,
     purpose: String(row.purpose ?? ""),

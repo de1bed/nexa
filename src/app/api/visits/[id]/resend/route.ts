@@ -10,6 +10,7 @@ import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
 import { getOrIssueStaffPass } from "@/lib/server/pass-issue";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { maskEmail } from "@/lib/security";
+import { passExpiresAt } from "@/lib/pass-window";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export async function POST(
         organizationId,
         startsAt: visit.startsAt,
         endsAt: visit.endsAt,
+        validDays: visit.passValidDays,
         rotate: true,
       });
       if (input.notify && recipient) {
@@ -109,9 +111,7 @@ export async function POST(
       .update({
         token_hash: hash,
         token_hint: `••••${invitationToken.slice(-4)}`,
-        expires_at: new Date(
-          new Date(visit.endsAt).getTime() + 86400000,
-        ).toISOString(),
+        expires_at: passExpiresAt(visit.startsAt, visit.passValidDays),
         revoked_at: null,
         completed_at: null,
         sent_at: input.notify ? new Date().toISOString() : null,

@@ -2,17 +2,18 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { createAdminClient } from "./supabase-admin";
 import { appUrl } from "@/lib/config";
-import { passValidityWindow } from "@/lib/pass-window";
+import { clampPassDays, passValidityWindow } from "@/lib/pass-window";
 
 export function passUrls(token: string) {
   return { passToken: token, passUrl: `${appUrl()}/pass/${token}` };
 }
 
-/** Ajusta pases ya emitidos: valen desde ahora y duran hasta un día después del fin. */
+/** Ajusta pases ya emitidos para que respeten los días elegidos al invitar. */
 export async function healQrWindow(input: {
   visitId: string;
   startsAt: string;
   endsAt: string;
+  validDays?: number;
   validFrom: string;
   expiresAt: string;
 }) {
@@ -22,6 +23,7 @@ export async function healQrWindow(input: {
   const desired = passValidityWindow({
     startsAt: input.startsAt,
     endsAt: input.endsAt,
+    validDays: input.validDays,
     issuedAt,
   });
   const patch: { valid_from?: string; expires_at?: string } = {};
@@ -54,6 +56,7 @@ export async function getOrIssueStaffPass(input: {
   organizationId: string;
   startsAt: string;
   endsAt: string;
+  validDays?: number;
   rotate?: boolean;
 }) {
   const admin = createAdminClient();
@@ -75,6 +78,7 @@ export async function getOrIssueStaffPass(input: {
           visitId: input.visitId,
           startsAt: input.startsAt,
           endsAt: input.endsAt,
+          validDays: input.validDays,
           validFrom,
           expiresAt,
         });
@@ -96,6 +100,7 @@ export async function getOrIssueStaffPass(input: {
   const window = passValidityWindow({
     startsAt: input.startsAt,
     endsAt: input.endsAt,
+    validDays: clampPassDays(input.validDays),
   });
 
   const { error: revokeError } = await admin

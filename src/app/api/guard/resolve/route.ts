@@ -55,6 +55,12 @@ export async function POST(request: Request) {
         { status: 404 },
       );
 
+    const { data: span } = await db
+      .from("visits")
+      .select("pass_valid_days")
+      .eq("id", row.visit_id)
+      .maybeSingle();
+
     const visit: Visit = {
       id: row.visit_id,
       visitorName: row.visitor_name,
@@ -72,6 +78,7 @@ export async function POST(request: Request) {
       purpose: row.purpose,
       status: row.visit_status,
       origin: "host_invitation",
+      passValidDays: Number(span?.pass_valid_days ?? 1),
       vehiclePlate: row.vehicle_plate || undefined,
       visitorNotes: row.visitor_notes || undefined,
       accessRequirements: row.access_requirements || undefined,

@@ -55,6 +55,7 @@ export type InvitationDraft = {
   hostId?: string;
   startsAt: string;
   endsAt: string;
+  passValidDays: number;
   purpose: string;
   notes?: string;
   accessRequirements?: string;

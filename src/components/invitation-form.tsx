@@ -98,6 +98,16 @@ function formatDateLong(dateString: string, locale: string): string {
 }
 
 const durations = [30, 60, 90, 120];
+const passDayChoices = [1, 2, 7, 15, 30, 90, 180, 365];
+
+function passLengthLabel(
+  days: number,
+  t: (path: string, vars?: Record<string, string | number>) => string,
+) {
+  if (days === 365) return t("invite.passYear");
+  if (days === 1) return t("invite.passOneDay");
+  return t("invite.passManyDays", { n: days });
+}
 
 function addMinutes(time: string, minutes: number) {
   const [hours, mins] = time.split(":").map(Number);
@@ -136,6 +146,7 @@ export function InvitationForm() {
     date: todayPlus(1),
     startTime: "10:00",
     endTime: "11:00",
+    passValidDays: 1,
     purpose: visitPurposes[0] as string,
     notes: "",
     accessRequirements: "",
@@ -195,6 +206,7 @@ export function InvitationForm() {
         hostId: canDelegate ? payload.hostId || viewer.id : undefined,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
+        passValidDays: payload.passValidDays,
         purpose: payload.purpose,
         notes: payload.notes || undefined,
         accessRequirements: payload.accessRequirements || undefined,
@@ -590,6 +602,50 @@ export function InvitationForm() {
                 </button>
               ))}
             </div>
+
+            <Field label={t("invite.passDays")} hint={t("invite.passDaysHint")}>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                inputMode="numeric"
+                className={fieldClass}
+                value={form.passValidDays}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (!Number.isInteger(next)) return;
+                  update("passValidDays", Math.min(365, Math.max(1, next)));
+                }}
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              {passDayChoices.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => update("passValidDays", days)}
+                  className={cn(
+                    "h-9 rounded-full border px-3.5 text-sm font-medium transition",
+                    form.passValidDays === days
+                      ? "border-[#10cfc9] bg-[#10cfc9]/12 text-[#0d9d99]"
+                      : "border-slate-200 bg-white text-slate-600",
+                  )}
+                >
+                  {passLengthLabel(days, t)}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-slate-500">
+              {t("invite.passUntil", {
+                date: new Date(
+                  new Date(`${form.date}T${form.startTime}`).getTime() +
+                    form.passValidDays * 24 * 60 * 60 * 1000,
+                ).toLocaleString(intl, {
+                  dateStyle: "full",
+                  timeStyle: "short",
+                }),
+              })}
+            </p>
 
             <Field label={t("invite.purpose")} error={errors.purpose}>
               <select

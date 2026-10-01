@@ -10,6 +10,7 @@ import { appUrl } from "@/lib/config";
 import { maskEmail, maskPhone } from "@/lib/security";
 import { sendInvitationWhatsApp } from "@/lib/server/whatsapp";
 import { normalizeMeetingUrl } from "@/lib/schemas";
+import { clampPassDays, passExpiresAt } from "@/lib/pass-window";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ const createSchema = z
     hostId: z.uuid().optional(),
     startsAt: z.iso.datetime(),
     endsAt: z.iso.datetime(),
+    passValidDays: z.number().int().min(1).max(365).default(1),
     purpose: z.string().trim().min(2).max(160),
     notes: z.string().trim().max(500).optional(),
     accessRequirements: z.string().trim().max(500).optional(),
@@ -159,6 +161,7 @@ export async function POST(request: Request) {
         visitor_company: input.company || null,
         starts_at: input.startsAt,
         ends_at: input.endsAt,
+        pass_valid_days: clampPassDays(input.passValidDays),
         internal_notes: input.notes || null,
         access_requirements: input.accessRequirements || null,
         internal_place: input.internalPlace || null,
@@ -180,9 +183,7 @@ export async function POST(request: Request) {
         visit_id: visitId,
         token_hash: tokenHash,
         token_hint: `••••${invitationToken.slice(-4)}`,
-        expires_at: new Date(
-          new Date(input.endsAt).getTime() + 86400000,
-        ).toISOString(),
+        expires_at: passExpiresAt(input.startsAt, input.passValidDays),
         sent_at:
           input.sendEmail || input.sendWhatsApp ? new Date().toISOString() : null,
         invitee_name: input.visitorName || null,
