@@ -389,11 +389,13 @@ export function PlatformConsole() {
       delivery?: string;
       location?: { id: string; name: string; address: string };
       accountRemoved?: boolean;
+      removed?: boolean;
     };
     if (!response.ok) {
       toast.error(payload.error ?? "No fue posible actualizar");
       return null;
     }
+    if (payload.removed) setOpen(null);
     await load();
     return payload;
   }
@@ -919,6 +921,29 @@ export function PlatformConsole() {
                       {selected.serviceStatus === "active" ? "Pausar" : "Reactivar"}
                     </Button>
                   )}
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      const typed = window.prompt(
+                        selected.members.length === 0
+                          ? `${selected.name} no tiene gente en el equipo. Eliminarla borra sus sedes y visitas para siempre. Escribe el nombre exacto para confirmar.`
+                          : `Se elimina ${selected.name}. ${selected.members.length} ${selected.members.length === 1 ? "persona verá" : "personas verán"}, al intentar entrar, que ya no tienen acceso. Las visitas también se borran. Escribe el nombre exacto para confirmar.`,
+                      );
+                      if (typed == null) return;
+                      if (typed.trim() !== selected.name) {
+                        toast.error("El nombre no coincide. No se eliminó");
+                        return;
+                      }
+                      void patch(selected.id, {
+                        removeCompany: true,
+                        confirmName: typed.trim(),
+                      }).then((result) => {
+                        if (result?.removed) toast.success("Empresa eliminada");
+                      });
+                    }}
+                  >
+                    Eliminar
+                  </Button>
                 </div>
               </div>
 

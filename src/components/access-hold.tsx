@@ -67,7 +67,7 @@ export function AccessHold({ initial }: { initial: Gate }) {
             ? "Esa solicitud ya no abre acceso. Pide que te inviten por correo."
             : rejected
               ? "Esa solicitud no abre acceso. Entras cuando te llega una invitación."
-              : "Para entrar necesitas una invitación por correo."}
+              : "Para entrar necesitas una invitación por correo. Si tu empresa fue dada de baja, ese acceso ya no existe."}
         </p>
         <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-blue-600">
           Volver a entrar

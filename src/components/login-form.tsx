@@ -145,7 +145,10 @@ export function LoginForm() {
         const response = await fetch("/api/session", { cache: "no-store" });
         if (response.ok) {
           const payload = (await response.json()) as {
-            memberships?: Array<{ role: MemberRole }>;
+            memberships?: Array<{
+              role: MemberRole;
+              serviceStatus?: "active" | "suspended";
+            }>;
             platformAdmin?: boolean;
           };
           memberships = payload.memberships ?? [];

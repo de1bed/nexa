@@ -64,14 +64,23 @@ const genericHomes = new Set([
  * selector). Un `next` concreto (visita, invitación) sí se respeta.
  */
 export function destinationAfterLogin(options: {
-  memberships: Array<{ role: keyof typeof roleHome }>;
+  memberships: Array<{
+    role: keyof typeof roleHome;
+    serviceStatus?: "active" | "suspended";
+  }>;
   next?: string | null;
 }) {
+  const active = options.memberships.filter(
+    (item) => item.serviceStatus !== "suspended",
+  );
+  if (options.memberships.length > 0 && active.length === 0)
+    return "/servicio-pausado";
+
   const requested = safeInternalPath(options.next ?? null, "");
   const hasSpecificNext = Boolean(requested) && !genericHomes.has(requested);
 
   if (hasSpecificNext) return requested;
-  if (options.memberships.length === 0) return "/espera";
-  if (options.memberships.length > 1) return "/select-organization";
-  return roleHome[options.memberships[0].role];
+  if (active.length === 0) return "/espera";
+  if (active.length > 1) return "/select-organization";
+  return roleHome[active[0].role];
 }

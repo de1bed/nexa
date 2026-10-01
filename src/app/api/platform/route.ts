@@ -33,7 +33,8 @@ async function logPlatformEvent(input: {
     | "company_updated"
     | "company_archived"
     | "company_restored"
-    | "admin_invite_resent";
+    | "admin_invite_resent"
+    | "company_deleted";
   summary: string;
 }) {
   const admin = createAdminClient();
@@ -433,6 +434,8 @@ const patchSchema = z.object({
     .optional(),
   archive: z.boolean().optional(),
   restore: z.boolean().optional(),
+  removeCompany: z.boolean().optional(),
+  confirmName: z.string().trim().min(2).max(120).optional(),
   newLocation: z
     .object({
       name: z.string().trim().min(2).max(120),
@@ -460,6 +463,47 @@ const patchSchema = z.object({
     .optional(),
 });
 
+async function eraseCompany(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+) {
+  const { data: documents, error: documentsError } = await admin
+    .from("visitor_documents")
+    .select("storage_path")
+    .eq("organization_id", organizationId);
+  if (documentsError) throw documentsError;
+
+  const paths = (documents ?? [])
+    .map((row) => row.storage_path as string)
+    .filter(Boolean);
+  for (let index = 0; index < paths.length; index += 100) {
+    const { error } = await admin.storage
+      .from("visitor-documents")
+      .remove(paths.slice(index, index + 100));
+    if (error) throw error;
+  }
+
+  const { error: eventsError } = await admin
+    .from("access_events")
+    .delete()
+    .eq("organization_id", organizationId);
+  if (eventsError) throw eventsError;
+
+  const { error: visitsError } = await admin
+    .from("visits")
+    .delete()
+    .eq("organization_id", organizationId);
+  if (visitsError) throw visitsError;
+
+  const { data: removed, error } = await admin
+    .from("organizations")
+    .delete()
+    .eq("id", organizationId)
+    .select("id")
+    .maybeSingle();
+  if (error || !removed) throw error ?? new Error("missing");
+}
+
 export async function PATCH(request: Request) {
   const guard = await guardPlatform();
   if (!guard.ok)
@@ -478,6 +522,23 @@ export async function PATCH(request: Request) {
       .eq("id", input.organizationId)
       .maybeSingle();
     if (currentError || !current) throw currentError ?? new Error("missing");
+
+    if (input.removeCompany) {
+      if (input.confirmName !== current.name)
+        return NextResponse.json(
+          { error: "Escribe el nombre exacto de la empresa para eliminarla" },
+          { status: 400 },
+        );
+      const name = current.name as string;
+      await eraseCompany(admin, input.organizationId);
+      const { error: logError } = await admin.from("platform_events").insert({
+        actor_id: actor.id,
+        event_type: "company_deleted",
+        summary: `Eliminó ${name}`,
+      });
+      if (logError) console.error("Company delete log failed", logError);
+      return NextResponse.json({ removed: true });
+    }
 
     if (input.serviceStatus === "active" && current.archived_at && !input.restore)
       return NextResponse.json(

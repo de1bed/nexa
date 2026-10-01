@@ -19,9 +19,9 @@ export default async function Page() {
         <Brand />
         <h1 className="mt-8 text-2xl font-semibold">El servicio está en pausa</h1>
         <p className="mt-3 text-[15px] leading-6 text-slate-500">
-          {context.memberships[0]?.organizationName ?? "Tu empresa"} no tiene el
-          servicio activo. Habla con tu asesor de NEXA para reactivarlo. Tus datos
-          siguen guardados.
+          NEXA pausó {context.memberships[0]?.organizationName ?? "tu empresa"}.
+          Mientras siga en pausa no puedes operar. Tus datos siguen guardados.
+          Habla con tu asesor de NEXA para reactivarla.
         </p>
       </div>
     </main>
