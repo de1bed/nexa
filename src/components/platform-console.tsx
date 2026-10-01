@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Loader2 } from "lucide-react";
+import { Copy, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, Field, fieldClass } from "./ui";
 
@@ -243,8 +243,7 @@ export function PlatformConsole() {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: "",
-    locationName: "Recepción principal",
-    locationAddress: "",
+    locations: [{ name: "", address: "" }],
     adminName: "",
     adminEmail: "",
   });
@@ -313,14 +312,42 @@ export function PlatformConsole() {
     });
   }
 
+  function updateSite(index: number, field: "name" | "address", value: string) {
+    setForm((current) => ({
+      ...current,
+      locations: current.locations.map((site, siteIndex) =>
+        siteIndex === index ? { ...site, [field]: value } : site,
+      ),
+    }));
+  }
+
   async function createCompany(event: React.FormEvent) {
     event.preventDefault();
+    const locations = form.locations.map((site) => ({
+      name: site.name.trim(),
+      address: site.address.trim(),
+    }));
+    if (locations.some((site) => site.name.length < 2 || site.address.length < 2)) {
+      toast.error("Cada sede necesita nombre y dirección");
+      return;
+    }
+    const names = new Set(locations.map((site) => site.name.toLocaleLowerCase("es")));
+    if (names.size !== locations.length) {
+      toast.error("Hay dos sedes con el mismo nombre");
+      return;
+    }
+
     setBusy(true);
     try {
       const response = await fetch("/api/platform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          name: form.name,
+          locations,
+          adminName: form.adminName,
+          adminEmail: form.adminEmail,
+        }),
       });
       const payload = (await response.json()) as {
         accessKey?: string;
@@ -337,8 +364,7 @@ export function PlatformConsole() {
       setCreating(false);
       setForm({
         name: "",
-        locationName: "Recepción principal",
-        locationAddress: "",
+        locations: [{ name: "", address: "" }],
         adminName: "",
         adminEmail: "",
       });
@@ -541,38 +567,85 @@ export function PlatformConsole() {
         <Card className="p-5">
           <h2 className="font-semibold">Activar empresa</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Se crea la empresa, se invita al administrador y aquí queda la clave
-            para compartirla con quien vaya a pedir acceso.
+            Carga todas las sedes antes de invitar. Cuando el administrador entre,
+            ya las encuentra listas.
           </p>
           <form onSubmit={createCompany} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Field label="Empresa">
-              <input
-                required
-                className={fieldClass}
-                value={form.name}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
-              />
-            </Field>
-            <Field label="Sede">
-              <input
-                required
-                className={fieldClass}
-                value={form.locationName}
-                onChange={(event) =>
-                  setForm({ ...form, locationName: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Dirección">
-              <input
-                required
-                className={fieldClass}
-                value={form.locationAddress}
-                onChange={(event) =>
-                  setForm({ ...form, locationAddress: event.target.value })
-                }
-              />
-            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Empresa">
+                <input
+                  required
+                  className={fieldClass}
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">Sedes</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={form.locations.length >= 20}
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      locations: [...current.locations, { name: "", address: "" }],
+                    }))
+                  }
+                >
+                  <Plus size={16} />
+                  Agregar sede
+                </Button>
+              </div>
+              {form.locations.map((site, index) => (
+                <div
+                  key={index}
+                  className="grid gap-3 rounded-2xl border border-slate-200 p-3 sm:grid-cols-[1fr_1fr_auto]"
+                >
+                  <Field label={`Sede ${index + 1}`}>
+                    <input
+                      required
+                      className={fieldClass}
+                      placeholder="Planta norte"
+                      value={site.name}
+                      onChange={(event) => updateSite(index, "name", event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Dirección">
+                    <input
+                      required
+                      className={fieldClass}
+                      placeholder="Calle y número"
+                      value={site.address}
+                      onChange={(event) =>
+                        updateSite(index, "address", event.target.value)
+                      }
+                    />
+                  </Field>
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={form.locations.length === 1}
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          locations: current.locations.filter(
+                            (_, siteIndex) => siteIndex !== index,
+                          ),
+                        }))
+                      }
+                    >
+                      Quitar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
             <Field label="Nombre del administrador">
               <input
                 required

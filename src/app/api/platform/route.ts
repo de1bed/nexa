@@ -252,13 +252,32 @@ export async function GET(request: Request) {
   });
 }
 
-const createSchema = z.object({
+const locationInput = z.object({
   name: z.string().trim().min(2).max(120),
-  locationName: z.string().trim().min(2).max(120).default("Recepción principal"),
-  locationAddress: z.string().trim().min(2).max(300).default("Por definir"),
-  adminName: z.string().trim().min(2).max(120),
-  adminEmail: z.email(),
+  address: z.string().trim().min(2).max(300),
 });
+
+const createSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120),
+    locations: z.array(locationInput).min(1).max(20),
+    adminName: z.string().trim().min(2).max(120),
+    adminEmail: z.email(),
+  })
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.locations.forEach((site, index) => {
+      const key = site.name.toLocaleLowerCase("es");
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Hay dos sedes con el mismo nombre",
+          path: ["locations", index, "name"],
+        });
+      }
+      seen.add(key);
+    });
+  });
 
 export async function POST(request: Request) {
   const guard = await guardPlatform();
@@ -306,12 +325,24 @@ export async function POST(request: Request) {
       privacy_notice:
         "Los datos personales que proporcionas se utilizan únicamente para gestionar, controlar y auditar tu acceso a nuestras instalaciones.",
     });
-    await admin.from("locations").insert({
-      organization_id: org.id,
-      name: input.locationName,
-      address: input.locationAddress,
-      timezone: "America/Mexico_City",
-    });
+    const { error: locationError } = await admin.from("locations").insert(
+      input.locations.map((site) => ({
+        organization_id: org.id,
+        name: site.name,
+        address: site.address,
+        timezone: "America/Mexico_City",
+      })),
+    );
+    if (locationError) {
+      await admin.from("organizations").delete().eq("id", org.id);
+      const code = "code" in locationError ? String(locationError.code) : "";
+      if (code === "23505")
+        return NextResponse.json(
+          { error: "Hay dos sedes con el mismo nombre" },
+          { status: 400 },
+        );
+      throw locationError;
+    }
 
     const email = input.adminEmail.toLowerCase();
     const { data: existing } = await admin
@@ -361,7 +392,7 @@ export async function POST(request: Request) {
       organizationId: org.id as string,
       actorId: actor.id,
       eventType: "company_created",
-      summary: `Activó ${input.name} e invitó a ${input.adminName}`,
+      summary: `Activó ${input.name} con ${input.locations.length} ${input.locations.length === 1 ? "sede" : "sedes"} e invitó a ${input.adminName}`,
     });
 
     return NextResponse.json({
@@ -370,11 +401,12 @@ export async function POST(request: Request) {
       inviteUrl: issued.inviteUrl,
       delivery: issued.delivery.status,
     });
-  } catch {
-    return NextResponse.json(
-      { error: "No fue posible activar la empresa" },
-      { status: 400 },
-    );
+  } catch (error) {
+    const message =
+      error instanceof z.ZodError
+        ? (error.issues[0]?.message ?? "Revisa las sedes y los datos de la empresa")
+        : "No fue posible activar la empresa";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
 
