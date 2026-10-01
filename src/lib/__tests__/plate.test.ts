@@ -14,6 +14,14 @@ describe("placas mexicanas", () => {
     expect(pickPlate("frente 123ABC")).toBe("123-ABC");
   });
 
+  it("corrige un 8 leído donde iba una letra", () => {
+    expect(pickPlate("A8C-12-34")).toBe("ABC-1234");
+  });
+
+  it("corrige una I leída donde iba un número", () => {
+    expect(pickPlate("ABC I234")).toBe("ABC-1234");
+  });
+
   it("no inventa una placa si el texto no trae una", () => {
     expect(pickPlate("credencial para votar")).toBeNull();
   });

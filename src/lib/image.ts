@@ -139,62 +139,67 @@ export async function prepareMrzImage(
 }
 
 /**
- * Aclara el contraste de una foto de placa. El número suele ser lo más
- * oscuro del encuadre; el resto del auto se aplana para no competir.
+ * Recorta la franja central, donde queda la placa en el marco ancho, y
+ * estira el contraste solo de esa franja. El auto completo aplana el número.
  */
-export async function preparePlateImage(
-  file: File,
-  targetWidth = 1400,
-): Promise<Blob> {
+export async function preparePlateCrops(file: File): Promise<Blob[]> {
   const bitmap = await createImageBitmap(file);
-  const scale = targetWidth / Math.max(1, bitmap.width);
-  const canvas = document.createElement("canvas");
-  canvas.width = targetWidth;
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const regions = [
+    { x: 0.06, y: 0.3, w: 0.88, h: 0.4 },
+    { x: 0.04, y: 0.08, w: 0.92, h: 0.84 },
+  ];
+  const blobs: Blob[] = [];
 
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) {
+  try {
+    for (const region of regions) {
+      const sx = Math.round(bitmap.width * region.x);
+      const sy = Math.round(bitmap.height * region.y);
+      const sw = Math.max(1, Math.round(bitmap.width * region.w));
+      const sh = Math.max(1, Math.round(bitmap.height * region.h));
+      const targetWidth = 1600;
+      const scale = targetWidth / sw;
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = Math.max(1, Math.round(sh * scale));
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) continue;
+
+      context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = image.data;
+      const luminance = new Uint8ClampedArray(pixels.length / 4);
+      for (let index = 0; index < luminance.length; index += 1) {
+        const offset = index * 4;
+        luminance[index] =
+          pixels[offset] * 0.299 +
+          pixels[offset + 1] * 0.587 +
+          pixels[offset + 2] * 0.114;
+      }
+      const sorted = Array.from(luminance).sort((a, b) => a - b);
+      const low = sorted[Math.floor(sorted.length * 0.12)] ?? 0;
+      const high = sorted[Math.floor(sorted.length * 0.88)] ?? 255;
+      const span = Math.max(20, high - low);
+      for (let index = 0; index < luminance.length; index += 1) {
+        const offset = index * 4;
+        const stretched = Math.min(
+          255,
+          Math.max(0, ((luminance[index] - low) / span) * 255),
+        );
+        pixels[offset] = stretched;
+        pixels[offset + 1] = stretched;
+        pixels[offset + 2] = stretched;
+      }
+      context.putImageData(image, 0, 0);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
+      if (blob) blobs.push(blob);
+    }
+  } finally {
     bitmap.close();
-    throw new Error("No fue posible procesar la imagen");
   }
 
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-
-  const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  const pixels = image.data;
-  const luminance = new Uint8ClampedArray(pixels.length / 4);
-  for (let index = 0; index < luminance.length; index += 1) {
-    const offset = index * 4;
-    luminance[index] =
-      pixels[offset] * 0.299 +
-      pixels[offset + 1] * 0.587 +
-      pixels[offset + 2] * 0.114;
-  }
-
-  const sorted = Array.from(luminance).sort((a, b) => a - b);
-  const low = sorted[Math.floor(sorted.length * 0.08)] ?? 0;
-  const high = sorted[Math.floor(sorted.length * 0.92)] ?? 255;
-  const span = Math.max(24, high - low);
-
-  for (let index = 0; index < luminance.length; index += 1) {
-    const offset = index * 4;
-    const stretched = Math.min(
-      255,
-      Math.max(0, ((luminance[index] - low) / span) * 255),
-    );
-    pixels[offset] = stretched;
-    pixels[offset + 1] = stretched;
-    pixels[offset + 2] = stretched;
-    pixels[offset + 3] = 255;
-  }
-  context.putImageData(image, 0, 0);
-
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png"),
-  );
-  if (!blob) throw new Error("No fue posible preparar la imagen");
-  return blob;
+  return blobs;
 }
 
 export const ACCEPTED_IMAGE_TYPES = [

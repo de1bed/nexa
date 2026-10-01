@@ -1,7 +1,8 @@
 import type { OCRField, OCRImageInput, OCRProvider, OCRResult } from "./types";
+import { pickPrintedIdentity } from "./card-text";
 import { isExpired, readMrz, type MrzResult } from "./mrz";
 import { pickPlate } from "./plate";
-import { prepareMrzImage, preparePlateImage } from "@/lib/image";
+import { prepareMrzImage, preparePlateCrops } from "@/lib/image";
 
 function lastImage(image: OCRImageInput) {
   return Array.isArray(image) ? image[image.length - 1] : image;
@@ -25,29 +26,20 @@ const ASSET_BASE = process.env.NEXT_PUBLIC_TESSERACT_ASSETS ?? "/tesseract";
 const MRZ_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
 const PLATE_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-type Worker = Awaited<ReturnType<typeof createMrzWorker>>;
+const workerOptions = {
+  workerPath: `${ASSET_BASE}/worker.min.js`,
+  corePath: `${ASSET_BASE}/core`,
+  langPath: `${ASSET_BASE}/lang`,
+  gzip: true,
+};
 
-async function createMrzWorker() {
-  const { createWorker, PSM } = await import("tesseract.js");
-
-  const worker = await createWorker("eng", 1, {
-    workerPath: `${ASSET_BASE}/worker.min.js`,
-    corePath: `${ASSET_BASE}/core`,
-    langPath: `${ASSET_BASE}/lang`,
-    gzip: true,
-  });
-
-  await worker.setParameters({
-    tessedit_char_whitelist: MRZ_CHARSET,
-    // La banda es un bloque uniforme de texto monoespaciado.
-    tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-    // El diccionario estorba: el MRZ no contiene palabras.
-    load_system_dawg: "0",
-    load_freq_dawg: "0",
-    preserve_interword_spaces: "1",
-  });
-
-  return worker;
+async function openWorker() {
+  const { createWorker } = await import("tesseract.js");
+  try {
+    return await createWorker("spa+eng", 1, workerOptions);
+  } catch {
+    return await createWorker("eng", 1, workerOptions);
+  }
 }
 
 function toFields(mrz: MrzResult): OCRField[] {
@@ -83,31 +75,31 @@ function toFields(mrz: MrzResult): OCRField[] {
 /** Lee una placa en el teléfono. Devuelve null si no aparece un patrón claro. */
 export async function readPlateText(file: File) {
   const { createWorker, PSM } = await import("tesseract.js");
-  const worker = await createWorker("eng", 1, {
-    workerPath: `${ASSET_BASE}/worker.min.js`,
-    corePath: `${ASSET_BASE}/core`,
-    langPath: `${ASSET_BASE}/lang`,
-    gzip: true,
-  });
+  const worker = await createWorker("eng", 1, workerOptions);
 
   try {
     await worker.setParameters({
       tessedit_char_whitelist: PLATE_CHARSET,
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      tessedit_pageseg_mode: PSM.SINGLE_LINE,
       load_system_dawg: "0",
       load_freq_dawg: "0",
     });
 
-    const prepared = await preparePlateImage(file).catch(() => null);
-    const first = await worker.recognize(prepared ?? file);
-    const direct = pickPlate(first.data.text ?? "");
-    if (direct) return direct;
+    const crops = await preparePlateCrops(file).catch(() => []);
+    const images: Array<Blob | File> = crops.length > 0 ? crops : [file];
+    let combined = "";
+    for (const image of images) {
+      const read = await worker.recognize(image);
+      combined = `${combined}\n${read.data.text ?? ""}`;
+      const hit = pickPlate(combined);
+      if (hit) return hit;
+    }
 
     await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SINGLE_LINE,
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
     });
-    const second = await worker.recognize(file);
-    return pickPlate(`${first.data.text ?? ""}\n${second.data.text ?? ""}`);
+    const again = await worker.recognize(images[0] ?? file);
+    return pickPlate(`${combined}\n${again.data.text ?? ""}`);
   } finally {
     await worker.terminate().catch(() => undefined);
   }
@@ -118,53 +110,64 @@ export class TesseractOCRProvider implements OCRProvider {
 
   async extractIdentityData(image: OCRImageInput): Promise<OCRResult> {
     const target = lastImage(image);
-    let worker: Worker | null = null;
+    const { PSM } = await import("tesseract.js");
+    const worker = await openWorker();
 
     try {
-      worker = await createMrzWorker();
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO,
+        preserve_interword_spaces: "1",
+      });
 
-      // Primer intento: solo la franja inferior, binarizada.
-      let rawText = "";
+      const page = await worker.recognize(target as Blob);
+      let rawText = page.data.text ?? "";
+      const printed = pickPrintedIdentity(rawText);
+
       let mrz: MrzResult | null = null;
-
       if (target instanceof File) {
         const band = await prepareMrzImage(target).catch(() => null);
         if (band) {
-          const { data } = await worker.recognize(band);
-          rawText = data.text ?? "";
-          mrz = readMrz(rawText);
+          await worker.setParameters({
+            tessedit_char_whitelist: MRZ_CHARSET,
+            tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+            load_system_dawg: "0",
+            load_freq_dawg: "0",
+          });
+          const bandRead = await worker.recognize(band);
+          const bandText = bandRead.data.text ?? "";
+          rawText = `${rawText}\n${bandText}`.trim();
+          mrz = readMrz(bandText);
         }
       }
 
-      // Segundo intento: la imagen completa, por si el encuadre dejó la banda
-      // fuera de la franja esperada.
-      if (!mrz) {
-        const { data } = await worker.recognize(target as Blob);
-        rawText = `${rawText}\n${data.text ?? ""}`.trim();
-        mrz = readMrz(rawText);
-      }
+      const fullName =
+        (mrz?.verified && mrz.fullName) || printed.fullName || mrz?.fullName || undefined;
+      const documentNumber =
+        printed.documentNumber ||
+        (mrz?.documentNumber && mrz.checks.documentNumber === "valid"
+          ? mrz.documentNumber
+          : undefined) ||
+        mrz?.curp ||
+        printed.curp;
 
-      if (!mrz)
-        return {
-          rawText,
-          confidence: 0,
-          fields: [],
-        };
+      if (!fullName && !documentNumber && !mrz)
+        return { rawText, confidence: 0, fields: [] };
 
+      const confidence = mrz?.verified ? 100 : fullName ? 85 : 60;
       return {
-        fullName: mrz.fullName || undefined,
-        documentNumber: mrz.documentNumber || undefined,
-        birthDate: mrz.birthDate,
-        expiryDate: mrz.expiryDate,
-        curp: mrz.curp,
+        fullName,
+        documentNumber,
+        birthDate: mrz?.birthDate,
+        expiryDate: mrz?.expiryDate,
+        curp: mrz?.curp || printed.curp,
         rawText,
-        confidence: mrz.verified ? 100 : mrz.confidence,
-        fields: toFields(mrz),
-        mrz,
-        expired: isExpired(mrz),
+        confidence,
+        fields: mrz ? toFields(mrz) : [],
+        mrz: mrz ?? undefined,
+        expired: mrz ? isExpired(mrz) : undefined,
       };
     } finally {
-      await worker?.terminate().catch(() => undefined);
+      await worker.terminate().catch(() => undefined);
     }
   }
 }

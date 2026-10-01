@@ -21,8 +21,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = path.join(root, "public", "tesseract");
 
-/** El MRZ es ASCII en tipografía OCR-B: el modelo inglés lo lee mejor que el español. */
-const LANGUAGES = ["eng"];
+/** Español para el nombre impreso; inglés para la banda MRZ y las placas. */
+const LANGUAGES = ["eng", "spa"];
 const TESSDATA_BASE = "https://tessdata.projectnaptha.com/4.0.0";
 
 async function exists(file) {

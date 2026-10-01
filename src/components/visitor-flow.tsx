@@ -293,9 +293,10 @@ export function VisitorFlow({
       setReadNote("");
       try {
         const result = await (await getOCRProvider()).extractIdentityData(file);
-        const trusted = Boolean(result.mrz?.verified) || result.confidence >= 70;
-        if (!trusted || (!result.fullName && !result.documentNumber)) {
-          setReadNote("miss");
+        if (!result.fullName && !result.documentNumber) {
+          setReadNote((current) =>
+            current === "verified" || current === "partial" ? current : "miss",
+          );
           return;
         }
         if (result.fullName) set("fullName", result.fullName);
@@ -760,7 +761,7 @@ export function VisitorFlow({
                 setFiles((current) => ({ ...current, [side]: captured }));
                 setPreviews((current) => ({ ...current, [side]: url }));
                 setCapturing(null);
-                if (side === "back") void readIdentity(captured);
+                void readIdentity(captured);
               }}
             />
           </div>
@@ -823,6 +824,26 @@ export function VisitorFlow({
                 />
               ))}
             </div>
+
+            {(files.front || files.back) && (
+              <div className="mt-4 space-y-4">
+                <Field label={t("visitor.fullName")}>
+                  <input
+                    className={fieldClass}
+                    value={value("fullName")}
+                    placeholder={reading === "id" ? t("visitor.readingId") : ""}
+                    onChange={(event) => set("fullName", event.target.value)}
+                  />
+                </Field>
+                <Field label={t("visitor.folio")} optional hint={t("visitor.folioHint")}>
+                  <input
+                    className={fieldClass}
+                    value={value("documentNumber")}
+                    onChange={(event) => set("documentNumber", event.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
               {reading === "id"

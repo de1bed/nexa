@@ -78,7 +78,7 @@ export function ManualAccess() {
     setReadingId(true);
     try {
       const result = await (await getOCRProvider()).extractIdentityData(compressed);
-      if (result.mrz?.verified && result.fullName) {
+      if (result.fullName) {
         setForm((current) =>
           current.visitorName.trim()
             ? current
