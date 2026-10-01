@@ -1,6 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
-import { buildIcs, type CalendarEvent } from "@/lib/calendar";
+import { buildIcs, mapsSearchUrl, type CalendarEvent } from "@/lib/calendar";
 import { escapeHtml } from "@/lib/security";
 
 /**
@@ -112,6 +112,7 @@ export async function sendInvitationEmail(input: {
   organizationName: string;
   dateLabel: string;
   locationName: string;
+  locationAddress?: string;
   internalPlace?: string;
   meetingUrl?: string;
   invitationUrl: string;
@@ -121,6 +122,10 @@ export async function sendInvitationEmail(input: {
     ? `Hola ${escapeHtml(input.visitorName)}: `
     : "";
   const place = [input.locationName, input.internalPlace].filter(Boolean).join(" · ");
+  const address = input.locationAddress?.trim();
+  const addressLine = address
+    ? `<br><a href="${escapeHtml(mapsSearchUrl(address))}">${escapeHtml(address)}</a>`
+    : "";
   const meeting = input.meetingUrl
     ? `<br><a href="${escapeHtml(input.meetingUrl)}">Junta en línea</a>`
     : "";
@@ -132,7 +137,7 @@ export async function sendInvitationEmail(input: {
     html: layout({
       preheader: `Completa tu registro para la visita del ${input.dateLabel}.`,
       title: `${escapeHtml(input.hostName)} te está esperando`,
-      body: `${greeting}completa tu registro desde el teléfono en menos de dos minutos y recibirás un pase QR para entrar sin filas.<br><br><b>${escapeHtml(input.dateLabel)}</b><br>${escapeHtml(input.organizationName)} · ${escapeHtml(place)}${meeting}`,
+      body: `${greeting}completa tu registro desde el teléfono en menos de dos minutos y recibirás un pase QR para entrar sin filas.<br><br><b>${escapeHtml(input.dateLabel)}</b><br>${escapeHtml(input.organizationName)} · ${escapeHtml(place)}${addressLine}${meeting}`,
       ctaLabel: "Completar mi registro",
       ctaUrl: input.invitationUrl,
       footnote:
@@ -158,9 +163,14 @@ export async function sendHostCalendarEmail(input: {
   organizationName: string;
   dateLabel: string;
   locationName: string;
+  locationAddress?: string;
   calendar: CalendarEvent;
 }): Promise<DeliveryResult> {
   const who = input.visitorName ? escapeHtml(input.visitorName) : "un visitante";
+  const address = input.locationAddress?.trim();
+  const addressLine = address
+    ? ` La dirección es <a href="${escapeHtml(mapsSearchUrl(address))}">${escapeHtml(address)}</a>.`
+    : "";
   return deliver({
     to: input.to,
     subject: `Visita en tu calendario · ${input.organizationName}`,
@@ -169,7 +179,7 @@ export async function sendHostCalendarEmail(input: {
     html: layout({
       preheader: `La visita del ${input.dateLabel} puede agregarse a tu calendario.`,
       title: "Esta visita quedó lista para tu agenda",
-      body: `Hola ${escapeHtml(input.hostName)}: la visita de <b>${who}</b> el <b>${escapeHtml(input.dateLabel)}</b> en ${escapeHtml(input.locationName)} va adjunta como invitación de calendario. Acéptala y se agrega sola en Outlook, Apple o Gmail.`,
+      body: `Hola ${escapeHtml(input.hostName)}: la visita de <b>${who}</b> el <b>${escapeHtml(input.dateLabel)}</b> en ${escapeHtml(input.locationName)} va adjunta como invitación de calendario. Acéptala y se agrega sola en Outlook, Apple o Gmail.${addressLine}`,
       footer: "Recibes este mensaje porque creaste una visita en NEXA VISIT.",
     }),
     ics: {

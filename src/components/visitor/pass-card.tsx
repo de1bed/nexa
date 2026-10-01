@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Building2, CalendarClock, Hourglass, Link2, MapPin, ShieldCheck, UserRound } from "lucide-react";
+import { mapsSearchUrl } from "@/lib/calendar";
 import { isKnownDemoToken } from "@/lib/demo-public";
 import { cn } from "../ui";
 import { RemainingUntil } from "../ui-client";
@@ -19,6 +20,7 @@ export function PassCard({
   organizationName,
   hostName,
   location,
+  locationAddress,
   startsAt,
   expiresAt,
   state = "valid",
@@ -32,6 +34,7 @@ export function PassCard({
   organizationName?: string;
   hostName: string;
   location: string;
+  locationAddress?: string;
   startsAt: string;
   expiresAt?: string;
   state?: "valid" | "used" | "expired" | "revoked";
@@ -133,7 +136,13 @@ export function PassCard({
 
       <div className="space-y-3.5 px-6 pb-7">
         <Row icon={UserRound} label={t("pass.host")} value={hostName} />
-        <Row icon={MapPin} label={t("pass.location")} value={location} />
+        <Row
+          icon={MapPin}
+          label={t("pass.location")}
+          value={location}
+          detail={locationAddress}
+          detailHref={locationAddress ? mapsSearchUrl(locationAddress) : undefined}
+        />
         {internalPlace && (
           <Row icon={Building2} label={t("visitor.internalPlace")} value={internalPlace} />
         )}
@@ -188,11 +197,15 @@ function Row({
   label,
   value,
   href,
+  detail,
+  detailHref,
 }: {
   icon: typeof UserRound;
   label: string;
   value: string;
   href?: string;
+  detail?: string;
+  detailHref?: string;
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -217,6 +230,19 @@ function Row({
             {value}
           </p>
         )}
+        {detail &&
+          (detailHref ? (
+            <a
+              href={detailHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block text-sm leading-5 text-[#0d9d99] underline"
+            >
+              {detail}
+            </a>
+          ) : (
+            <p className="mt-1 text-sm leading-5 text-slate-600">{detail}</p>
+          ))}
       </div>
     </div>
   );

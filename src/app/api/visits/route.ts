@@ -132,7 +132,7 @@ export async function POST(request: Request) {
 
     const { data: location } = await db
       .from("locations")
-      .select("id,name")
+      .select("id,name,address")
       .eq("id", input.locationId)
       .eq("organization_id", organizationId)
       .eq("active", true)
@@ -221,6 +221,7 @@ export async function POST(request: Request) {
       endsAt: input.endsAt,
       organizationName,
       locationName: location.name,
+      locationAddress: location.address,
       internalPlace: input.internalPlace,
       meetingUrl,
       purpose: input.purpose,
@@ -237,6 +238,7 @@ export async function POST(request: Request) {
         hostName,
         organizationName,
         locationName: location.name,
+        locationAddress: location.address,
         internalPlace: input.internalPlace,
         meetingUrl,
         dateLabel,
@@ -266,6 +268,7 @@ export async function POST(request: Request) {
         organizationName,
         dateLabel,
         locationName: location.name,
+        locationAddress: location.address,
         calendar,
       }).catch(() => ({ status: "failed" as const }));
       await writeNotification({

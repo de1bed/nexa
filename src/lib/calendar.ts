@@ -37,13 +37,20 @@ export type VisitCalendarInput = {
   attendeeEmail?: string;
 };
 
+/** Enlace de mapa para una dirección escrita, no para el nombre interno de la sede. */
+export function mapsSearchUrl(address: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 export function visitCalendarEvent(input: VisitCalendarInput): CalendarEvent {
-  const place = [input.locationName, input.internalPlace, input.locationAddress]
+  const site = [input.locationName, input.internalPlace]
     .map((part) => part?.trim())
     .filter(Boolean)
-    .join(", ");
+    .join(" · ");
+  const address = input.locationAddress?.trim() ?? "";
   const details = [
     input.organizationName,
+    site && address ? `Sede: ${site}` : "",
     input.purpose,
     input.meetingUrl ? `Junta en línea: ${input.meetingUrl}` : "",
     input.invitationUrl ? `Registro: ${input.invitationUrl}` : "",
@@ -57,7 +64,7 @@ export function visitCalendarEvent(input: VisitCalendarInput): CalendarEvent {
     title: input.title,
     startsAt: input.startsAt,
     endsAt: input.endsAt,
-    location: place || undefined,
+    location: address || site || undefined,
     description: details || undefined,
     organizerName: input.organizerName,
     organizerEmail: input.organizerEmail,

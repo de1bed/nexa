@@ -128,6 +128,7 @@ export async function POST(
         hostName: visit.hostName,
         organizationName,
         locationName: visit.location,
+        locationAddress: visit.locationAddress,
         internalPlace: visit.internalPlace,
         meetingUrl: visit.meetingUrl,
         dateLabel,

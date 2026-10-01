@@ -9,6 +9,7 @@ import {
   MapPin,
   ShieldCheck,
 } from "lucide-react";
+import { mapsSearchUrl } from "@/lib/calendar";
 import { useI18n } from "./i18n-provider";
 import { cn } from "./ui";
 import {
@@ -101,7 +102,12 @@ export function InvitationPreview({
                 icon={MapPin}
                 label={t("visitor.where")}
                 value={place}
-                hint={locationAddress}
+                detail={locationAddress}
+                detailHref={
+                  locationAddress?.trim()
+                    ? mapsSearchUrl(locationAddress.trim())
+                    : undefined
+                }
               />
             )}
             {reason && <Fact icon={FileCheck2} label={t("visitor.purpose")} value={reason} />}
@@ -366,12 +372,16 @@ function Fact({
   label,
   value,
   hint,
+  detail,
+  detailHref,
   href,
 }: {
   icon: typeof MapPin;
   label: string;
   value: string;
   hint?: string;
+  detail?: string;
+  detailHref?: string;
   href?: string;
 }) {
   return (
@@ -391,6 +401,19 @@ function Fact({
         ) : (
           <p className="text-sm font-semibold leading-5 text-[#071426]">{value}</p>
         )}
+        {detail &&
+          (detailHref ? (
+            <a
+              href={detailHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block text-sm leading-5 text-[#0d9d99] underline"
+            >
+              {detail}
+            </a>
+          ) : (
+            <p className="mt-1 text-sm leading-5 text-slate-600">{detail}</p>
+          ))}
         {hint && <p className="text-xs text-slate-500">{hint}</p>}
       </div>
     </div>

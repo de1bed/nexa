@@ -11,6 +11,7 @@ import {
   LockKeyhole,
   LogIn,
 } from "lucide-react";
+import { mapsSearchUrl } from "@/lib/calendar";
 import { Brand } from "./brand";
 import { LanguageSwitcher } from "./language-switcher";
 import { PassCard } from "./visitor/pass-card";
@@ -201,6 +202,7 @@ export function PublicPass({
         organizationName={pass.organizationName}
         hostName={pass.hostName}
         location={pass.location}
+        locationAddress={pass.locationAddress || undefined}
         startsAt={pass.startsAt}
         expiresAt={pass.expiresAt}
         accessRequirements={pass.accessRequirements || undefined}
@@ -223,13 +225,20 @@ export function PublicPass({
         <WalletButtons token={token} available={pass.wallet} />
 
         {pass.locationAddress && (
-          <Callout
-            tone="neutral"
-            icon={Building2}
-            className="border-white/10 bg-white/5 text-slate-300"
+          <a
+            href={mapsSearchUrl(pass.locationAddress)}
+            target="_blank"
+            rel="noreferrer"
+            className="block"
           >
-            {pass.locationAddress}
-          </Callout>
+            <Callout
+              tone="neutral"
+              icon={Building2}
+              className="border-white/10 bg-white/5 text-slate-300"
+            >
+              {pass.locationAddress}
+            </Callout>
+          </a>
         )}
         <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
           <LockKeyhole size={13} />

@@ -48,6 +48,7 @@ import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
 import { isLiveMode } from "@/lib/config";
 import { documentTypes } from "@/lib/domain";
+import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
 import { DEMO_PASS_TOKEN } from "@/lib/demo-public";
 import { showcaseOrganization, showcaseSettings } from "@/lib/demo-data";
@@ -526,7 +527,12 @@ export function VisitorFlow({
               icon={MapPin}
               label={t("visitor.where")}
               value={invitation.locationName}
-              hint={invitation.locationAddress}
+              detail={invitation.locationAddress}
+              detailHref={
+                invitation.locationAddress
+                  ? mapsSearchUrl(invitation.locationAddress)
+                  : undefined
+              }
             />
             {invitation.internalPlace && (
               <SummaryRow
@@ -961,6 +967,16 @@ export function VisitorFlow({
               <p className="mt-1.5 font-semibold">{invitation.hostName}</p>
               <p className="mt-1 text-sm text-slate-500">{dateLabel}</p>
               <p className="text-sm text-slate-500">{invitation.locationName}</p>
+              {invitation.locationAddress && (
+                <a
+                  href={mapsSearchUrl(invitation.locationAddress)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-0.5 block text-sm leading-5 text-[#0d9d99] underline"
+                >
+                  {invitation.locationAddress}
+                </a>
+              )}
             </div>
           </StepShell>
         ))}
@@ -1095,6 +1111,7 @@ export function VisitorFlow({
               organizationName={invitation.organizationName}
               hostName={invitation.hostName}
               location={invitation.locationName}
+              locationAddress={invitation.locationAddress || undefined}
               startsAt={invitation.startsAt}
               expiresAt={
                 passValidityWindow({
@@ -1456,12 +1473,16 @@ function SummaryRow({
   label,
   value,
   hint,
+  detail,
+  detailHref,
   href,
 }: {
   icon: typeof MapPin;
   label: string;
   value: string;
   hint?: string;
+  detail?: string;
+  detailHref?: string;
   href?: string;
 }) {
   return (
@@ -1485,6 +1506,19 @@ function SummaryRow({
         ) : (
           <p className="mt-0.5 text-sm font-semibold leading-5">{value}</p>
         )}
+        {detail &&
+          (detailHref ? (
+            <a
+              href={detailHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block text-sm leading-5 text-[#0d9d99] underline"
+            >
+              {detail}
+            </a>
+          ) : (
+            <p className="mt-1 text-sm leading-5 text-slate-600">{detail}</p>
+          ))}
         {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
       </div>
     </div>
