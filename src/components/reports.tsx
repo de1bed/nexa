@@ -639,8 +639,8 @@ export function Reports() {
               className="flex-1"
               onClick={() =>
                 setFilters({
-                  from: isoDay(-30),
-                  to: isoDay(1),
+                  from: shiftLocalDay(-29),
+                  to: shiftLocalDay(0),
                   location: "all",
                   host: "all",
                   company: "all",
