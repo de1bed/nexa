@@ -115,6 +115,7 @@ function escapeIcs(value: string) {
 }
 
 function fold(line: string) {
+  if (line.startsWith("LOCATION:")) return line;
   const chunks: string[] = [];
   let rest = line;
   let first = true;
@@ -142,7 +143,11 @@ export function buildIcs(event: CalendarEvent, method: "REQUEST" | "PUBLISH" = "
     `DTEND:${utcStamp(event.endsAt)}`,
     `SUMMARY:${escapeIcs(event.title)}`,
   ];
-  if (event.location) lines.push(`LOCATION:${escapeIcs(event.location)}`);
+  if (event.location) {
+    // Gmail muestra la ubicación del calendario con esta línea. Si se parte,
+    // la ficha se queda con un pedazo y el mapa no abre la calle completa.
+    lines.push(`LOCATION:${escapeIcs(event.location)}`);
+  }
   if (event.description) lines.push(`DESCRIPTION:${escapeIcs(event.description)}`);
   if (event.organizerEmail) {
     const name = event.organizerName ? `;CN=${escapeIcs(event.organizerName)}` : "";
