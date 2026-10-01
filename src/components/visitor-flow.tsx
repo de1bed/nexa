@@ -48,7 +48,7 @@ import { SavePassButton } from "./visitor/save-pass";
 import { WalletButtons } from "./visitor/wallet-buttons";
 import { isLiveMode } from "@/lib/config";
 import { getOCRProvider } from "@/lib/ocr";
-import { readPlateText } from "@/lib/ocr/tesseract";
+import { readPlateText, setOcrStatusSink } from "@/lib/ocr/tesseract";
 import { documentTypes } from "@/lib/domain";
 import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
@@ -159,6 +159,7 @@ export function VisitorFlow({
   const [capturing, setCapturing] = useState<CaptureTarget | null>(null);
   const [reading, setReading] = useState<"" | "id" | "plate">("");
   const [readNote, setReadNote] = useState("");
+  const [ocrHint, setOcrHint] = useState("");
   const [consent, setConsent] = useState(false);
   const [passToken, setPassToken] = useState("");
   const [invitationUrl, setInvitationUrl] = useState("");
@@ -291,6 +292,14 @@ export function VisitorFlow({
       if (!live) return;
       setReading("id");
       setReadNote("");
+      setOcrHint("");
+      setOcrStatusSink((phase, progress) => {
+        setOcrHint(
+          phase === "read"
+            ? `${t("visitor.readingId")} ${Math.round(progress * 100)}%`
+            : t("visitor.readingWait"),
+        );
+      });
       try {
         const result = await (await getOCRProvider()).extractIdentityData(file);
         if (!result.fullName && !result.documentNumber) {
@@ -299,16 +308,26 @@ export function VisitorFlow({
           );
           return;
         }
-        if (result.fullName) set("fullName", result.fullName);
-        if (result.documentNumber) set("documentNumber", result.documentNumber);
+        setEdits((current) => ({
+          ...current,
+          ...(result.fullName && !current.fullName?.trim()
+            ? { fullName: result.fullName }
+            : {}),
+          ...(result.documentNumber && !current.documentNumber?.trim()
+            ? { documentNumber: result.documentNumber }
+            : {}),
+        }));
         setReadNote(result.mrz?.verified ? "verified" : "partial");
       } catch {
-        setReadNote("miss");
+        setReadNote((current) =>
+          current === "verified" || current === "partial" ? current : "engine",
+        );
       } finally {
+        setOcrStatusSink(null);
         setReading("");
       }
     },
-    [live, set],
+    [live, t],
   );
 
   const readPlate = useCallback(
@@ -316,6 +335,14 @@ export function VisitorFlow({
       if (!live) return;
       setReading("plate");
       setReadNote("");
+      setOcrHint("");
+      setOcrStatusSink((phase, progress) => {
+        setOcrHint(
+          phase === "read"
+            ? `${t("visitor.readingPlate")} ${Math.round(progress * 100)}%`
+            : t("visitor.readingWait"),
+        );
+      });
       try {
         const plate = await readPlateText(file);
         if (!plate) {
@@ -325,12 +352,13 @@ export function VisitorFlow({
         set("vehiclePlate", plate);
         setReadNote("plate");
       } catch {
-        setReadNote("plate-miss");
+        setReadNote("engine");
       } finally {
+        setOcrStatusSink(null);
         setReading("");
       }
     },
-    [live, set],
+    [live, set, t],
   );
 
   const go = useCallback((next: Step) => {
@@ -847,14 +875,16 @@ export function VisitorFlow({
 
             <Callout tone="info" icon={ShieldCheck} className="mt-5">
               {reading === "id"
-                ? t("visitor.readingId")
+                ? ocrHint || t("visitor.readingId")
                 : readNote === "verified" || readNote === "partial"
                   ? t("visitor.ocrVerified")
-                  : readNote === "miss"
-                    ? t("visitor.ocrMiss")
-                    : flow.identification === "required"
-                      ? t("visitor.idRequiredNote")
-                      : t("visitor.idOptionalNote")}
+                  : readNote === "engine"
+                    ? t("visitor.ocrEngine")
+                    : readNote === "miss"
+                      ? t("visitor.ocrMiss")
+                      : flow.identification === "required"
+                        ? t("visitor.idRequiredNote")
+                        : t("visitor.idOptionalNote")}
             </Callout>
           </StepShell>
         ))}
@@ -962,10 +992,15 @@ export function VisitorFlow({
             error={error}
           >
             {reading === "plate" && (
-              <p className="mb-3 text-sm text-slate-500">{t("visitor.readingPlate")}</p>
+              <p className="mb-3 text-sm text-slate-500">
+                {ocrHint || t("visitor.readingPlate")}
+              </p>
             )}
             {readNote === "plate" && (
               <p className="mb-3 text-sm text-[#0d9d99]">{t("visitor.plateRead")}</p>
+            )}
+            {readNote === "engine" && (
+              <p className="mb-3 text-sm text-amber-700">{t("visitor.ocrEngine")}</p>
             )}
             {readNote === "plate-miss" && (
               <p className="mb-3 text-sm text-amber-700">{t("visitor.plateMiss")}</p>
@@ -1022,10 +1057,15 @@ export function VisitorFlow({
           >
             <div className="space-y-4">
               {extrasShowsVehicle(flow) && reading === "plate" && (
-                <p className="text-sm text-slate-500">{t("visitor.readingPlate")}</p>
+                <p className="text-sm text-slate-500">
+                  {ocrHint || t("visitor.readingPlate")}
+                </p>
               )}
               {extrasShowsVehicle(flow) && readNote === "plate" && (
                 <p className="text-sm text-[#0d9d99]">{t("visitor.plateRead")}</p>
+              )}
+              {extrasShowsVehicle(flow) && readNote === "engine" && (
+                <p className="text-sm text-amber-700">{t("visitor.ocrEngine")}</p>
               )}
               {extrasShowsVehicle(flow) && readNote === "plate-miss" && (
                 <p className="text-sm text-amber-700">{t("visitor.plateMiss")}</p>

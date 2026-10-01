@@ -7,7 +7,7 @@ import { useI18n } from "../i18n-provider";
 import { translate } from "@/lib/i18n";
 import {
   ACCEPTED_IMAGE_TYPES,
-  captureFrame,
+  captureFramed,
   compressIdentityImage,
   validateImage,
 } from "@/lib/image";
@@ -38,6 +38,7 @@ export function PhotoCapture({
 }) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraState, setCameraState] = useState<
     "idle" | "starting" | "ready" | "unavailable"
@@ -114,7 +115,11 @@ export function PhotoCapture({
     setBusy(true);
     setError("");
     try {
-      const file = await captureFrame(videoRef.current, 1800, filePrefix);
+      const file = await captureFramed(
+        videoRef.current,
+        frameRef.current,
+        filePrefix,
+      );
       streamRef.current?.getTracks().forEach((track) => track.stop());
       onCaptured(file, URL.createObjectURL(file));
     } catch {
@@ -152,7 +157,7 @@ export function PhotoCapture({
         />
 
         <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
-          <div className={cn("relative", frameClass)}>
+          <div ref={frameRef} className={cn("relative", frameClass)}>
             <span className="absolute -left-1 -top-1 size-9 rounded-tl-2xl border-l-4 border-t-4 border-[#10cfc9]" />
             <span className="absolute -right-1 -top-1 size-9 rounded-tr-2xl border-r-4 border-t-4 border-[#10cfc9]" />
             <span className="absolute -bottom-1 -left-1 size-9 rounded-bl-2xl border-b-4 border-l-4 border-[#10cfc9]" />

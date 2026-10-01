@@ -2,43 +2,121 @@ import type { OCRField, OCRImageInput, OCRProvider, OCRResult } from "./types";
 import { pickPrintedIdentity } from "./card-text";
 import { isExpired, readMrz, type MrzResult } from "./mrz";
 import { pickPlate } from "./plate";
-import { prepareMrzImage, preparePlateCrops } from "@/lib/image";
+import {
+  prepareIdentityCrops,
+  prepareMrzImage,
+  preparePlateCrops,
+} from "@/lib/image";
 
 function lastImage(image: OCRImageInput) {
   return Array.isArray(image) ? image[image.length - 1] : image;
 }
 
 /**
- * Reconocimiento local con Tesseract, afinado para la banda MRZ del reverso.
+ * Lectura en el teléfono, sin servicio de pago.
  *
- * La imagen nunca sale del dispositivo del visitante: el motor corre en
- * WebAssembly dentro del navegador. Los archivos del motor se sirven desde
- * `/tesseract` (ver `npm run setup:ocr`), no desde un CDN externo, para que la
- * política de seguridad de contenido pueda seguir siendo estricta.
+ * El motor se carga como worker del mismo sitio (`workerBlobURL: false`).
+ * El atajo por blob falla en Safari y el reconocimiento no llega a correr:
+ * el nombre y la placa se quedan vacíos aunque la foto sí se guardó.
  *
- * Se prioriza el MRZ sobre el anverso porque trae dígitos de control: permite
- * **comprobar** que la lectura fue correcta en vez de confiar en ella.
+ * Un solo worker en inglés, reutilizado. Cargar español junto con inglés
+ * duplica la descarga y, si falla, la promesa de arranque no se resuelve.
  */
 
 const ASSET_BASE = process.env.NEXT_PUBLIC_TESSERACT_ASSETS ?? "/tesseract";
-
-/** Alfabeto de la norma ICAO 9303: sin minúsculas, signos ni acentos. */
 const MRZ_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
 const PLATE_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const TEXT_CHARSET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ0123456789 ";
+
+type OcrPhase = "prepare" | "read";
+type StatusSink = (phase: OcrPhase, progress: number) => void;
+
+let statusSink: StatusSink | null = null;
+
+export function setOcrStatusSink(sink: StatusSink | null) {
+  statusSink = sink;
+}
 
 const workerOptions = {
   workerPath: `${ASSET_BASE}/worker.min.js`,
   corePath: `${ASSET_BASE}/core`,
   langPath: `${ASSET_BASE}/lang`,
   gzip: true,
+  workerBlobURL: false,
+  logger(message: { status?: string; progress?: number }) {
+    const status = message.status ?? "";
+    if (!statusSink || !status) return;
+    if (status === "recognizing text") statusSink("read", message.progress ?? 0);
+    else statusSink("prepare", message.progress ?? 0);
+  },
 };
 
-async function openWorker() {
-  const { createWorker } = await import("tesseract.js");
+type Engine = Awaited<ReturnType<typeof import("tesseract.js").createWorker>>;
+
+let enginePromise: Promise<Engine> | null = null;
+let queue: Promise<unknown> = Promise.resolve();
+
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("ocr-timeout")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error("ocr-failed"));
+      },
+    );
+  });
+}
+
+function enqueue<T>(job: () => Promise<T>) {
+  const run = queue.then(job, job);
+  queue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function discardEngine() {
+  const pending = enginePromise;
+  enginePromise = null;
+  if (!pending) return;
+  const engine = await pending.catch(() => null);
+  await engine?.terminate().catch(() => undefined);
+}
+
+async function getEngine() {
+  if (!enginePromise) {
+    enginePromise = (async () => {
+      const { createWorker } = await import("tesseract.js");
+      return withTimeout(createWorker("eng", 1, workerOptions), 90000);
+    })().catch((error) => {
+      enginePromise = null;
+      throw error;
+    });
+  }
+  return enginePromise;
+}
+
+function readText(result: { data?: { text?: string } }) {
+  return result.data?.text ?? "";
+}
+
+async function configure(
+  engine: Engine,
+  params: Parameters<Engine["setParameters"]>[0],
+) {
   try {
-    return await createWorker("spa+eng", 1, workerOptions);
+    await engine.setParameters(params);
   } catch {
-    return await createWorker("eng", 1, workerOptions);
+    const rest = { ...params };
+    delete rest.tessedit_char_whitelist;
+    await engine.setParameters(rest);
   }
 }
 
@@ -74,35 +152,33 @@ function toFields(mrz: MrzResult): OCRField[] {
 
 /** Lee una placa en el teléfono. Devuelve null si no aparece un patrón claro. */
 export async function readPlateText(file: File) {
-  const { createWorker, PSM } = await import("tesseract.js");
-  const worker = await createWorker("eng", 1, workerOptions);
+  return enqueue(async () => {
+    const { PSM } = await import("tesseract.js");
+    const engine = await getEngine();
+    try {
+      const crops = await preparePlateCrops(file).catch(() => []);
+      const images: Array<Blob | File> = [...crops, file];
+      let combined = "";
 
-  try {
-    await worker.setParameters({
-      tessedit_char_whitelist: PLATE_CHARSET,
-      tessedit_pageseg_mode: PSM.SINGLE_LINE,
-      load_system_dawg: "0",
-      load_freq_dawg: "0",
-    });
-
-    const crops = await preparePlateCrops(file).catch(() => []);
-    const images: Array<Blob | File> = crops.length > 0 ? crops : [file];
-    let combined = "";
-    for (const image of images) {
-      const read = await worker.recognize(image);
-      combined = `${combined}\n${read.data.text ?? ""}`;
-      const hit = pickPlate(combined);
-      if (hit) return hit;
+      for (const [index, image] of images.entries()) {
+        await configure(engine, {
+          tessedit_char_whitelist: PLATE_CHARSET,
+          tessedit_pageseg_mode:
+            index === 0 ? PSM.SINGLE_BLOCK : PSM.SINGLE_LINE,
+          load_system_dawg: "0",
+          load_freq_dawg: "0",
+        });
+        const read = await withTimeout(engine.recognize(image), 25000);
+        combined = `${combined}\n${readText(read)}`;
+        const hit = pickPlate(combined);
+        if (hit) return hit;
+      }
+      return pickPlate(combined);
+    } catch (error) {
+      await discardEngine();
+      throw error;
     }
-
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-    });
-    const again = await worker.recognize(images[0] ?? file);
-    return pickPlate(`${combined}\n${again.data.text ?? ""}`);
-  } finally {
-    await worker.terminate().catch(() => undefined);
-  }
+  });
 }
 
 export class TesseractOCRProvider implements OCRProvider {
@@ -110,64 +186,81 @@ export class TesseractOCRProvider implements OCRProvider {
 
   async extractIdentityData(image: OCRImageInput): Promise<OCRResult> {
     const target = lastImage(image);
-    const { PSM } = await import("tesseract.js");
-    const worker = await openWorker();
+    return enqueue(async () => {
+      const { PSM } = await import("tesseract.js");
+      const engine = await getEngine();
+      try {
+        const crops =
+          target instanceof File
+            ? await prepareIdentityCrops(target).catch(() => [])
+            : [];
+        const images: Array<Blob | File> =
+          crops.length > 0 ? crops : [target as Blob];
 
-    try {
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.AUTO,
-        preserve_interword_spaces: "1",
-      });
-
-      const page = await worker.recognize(target as Blob);
-      let rawText = page.data.text ?? "";
-      const printed = pickPrintedIdentity(rawText);
-
-      let mrz: MrzResult | null = null;
-      if (target instanceof File) {
-        const band = await prepareMrzImage(target).catch(() => null);
-        if (band) {
-          await worker.setParameters({
-            tessedit_char_whitelist: MRZ_CHARSET,
-            tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-            load_system_dawg: "0",
-            load_freq_dawg: "0",
+        let rawText = "";
+        let printed = pickPrintedIdentity("");
+        for (const sample of images) {
+          await configure(engine, {
+            tessedit_char_whitelist: TEXT_CHARSET,
+            tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+            preserve_interword_spaces: "1",
           });
-          const bandRead = await worker.recognize(band);
-          const bandText = bandRead.data.text ?? "";
-          rawText = `${rawText}\n${bandText}`.trim();
-          mrz = readMrz(bandText);
+          const page = await withTimeout(engine.recognize(sample), 30000);
+          rawText = `${rawText}\n${readText(page)}`.trim();
+          printed = pickPrintedIdentity(rawText);
+          if (printed.fullName) break;
         }
+
+        let mrz: MrzResult | null = null;
+        if (target instanceof File && !printed.documentNumber) {
+          const band = await prepareMrzImage(target).catch(() => null);
+          if (band) {
+            await configure(engine, {
+              tessedit_char_whitelist: MRZ_CHARSET,
+              tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+              load_system_dawg: "0",
+              load_freq_dawg: "0",
+            });
+            const bandRead = await withTimeout(engine.recognize(band), 20000);
+            const bandText = readText(bandRead);
+            rawText = `${rawText}\n${bandText}`.trim();
+            mrz = readMrz(bandText);
+          }
+        }
+
+        const fullName =
+          (mrz?.verified && mrz.fullName) ||
+          printed.fullName ||
+          mrz?.fullName ||
+          undefined;
+        const documentNumber =
+          printed.documentNumber ||
+          (mrz?.documentNumber && mrz.checks.documentNumber === "valid"
+            ? mrz.documentNumber
+            : undefined) ||
+          mrz?.curp ||
+          printed.curp;
+
+        if (!fullName && !documentNumber && !mrz)
+          return { rawText, confidence: 0, fields: [] };
+
+        const confidence = mrz?.verified ? 100 : fullName ? 85 : 60;
+        return {
+          fullName,
+          documentNumber,
+          birthDate: mrz?.birthDate,
+          expiryDate: mrz?.expiryDate,
+          curp: mrz?.curp || printed.curp,
+          rawText,
+          confidence,
+          fields: mrz ? toFields(mrz) : [],
+          mrz: mrz ?? undefined,
+          expired: mrz ? isExpired(mrz) : undefined,
+        };
+      } catch (error) {
+        await discardEngine();
+        throw error;
       }
-
-      const fullName =
-        (mrz?.verified && mrz.fullName) || printed.fullName || mrz?.fullName || undefined;
-      const documentNumber =
-        printed.documentNumber ||
-        (mrz?.documentNumber && mrz.checks.documentNumber === "valid"
-          ? mrz.documentNumber
-          : undefined) ||
-        mrz?.curp ||
-        printed.curp;
-
-      if (!fullName && !documentNumber && !mrz)
-        return { rawText, confidence: 0, fields: [] };
-
-      const confidence = mrz?.verified ? 100 : fullName ? 85 : 60;
-      return {
-        fullName,
-        documentNumber,
-        birthDate: mrz?.birthDate,
-        expiryDate: mrz?.expiryDate,
-        curp: mrz?.curp || printed.curp,
-        rawText,
-        confidence,
-        fields: mrz ? toFields(mrz) : [],
-        mrz: mrz ?? undefined,
-        expired: mrz ? isExpired(mrz) : undefined,
-      };
-    } finally {
-      await worker.terminate().catch(() => undefined);
-    }
+    });
   }
 }
