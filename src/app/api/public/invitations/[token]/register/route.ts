@@ -12,8 +12,11 @@ import {
   isAllowedIdentityUpload,
 } from "@/lib/identity-file";
 import { clampPassDays, passValidityWindow } from "@/lib/pass-window";
+import { DEFAULT_RETENTION_DAYS, retentionExpiresAt } from "@/lib/retention";
 import {
+  attachmentHasContent,
   parseVisitorFlow,
+  requestedComplete,
   resolvedVisitorName,
   validateRegistration,
 } from "@/lib/visitor-flow";
@@ -35,7 +38,28 @@ const schema = z.object({
   ocrVerified: z.enum(["true", "false"]).optional(),
   documentExpiresAt: z.string().max(20).optional(),
   consent: z.enum(["true", "false"]).optional(),
+  vehicleDeclined: z.enum(["true", "false"]).optional(),
+  attachments: z.string().max(40000).optional(),
 });
+
+/**
+ * Metadatos de cada anexo. Las fotos viajan aparte como
+ * `attachmentPhoto:<key>`. `requestedId` liga la respuesta con un requisito
+ * que la empresa pidió; sin él es un anexo libre del visitante.
+ */
+const attachmentMetaSchema = z
+  .array(
+    z.object({
+      key: z.string().trim().min(1).max(64),
+      requestedId: z.uuid().optional(),
+      title: z.string().trim().max(120).default(""),
+      text: z.string().trim().max(2000).default(""),
+    }),
+  )
+  .max(40);
+
+const MAX_PHOTOS_PER_ATTACHMENT = 5;
+const MAX_FREE_ATTACHMENTS = 10;
 
 const IDENTITY_SIDES = [
   { field: "documentFront", type: "identity_front" },
@@ -76,14 +100,51 @@ export async function POST(
       identityImages.push({ file: image, type: side.type });
     }
 
-    const vehicleImages = collectFiles(form, "vehiclePlatePhoto").map(
-      (file) => ({ file, type: "vehicle_plate" }),
-    );
-    const attachmentImages = collectFiles(form, "attachment").map((file) => ({
-      file,
-      type: "attachment",
+    // Si el visitante declaró que no trae vehículo, sus placas y fotos no se guardan.
+    const vehicleDeclined = values.vehicleDeclined === "true";
+    const vehicleImages = vehicleDeclined
+      ? []
+      : collectFiles(form, "vehiclePlatePhoto").map((file) => ({
+          file,
+          type: "vehicle_plate",
+        }));
+    const vehiclePlate = vehicleDeclined ? "" : (values.vehiclePlate ?? "");
+    let rawAttachments: unknown = [];
+    try {
+      rawAttachments = JSON.parse(values.attachments || "[]");
+    } catch {
+      return NextResponse.json(
+        { error: translate("errors.form_invalid", undefined, locale) },
+        { status: 400 },
+      );
+    }
+    const attachmentMeta = attachmentMetaSchema.parse(rawAttachments);
+    const attachmentEntries = attachmentMeta.map((entry) => ({
+      ...entry,
+      photos: collectFiles(form, `attachmentPhoto:${entry.key}`).slice(
+        0,
+        MAX_PHOTOS_PER_ATTACHMENT,
+      ),
     }));
-    const images = [...identityImages, ...vehicleImages, ...attachmentImages];
+    // Clientes anteriores mandaban fotos sueltas en `attachment`.
+    const legacyPhotos = collectFiles(form, "attachment");
+    if (legacyPhotos.length)
+      attachmentEntries.push({
+        key: "legacy",
+        requestedId: undefined,
+        title: "",
+        text: "",
+        photos: legacyPhotos.slice(0, MAX_PHOTOS_PER_ATTACHMENT),
+      });
+    const attachmentImages = attachmentEntries.flatMap((entry) =>
+      entry.photos.map((file) => ({
+        file,
+        type: "attachment",
+        attachmentKey: entry.key,
+      })),
+    );
+    const images: Array<{ file: File; type: string; attachmentKey?: string }> =
+      [...identityImages, ...vehicleImages, ...attachmentImages];
 
     for (const image of images) {
       if (!isAllowedIdentityUpload(image.file))
@@ -125,7 +186,7 @@ export async function POST(
     const { data: settings } = await db
       .from("organization_settings")
       .select(
-        "document_retention_days,privacy_notice_version,require_identification,visitor_flow",
+        "document_retention_days,document_retention_unlimited,privacy_notice_version,require_identification,visitor_flow",
       )
       .eq("organization_id", visit.organization_id)
       .maybeSingle();
@@ -135,18 +196,47 @@ export async function POST(
       settings?.require_identification !== false,
     );
 
+    // Requisitos que la empresa pidió en esta visita y lo que respondió el visitante.
+    const { data: requestedRows } = await db
+      .from("visit_attachments")
+      .select("id,ask_photo,ask_text,required")
+      .eq("visit_id", visit.id)
+      .eq("source", "requested");
+    const requested = requestedRows ?? [];
+    const answerFor = (id: string) =>
+      attachmentEntries.find((entry) => entry.requestedId === id);
+    const requirementsMissing = requested.some((item) => {
+      const answer = answerFor(item.id);
+      return !requestedComplete(
+        {
+          askPhoto: item.ask_photo,
+          askText: item.ask_text,
+          required: item.required,
+        },
+        { text: answer?.text ?? "", photos: answer?.photos.length ?? 0 },
+      );
+    });
+    const freeEntries = attachmentEntries
+      .filter((entry) => !entry.requestedId)
+      .filter((entry) =>
+        attachmentHasContent({ ...entry, photos: entry.photos.length }),
+      )
+      .slice(0, MAX_FREE_ATTACHMENTS);
+
     const problem = validateRegistration(
       {
         fullName: values.fullName,
         email: values.email,
         phone: values.phone,
         company: values.company,
-        vehiclePlate: values.vehiclePlate ?? "",
+        vehiclePlate,
+        vehicleDeclined,
         visitorNotes: values.visitorNotes ?? "",
         consent: values.consent === "true",
         identityPhotos: identityImages.length,
         vehiclePhotos: vehicleImages.length,
-        attachmentPhotos: attachmentImages.length,
+        attachmentItems: freeEntries.length,
+        requirementsMissing,
         invitedName: resolved.visitor_name,
       },
       flow,
@@ -196,14 +286,73 @@ export async function POST(
       visitorId = created.id;
     }
 
-    const retentionDays = settings?.document_retention_days ?? 30;
-    const retentionExpiresAt = new Date(
-      Date.now() + retentionDays * 86400000,
-    ).toISOString();
+    // Anexos: un nuevo registro reemplaza lo que el visitante haya entregado antes.
+    const now = new Date().toISOString();
+    const attachmentIds = new Map<string, string>();
+    const { error: clearError } = await db
+      .from("visit_attachments")
+      .delete()
+      .eq("visit_id", visit.id)
+      .eq("source", "visitor");
+    if (clearError) throw clearError;
+
+    for (const item of requested) {
+      const answer = answerFor(item.id);
+      const text = item.ask_text ? (answer?.text ?? "") : "";
+      const photos = item.ask_photo ? (answer?.photos.length ?? 0) : 0;
+      const { error } = await db
+        .from("visit_attachments")
+        .update({
+          response_text: text || null,
+          completed_at: text || photos ? now : null,
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+      if (item.ask_photo) attachmentIds.set(item.id, item.id);
+    }
+
+    if (freeEntries.length) {
+      const { data: inserted, error } = await db
+        .from("visit_attachments")
+        .insert(
+          freeEntries.map((entry, index) => ({
+            organization_id: visit.organization_id,
+            visit_id: visit.id,
+            source: "visitor",
+            title: entry.title,
+            description: "",
+            ask_photo: true,
+            ask_text: true,
+            required: false,
+            response_text: entry.text || null,
+            sort_order: 100 + index,
+            completed_at: now,
+          })),
+        )
+        .select("id,sort_order");
+      if (error) throw error;
+      for (const row of inserted ?? []) {
+        const entry = freeEntries[Number(row.sort_order) - 100];
+        if (entry) attachmentIds.set(entry.key, row.id as string);
+      }
+    }
+
+    // Solo se guardan fotos de anexos que existen y que piden foto.
+    const storedImages = images.filter(
+      (image) => !image.attachmentKey || attachmentIds.has(image.attachmentKey),
+    );
+
+    const retentionDays =
+      settings?.document_retention_days ?? DEFAULT_RETENTION_DAYS;
+    const retentionUnlimited = settings?.document_retention_unlimited !== false;
+    const documentsExpireAt = retentionExpiresAt({
+      unlimited: retentionUnlimited,
+      days: retentionDays,
+    });
 
     const uploaded: string[] = [];
     try {
-      for (const image of images) {
+      for (const image of storedImages) {
         const { mimeType, extension } = identityFileMeta(image.file);
         const path = `${visit.organization_id}/${visit.id}/${crypto.randomUUID()}.${extension}`;
 
@@ -226,8 +375,11 @@ export async function POST(
             mime_type: mimeType,
             size_bytes: image.file.size,
             document_type: image.type,
+            attachment_id: image.attachmentKey
+              ? (attachmentIds.get(image.attachmentKey) ?? null)
+              : null,
             ocr_confidence: values.ocrConfidence ?? null,
-            retention_expires_at: retentionExpiresAt,
+            retention_expires_at: documentsExpireAt,
           });
         if (documentError) throw documentError;
       }
@@ -265,7 +417,8 @@ export async function POST(
       .update({
         visitor_id: visitorId,
         visitor_company: values.company || null,
-        vehicle_plate: values.vehiclePlate || null,
+        vehicle_plate: vehiclePlate || null,
+        vehicle_declined: vehicleDeclined,
         visitor_notes: values.visitorNotes || null,
         status: "pre_registered",
         consented_at: consented ? new Date().toISOString() : null,
@@ -284,11 +437,13 @@ export async function POST(
         visit_id: visit.id,
         event_type: "document_uploaded",
         metadata: {
-          sides: images.length,
+          sides: storedImages.length,
           identity: identityImages.length,
           vehicle: vehicleImages.length,
-          attachments: attachmentImages.length,
-          retention_days: retentionDays,
+          attachments: storedImages.length - identityImages.length - vehicleImages.length,
+          requested: requested.length,
+          free_attachments: freeEntries.length,
+          retention_days: retentionUnlimited ? null : retentionDays,
           document_type: values.documentType,
         },
       },

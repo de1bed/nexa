@@ -24,7 +24,8 @@ import { getOCRProvider } from "@/lib/ocr";
  * Anfitriones y ubicaciones salen del catálogo real de la organización.
  */
 export function ManualAccess() {
-  const { hosts, locations, createManualVisit, settings, live } = useWorkspace();
+  const { hosts, locations, createManualVisit, settings, live, stationId } =
+    useWorkspace();
   const { t } = useI18n();
   const [done, setDone] = useState<Visit | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -47,8 +48,8 @@ export function ManualAccess() {
     [form.hostId, hosts],
   );
   const locationId = useMemo(
-    () => form.locationId || locations[0]?.id || "",
-    [form.locationId, locations],
+    () => form.locationId || stationId || locations[0]?.id || "",
+    [form.locationId, stationId, locations],
   );
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
@@ -292,7 +293,9 @@ export function ManualAccess() {
             </span>
             <span className="mt-0.5 block text-xs text-slate-400">
               Opcional · el reverso llena el nombre ·{" "}
-              {settings.documentRetentionDays} días de retención
+              {settings.documentRetentionUnlimited
+                ? "retención ilimitada"
+                : `${settings.documentRetentionDays} días de retención`}
             </span>
           </span>
           <span className="shrink-0 text-right text-xs font-semibold text-[#10cfc9]">

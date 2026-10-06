@@ -61,7 +61,8 @@ export function InvitationPreview({
   phone?: string;
   company?: string;
   privacyNotice?: string;
-  retentionDays?: number;
+  /** null = retención ilimitada. */
+  retentionDays?: number | null;
 }) {
   const { t } = useI18n();
   const steps = registrationSteps(flow);
@@ -249,7 +250,8 @@ function StepBody({
   company?: string;
   privacyNotice?: string;
   organizationName: string;
-  retentionDays?: number;
+  /** null = retención ilimitada. */
+  retentionDays?: number | null;
 }) {
   const { t } = useI18n();
   const optionalIdentity = flow.identity !== "required";
@@ -300,7 +302,13 @@ function StepBody({
   }
 
   if (step === "attachments") {
-    return <PhotoSlot label={t("visitor.addPhoto")} />;
+    return (
+      <div className="space-y-2.5">
+        <Blank label={t("visitor.attachmentTitleField")} optional />
+        <Blank label={t("visitor.attachmentTextField")} optional />
+        <PhotoSlot label={t("visitor.attachmentAddPhoto")} />
+      </div>
+    );
   }
 
   const notice = privacyNotice?.trim() || t("visitor.noticeFallback");
@@ -311,7 +319,9 @@ function StepBody({
           {t("visitor.noticeTitle", { org: organizationName })}
         </p>
         <p className="mt-1 line-clamp-4 whitespace-pre-line">{notice}</p>
-        {flow.identification !== "off" && retentionDays ? (
+        {flow.identification !== "off" && retentionDays === null ? (
+          <p className="mt-2">{t("visitor.retentionUnlimited")}</p>
+        ) : flow.identification !== "off" && retentionDays ? (
           <p className="mt-2">{t("visitor.retention", { days: retentionDays })}</p>
         ) : null}
       </div>

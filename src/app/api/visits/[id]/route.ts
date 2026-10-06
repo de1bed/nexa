@@ -12,6 +12,8 @@ const schema = z.object({
   status: z.enum(["cancelled", "checked_in", "checked_out", "denied"]),
   denialReason: z.string().trim().min(2).max(300).optional(),
   allowOutsideWindow: z.boolean().optional(),
+  /** Sede de la caseta que registra la decisión. */
+  locationId: z.uuid().optional(),
 });
 
 const decisionByStatus = {
@@ -125,6 +127,7 @@ export async function PATCH(
         p_decision: decisionByStatus[input.status],
         p_reason: input.denialReason ?? null,
         p_allow_outside_window: input.allowOutsideWindow ?? false,
+        p_location_id: input.locationId ?? null,
       });
       if (error)
         return NextResponse.json(
@@ -145,11 +148,22 @@ export async function PATCH(
 
     // Aviso al anfitrión: nunca bloquea ni revierte el registro de entrada.
     if (input.status === "checked_in" && visit?.hostEmail) {
+      // El aviso dice por qué sede entró, que puede no ser la de la invitación.
+      let entryLocation = visit.location;
+      if (input.locationId && input.locationId !== visit.locationId) {
+        const { data: place } = await db
+          .from("locations")
+          .select("name")
+          .eq("id", input.locationId)
+          .eq("organization_id", organizationId)
+          .maybeSingle();
+        entryLocation = place?.name ?? entryLocation;
+      }
       const delivery = await sendHostArrivalEmail({
         to: visit.hostEmail,
         hostName: visit.hostName,
         visitorName: visit.visitorName,
-        locationName: visit.location,
+        locationName: entryLocation,
         timeLabel: new Intl.DateTimeFormat("es-MX", {
           timeStyle: "short",
         }).format(new Date()),

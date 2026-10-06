@@ -10,6 +10,7 @@ import {
   identityFileMeta,
   isAllowedIdentityUpload,
 } from "@/lib/identity-file";
+import { DEFAULT_RETENTION_DAYS, retentionExpiresAt } from "@/lib/retention";
 
 export const dynamic = "force-dynamic";
 
@@ -124,10 +125,9 @@ export async function POST(request: Request) {
 
       const { data: settings } = await db
         .from("organization_settings")
-        .select("document_retention_days")
+        .select("document_retention_days,document_retention_unlimited")
         .eq("organization_id", organizationId)
         .maybeSingle();
-      const retentionDays = settings?.document_retention_days ?? 30;
 
       const { error: documentError } = await storage
         .from("visitor_documents")
@@ -139,9 +139,10 @@ export async function POST(request: Request) {
           mime_type: mimeType,
           size_bytes: document.size,
           document_type: "manual_capture",
-          retention_expires_at: new Date(
-            Date.now() + retentionDays * 86400000,
-          ).toISOString(),
+          retention_expires_at: retentionExpiresAt({
+            unlimited: settings?.document_retention_unlimited !== false,
+            days: settings?.document_retention_days ?? DEFAULT_RETENTION_DAYS,
+          }),
         });
       if (documentError) {
         // El objeto no debe quedar huérfano si falla el registro de metadatos.

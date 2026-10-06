@@ -2,6 +2,7 @@ import type {
   AccessEvent,
   Location,
   OrganizationSettings,
+  Requirement,
   TeamMember,
   Visit,
   VisitStatus,
@@ -85,15 +86,40 @@ export const showcaseTeam: TeamMember[] = [
   },
 ];
 
+export const showcaseRequirements: Requirement[] = [
+  {
+    id: "req-imss",
+    title: "Alta en IMSS vigente",
+    description:
+      "Para contratistas: foto del comprobante de alta del mes en curso.",
+    askPhoto: true,
+    askText: false,
+    required: false,
+    applyByDefault: false,
+    active: true,
+  },
+  {
+    id: "req-equipo",
+    title: "Equipo que ingresa",
+    description: "Laptops, herramientas o equipo de medición, con número de serie.",
+    askPhoto: true,
+    askText: true,
+    required: false,
+    applyByDefault: true,
+    active: true,
+  },
+];
+
 export const showcaseSettings: OrganizationSettings = {
   documentRetentionDays: 30,
+  documentRetentionUnlimited: true,
   allowDocumentPreviewForGuards: false,
   requireIdentification: true,
   visitorFlow: defaultVisitorFlow,
   earlyEntryMinutes: 15,
   lateEntryMinutes: 30,
   privacyNotice:
-    "Los datos personales que proporcionas se utilizan únicamente para gestionar, controlar y auditar tu acceso a nuestras instalaciones. Tu identificación se conserva de forma privada durante el periodo de retención configurado y después se elimina de manera permanente. No realizamos reconocimiento facial ni almacenamos datos biométricos.",
+    "Los datos personales que proporcionas se utilizan únicamente para gestionar, controlar y auditar tu acceso a nuestras instalaciones. Tu identificación se conserva de forma privada conforme a la política de retención de la empresa. No realizamos reconocimiento facial ni almacenamos datos biométricos.",
   privacyNoticeVersion: "mvp-1",
 };
 

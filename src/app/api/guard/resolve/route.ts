@@ -20,14 +20,22 @@ type ResolvedRow = {
   host_email: string;
   purpose: string;
   vehicle_plate: string;
+  vehicle_declined: boolean;
   visitor_notes: string;
   access_requirements: string;
   starts_at: string;
   ends_at: string;
+  pass_valid_days: number;
   checked_in_at: string | null;
   visit_status: Visit["status"];
   token_state: string;
   document_captured: boolean;
+  identity_captured: boolean;
+  vehicle_photos_captured: boolean;
+  attachments_captured: boolean;
+  all_locations: boolean;
+  access_location_ids: string[] | null;
+  access_location_names: string[] | null;
 };
 
 export async function POST(request: Request) {
@@ -55,12 +63,6 @@ export async function POST(request: Request) {
         { status: 404 },
       );
 
-    const { data: span } = await db
-      .from("visits")
-      .select("pass_valid_days")
-      .eq("id", row.visit_id)
-      .maybeSingle();
-
     const visit: Visit = {
       id: row.visit_id,
       visitorName: row.visitor_name,
@@ -78,14 +80,18 @@ export async function POST(request: Request) {
       purpose: row.purpose,
       status: row.visit_status,
       origin: "host_invitation",
-      passValidDays: Number(span?.pass_valid_days ?? 1),
+      passValidDays: Number(row.pass_valid_days ?? 1),
       vehiclePlate: row.vehicle_plate || undefined,
+      vehicleDeclined: Boolean(row.vehicle_declined),
+      allLocations: row.all_locations !== false,
+      accessLocationIds: row.access_location_ids ?? [],
+      accessLocationNames: row.access_location_names ?? [],
       visitorNotes: row.visitor_notes || undefined,
       accessRequirements: row.access_requirements || undefined,
       documentCaptured: row.document_captured,
-      identityCaptured: Boolean(row.document_captured),
-      vehiclePhotosCaptured: false,
-      attachmentsCaptured: false,
+      identityCaptured: Boolean(row.identity_captured),
+      vehiclePhotosCaptured: Boolean(row.vehicle_photos_captured),
+      attachmentsCaptured: Boolean(row.attachments_captured),
     };
 
     return NextResponse.json(

@@ -48,6 +48,8 @@ type Pass = {
   accessRequirements: string;
   internalPlace?: string;
   meetingUrl?: string;
+  allLocations?: boolean;
+  accessLocations?: string[];
   wallet?: { apple?: boolean; google?: boolean };
 };
 
@@ -240,6 +242,18 @@ export function PublicPass({
             </Callout>
           </a>
         )}
+        <p className="text-center text-xs leading-5 text-slate-400">
+          {pass.allLocations !== false
+            ? t("pass.validAllSites", { org: pass.organizationName })
+            : t("pass.validAtSites", {
+                sites: [
+                  pass.location,
+                  ...(pass.accessLocations ?? []).filter(
+                    (name) => name !== pass.location,
+                  ),
+                ].join(", "),
+              })}
+        </p>
         <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
           <LockKeyhole size={13} />
           {t("pass.tokenOnly")}

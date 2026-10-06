@@ -13,6 +13,7 @@ import { isLiveMode } from "@/lib/config";
 import {
   showcaseLocations,
   showcaseOrganization,
+  showcaseRequirements,
   showcaseSettings,
   showcaseTeam,
 } from "@/lib/demo-data";
@@ -30,6 +31,7 @@ import type {
   Location,
   MemberRole,
   OrganizationSettings,
+  Requirement,
   Visit,
   VisitStatus,
   WorkspaceState,
@@ -61,6 +63,11 @@ export type InvitationDraft = {
   accessRequirements?: string;
   sendEmail: boolean;
   sendWhatsApp: boolean;
+  /** El QR vale en todas las sedes. Si es false, solo en `accessLocationIds`. */
+  allLocations: boolean;
+  accessLocationIds: string[];
+  /** Requisitos del catálogo que se le piden al visitante en esta visita. */
+  requirementIds: string[];
 };
 
 export type ManualDraft = {
@@ -80,11 +87,14 @@ type Directory = {
   organization: { id: string; name: string };
   locations: Location[];
   hosts: HostOption[];
+  /** Catálogo de requisitos activos de la empresa. */
+  requirements: Requirement[];
   settings: OrganizationSettings;
   channels: Channels;
+  viewer?: { defaultLocationId?: string | null };
 };
 
-type WorkspaceValue = Directory & {
+type WorkspaceValue = Omit<Directory, "viewer"> & {
   live: boolean;
   loading: boolean;
   error?: string;
@@ -92,6 +102,12 @@ type WorkspaceValue = Directory & {
   viewer: Viewer;
   visits: Visit[];
   events: WorkspaceState["events"];
+  /**
+   * Sede de la caseta en este dispositivo. El guardia la elige; si no, se usa
+   * la que le asignó administración, y si la empresa tiene una sola sede, esa.
+   */
+  stationId?: string;
+  setStationId: (locationId: string) => void;
   reload: (silent?: boolean) => Promise<void>;
   createInvitation: (
     draft: InvitationDraft,
@@ -118,6 +134,37 @@ type WorkspaceValue = Directory & {
 };
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
+
+/* Caseta elegida en este dispositivo, guardada en localStorage. */
+const stationListeners = new Set<() => void>();
+const memoryStations = new Map<string, string>();
+
+function subscribeStation(listener: () => void) {
+  stationListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    stationListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function readStation(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key) ?? memoryStations.get(key) ?? null;
+  } catch {
+    return memoryStations.get(key) ?? null;
+  }
+}
+
+function writeStation(key: string, locationId: string) {
+  memoryStations.set(key, locationId);
+  try {
+    window.localStorage.setItem(key, locationId);
+  } catch {
+    // Sin almacenamiento la elección dura lo que la pestaña.
+  }
+  stationListeners.forEach((listener) => listener());
+}
 
 const emptyState: WorkspaceState = { visits: [], events: [] };
 
@@ -186,6 +233,7 @@ export function WorkspaceProvider({
     organization: live ? initialOrganization : showcaseOrganization,
     locations: live ? [] : showcaseLocations,
     hosts: live ? [] : showcaseHosts,
+    requirements: live ? [] : showcaseRequirements,
     settings: showcaseSettings,
     // En vitrina no hay envíos reales: se comparte el enlace a mano.
     channels: { email: false, whatsapp: false },
@@ -195,6 +243,27 @@ export function WorkspaceProvider({
   const [syncedAt, setSyncedAt] = useState<string>();
 
   const state = live ? remoteState : showcaseState;
+
+  // Caseta del dispositivo: se recuerda por empresa en este navegador.
+  const stationKey = `nexa-guard-station:${directory.organization.id}`;
+  const stationChoice = useSyncExternalStore(
+    subscribeStation,
+    () => readStation(stationKey),
+    () => null,
+  );
+  const setStationId = useCallback(
+    (locationId: string) => writeStation(stationKey, locationId),
+    [stationKey],
+  );
+  const stationId = useMemo(() => {
+    const known = (id?: string | null) =>
+      id && directory.locations.some((item) => item.id === id) ? id : undefined;
+    return (
+      known(stationChoice) ??
+      known(directory.viewer?.defaultLocationId) ??
+      (directory.locations.length === 1 ? directory.locations[0].id : undefined)
+    );
+  }, [stationChoice, directory.locations, directory.viewer]);
 
   const reload = useCallback(async (silent = false) => {
     if (!live) return;
@@ -385,6 +454,7 @@ export function WorkspaceProvider({
             status,
             denialReason: options?.denialReason,
             allowOutsideWindow: options?.allowOutsideWindow ?? false,
+            locationId: stationId,
           }),
         });
         if (!response.ok)
@@ -427,7 +497,7 @@ export function WorkspaceProvider({
         { type: eventType, actor: viewer.name, detail: options?.denialReason },
       );
     },
-    [live, viewer],
+    [live, viewer, stationId],
   );
 
   const cancelVisit = useCallback<WorkspaceValue["cancelVisit"]>(
@@ -500,23 +570,29 @@ export function WorkspaceProvider({
     [live],
   );
 
-  const value = useMemo<WorkspaceValue>(
-    () => ({
+  const value = useMemo<WorkspaceValue>(() => {
+    // El directorio remoto también trae `viewer`; manda el de la sesión.
+    const { viewer: _remoteViewer, ...catalog } = directory;
+    void _remoteViewer;
+    return {
       live,
       loading,
       error,
       syncedAt,
       viewer,
-      ...directory,
+      ...catalog,
       visits: state.visits,
       events: state.events,
+      stationId,
+      setStationId,
       reload,
       createInvitation,
       createManualVisit,
       decide,
       cancelVisit,
       resendLink,
-    }),
+    };
+  },
     [
       live,
       loading,
@@ -525,6 +601,8 @@ export function WorkspaceProvider({
       viewer,
       directory,
       state,
+      stationId,
+      setStationId,
       reload,
       createInvitation,
       createManualVisit,

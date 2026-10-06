@@ -19,7 +19,7 @@ export async function GET() {
   const { data, error } = await db
     .from("organization_members")
     .select(
-      "profile_id,role,active,status,department_id,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name)",
+      "profile_id,role,active,status,department_id,default_location_id,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name),default_location:locations(name)",
     )
     .eq("organization_id", organizationId)
     .order("created_at");
@@ -38,6 +38,9 @@ export async function GET() {
           email?: string;
         } | null;
         const department = row.department as unknown as { name?: string } | null;
+        const defaultLocation = row.default_location as unknown as {
+          name?: string;
+        } | null;
         const status = (row.status as MemberStatus) ?? (row.active ? "active" : "suspended");
         return {
           id: row.profile_id as string,
@@ -46,6 +49,9 @@ export async function GET() {
           status,
           departmentId: (row.department_id as string | null) ?? undefined,
           department: department?.name ?? undefined,
+          defaultLocationId:
+            (row.default_location_id as string | null) ?? undefined,
+          defaultLocation: defaultLocation?.name ?? undefined,
           name: profile?.full_name ?? "Usuario",
           email: profile?.email ?? "",
           joinedAt: (row.joined_at as string | null) ?? undefined,

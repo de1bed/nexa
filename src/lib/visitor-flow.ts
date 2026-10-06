@@ -127,6 +127,40 @@ export function requireIdentificationFromFlow(flow: VisitorFlowConfig) {
   return flow.identification === "required";
 }
 
+/**
+ * Política para navegar el registro de una visita concreta. Si la invitación
+ * trae requisitos, el paso de anexos aparece aunque los anexos libres estén
+ * apagados; la política de anexos libres sigue siendo `flow.attachments`.
+ */
+export function flowWithRequests(
+  flow: VisitorFlowConfig,
+  requestedCount: number,
+): VisitorFlowConfig {
+  if (requestedCount > 0 && flow.attachments === "off")
+    return { ...flow, attachments: "optional" };
+  return flow;
+}
+
+/** Un anexo libre cuenta si trae al menos título, texto o foto. */
+export function attachmentHasContent(item: {
+  title: string;
+  text: string;
+  photos: number;
+}) {
+  return Boolean(item.title.trim() || item.text.trim() || item.photos > 0);
+}
+
+/** Un requisito obligatorio está completo cuando trae todo lo que pide. */
+export function requestedComplete(
+  item: { askPhoto: boolean; askText: boolean; required: boolean },
+  answer: { text: string; photos: number },
+) {
+  if (!item.required) return true;
+  if (item.askPhoto && answer.photos < 1) return false;
+  if (item.askText && !answer.text.trim()) return false;
+  return true;
+}
+
 export function extrasVisible(flow: VisitorFlowConfig) {
   return flow.vehicle === "optional" || flow.notes !== "off";
 }
@@ -246,11 +280,16 @@ export type RegistrationInput = {
   phone: string;
   company: string;
   vehiclePlate: string;
+  /** «No traje vehículo»: libera placas y fotos aunque el paso sea obligatorio. */
+  vehicleDeclined?: boolean;
   visitorNotes: string;
   consent: boolean;
   identityPhotos: number;
   vehiclePhotos: number;
-  attachmentPhotos: number;
+  /** Anexos libres con contenido (título, texto o foto). */
+  attachmentItems: number;
+  /** Algún requisito obligatorio de la invitación quedó incompleto. */
+  requirementsMissing?: boolean;
   invitedName?: string;
 };
 
@@ -265,6 +304,7 @@ export type RegistrationError =
   | "plate_required"
   | "plate_photo_required"
   | "notes_required"
+  | "requirement_missing"
   | "attachment_required"
   | "consent_required";
 
@@ -286,7 +326,7 @@ export function validateRegistration(
   if (flow.identification === "required" && input.identityPhotos < 2)
     return "identity_photos_required";
 
-  if (flow.vehicle === "required") {
+  if (flow.vehicle === "required" && !input.vehicleDeclined) {
     if (!input.vehiclePlate.trim()) return "plate_required";
     if (input.vehiclePhotos < 1) return "plate_photo_required";
   }
@@ -294,7 +334,9 @@ export function validateRegistration(
   if (flow.notes === "required" && !input.visitorNotes.trim())
     return "notes_required";
 
-  if (flow.attachments === "required" && input.attachmentPhotos < 1)
+  if (input.requirementsMissing) return "requirement_missing";
+
+  if (flow.attachments === "required" && input.attachmentItems < 1)
     return "attachment_required";
 
   if (flow.consent === "required" && !input.consent) return "consent_required";

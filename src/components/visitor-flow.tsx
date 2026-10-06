@@ -53,7 +53,11 @@ import { documentTypes } from "@/lib/domain";
 import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
 import { DEMO_PASS_TOKEN } from "@/lib/demo-public";
-import { showcaseOrganization, showcaseSettings } from "@/lib/demo-data";
+import {
+  showcaseOrganization,
+  showcaseRequirements,
+  showcaseSettings,
+} from "@/lib/demo-data";
 import {
   getShowcaseServerSnapshot,
   getShowcaseSnapshot,
@@ -62,9 +66,12 @@ import {
 import {
   extrasShowsNotes,
   extrasShowsVehicle,
+  attachmentHasContent,
   firstRegistrationStep,
+  flowWithRequests,
   parseVisitorFlow,
   registrationPath,
+  requestedComplete,
   resolvedVisitorName,
   stepAfter,
   stepBefore,
@@ -99,27 +106,54 @@ type Invitation = {
   purpose: string;
   accessRequirements: string;
   privacyNotice: string;
-  retentionDays: number;
+  /** null = retención ilimitada. */
+  retentionDays: number | null;
   requireIdentification: boolean;
   visitorFlow: VisitorFlowConfig;
   visitorName: string;
   visitorEmail: string;
   visitorPhone: string;
   visitorCompany: string;
+  /** Requisitos que la empresa pidió en esta invitación. */
+  requested: RequestedItem[];
+};
+
+type RequestedItem = {
+  id: string;
+  title: string;
+  description: string;
+  askPhoto: boolean;
+  askText: boolean;
+  required: boolean;
 };
 
 type CaptureTarget =
   | { kind: "id"; side: DocumentSide }
   | { kind: "vehicle" }
-  | { kind: "attachment" };
+  /** `key`: id del requisito o clave del anexo libre. */
+  | { kind: "attachment"; key: string };
 
 type PhotoItem = { file: File; preview: string };
+
+/** Respuesta a un requisito pedido. */
+type RequestedAnswer = { text: string; photos: PhotoItem[] };
+
+/** Anexo libre: título, texto y fotos, los tres opcionales. */
+type ExtraAttachment = {
+  key: string;
+  title: string;
+  text: string;
+  photos: PhotoItem[];
+};
+
+const MAX_EXTRA_ATTACHMENTS = 10;
 
 const invalidInvitation = {
   visitId: "",
   state: "invalid",
   visitorFlow: parseVisitorFlow(undefined, true),
-} as Invitation;
+  requested: [],
+} as unknown as Invitation;
 
 export function VisitorFlow({
   token,
@@ -155,7 +189,9 @@ export function VisitorFlow({
     Partial<Record<DocumentSide, string>>
   >({});
   const [vehiclePhotos, setVehiclePhotos] = useState<PhotoItem[]>([]);
-  const [attachmentPhotos, setAttachmentPhotos] = useState<PhotoItem[]>([]);
+  const [noVehicle, setNoVehicle] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, RequestedAnswer>>({});
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
   const [capturing, setCapturing] = useState<CaptureTarget | null>(null);
   const [reading, setReading] = useState<"" | "id" | "plate">("");
   const [readNote, setReadNote] = useState("");
@@ -191,17 +227,45 @@ export function VisitorFlow({
       purpose: showcaseVisit.purpose,
       accessRequirements: showcaseVisit.accessRequirements ?? "",
       privacyNotice: showcaseSettings.privacyNotice,
-      retentionDays: showcaseSettings.documentRetentionDays,
+      retentionDays: showcaseSettings.documentRetentionUnlimited
+        ? null
+        : showcaseSettings.documentRetentionDays,
       requireIdentification: visitorFlow.identification === "required",
       visitorFlow,
       visitorName: showcaseVisit.inviteeName ?? "",
       visitorEmail: showcaseVisit.inviteeEmail ?? "",
       visitorPhone: showcaseVisit.inviteePhone ?? "",
       visitorCompany: showcaseVisit.inviteeCompany ?? "",
+      // La demo muestra los requisitos de ejemplo que vienen marcados.
+      requested: showcaseRequirements
+        .filter((item) => item.applyByDefault)
+        .map(({ id, title, description, askPhoto, askText, required }) => ({
+          id,
+          title,
+          description,
+          askPhoto,
+          askText,
+          required,
+        })),
     };
   }, [live, remoteInvitation, showcaseVisit]);
 
-  const flow = invitation?.visitorFlow ?? parseVisitorFlow(undefined, true);
+  const requested = useMemo(() => invitation?.requested ?? [], [invitation]);
+  // La política de anexos libres es la de la empresa; los requisitos pedidos
+  // abren el paso aunque esté apagada.
+  const baseFlow = invitation?.visitorFlow ?? parseVisitorFlow(undefined, true);
+  const flow = flowWithRequests(baseFlow, requested.length);
+  const extrasEnabled = baseFlow.attachments !== "off";
+  const extrasWithContent = extras.filter((item) =>
+    attachmentHasContent({ ...item, photos: item.photos.length }),
+  );
+  const requirementsMissing = requested.some(
+    (item) =>
+      !requestedComplete(item, {
+        text: answers[item.id]?.text ?? "",
+        photos: answers[item.id]?.photos.length ?? 0,
+      }),
+  );
   const hasIdentityPhotos = Boolean(files.front || files.back);
   const path = registrationPath(flow, hasIdentityPhotos);
   const totalSteps = Math.max(1, path.length);
@@ -241,13 +305,19 @@ export function VisitorFlow({
           purpose: String(row.purpose ?? ""),
           accessRequirements: String(row.access_requirements ?? ""),
           privacyNotice: String(row.privacy_notice ?? ""),
-          retentionDays: Number(row.retention_days ?? 30),
+          retentionDays:
+            row.retention_unlimited === false
+              ? Number(row.retention_days ?? 30)
+              : null,
           requireIdentification: visitorFlow.identification === "required",
           visitorFlow,
           visitorName: String(row.visitor_name ?? ""),
           visitorEmail: String(row.visitor_email ?? ""),
           visitorPhone: String(row.visitor_phone ?? ""),
           visitorCompany: String(row.visitor_company ?? ""),
+          requested: Array.isArray(row.requested_attachments)
+            ? (row.requested_attachments as RequestedItem[])
+            : [],
         });
       } catch {
         if (active) setRemoteInvitation(invalidInvitation);
@@ -396,11 +466,13 @@ export function VisitorFlow({
         phone: value("phone"),
         company: value("company"),
         vehiclePlate: value("vehiclePlate"),
+        vehicleDeclined: noVehicle,
         visitorNotes: value("visitorNotes"),
         consent,
         identityPhotos: Number(Boolean(files.front)) + Number(Boolean(files.back)),
         vehiclePhotos: vehiclePhotos.length,
-        attachmentPhotos: attachmentPhotos.length,
+        attachmentItems: extrasWithContent.length,
+        requirementsMissing,
         invitedName: invitation?.visitorName,
       },
       flow,
@@ -410,7 +482,11 @@ export function VisitorFlow({
       if (problem.startsWith("identity_")) go("document");
       else if (problem.startsWith("plate_"))
         go(flow.vehicle === "required" ? "vehicle" : "extras");
-      else if (problem === "attachment_required") go("attachments");
+      else if (
+        problem === "attachment_required" ||
+        problem === "requirement_missing"
+      )
+        go("attachments");
       else if (problem === "notes_required") go("extras");
       else if (problem === "consent_required") go("consent");
       else if (flow.identity !== "off") go("identity");
@@ -434,20 +510,51 @@ export function VisitorFlow({
               (files.front || files.back ? "INE" : "No presentada"),
           ],
           ["documentNumber", value("documentNumber")],
-          ["vehiclePlate", value("vehiclePlate")],
+          ["vehiclePlate", noVehicle ? "" : value("vehiclePlate")],
           ["visitorNotes", value("visitorNotes")],
         ];
         fields.forEach(([key, fieldValue]) => {
           if (fieldValue) form.set(key, fieldValue);
         });
         form.set("consent", consent ? "true" : "false");
+        form.set("vehicleDeclined", noVehicle ? "true" : "false");
         if (files.front) form.set("documentFront", files.front);
         if (files.back) form.set("documentBack", files.back);
-        vehiclePhotos.forEach((photo) =>
-          form.append("vehiclePlatePhoto", photo.file),
+        if (!noVehicle)
+          vehiclePhotos.forEach((photo) =>
+            form.append("vehiclePlatePhoto", photo.file),
+          );
+        // Cada anexo viaja como metadatos en JSON y sus fotos con su clave.
+        const attachmentEntries = [
+          ...requested.map((item) => ({
+            key: item.id,
+            requestedId: item.id,
+            title: "",
+            text: answers[item.id]?.text.trim() ?? "",
+            photos: answers[item.id]?.photos ?? [],
+          })),
+          ...extrasWithContent.map((item) => ({
+            key: item.key,
+            title: item.title.trim(),
+            text: item.text.trim(),
+            photos: item.photos,
+          })),
+        ];
+        form.set(
+          "attachments",
+          JSON.stringify(
+            attachmentEntries.map((entry) => ({
+              key: entry.key,
+              requestedId: "requestedId" in entry ? entry.requestedId : undefined,
+              title: entry.title,
+              text: entry.text,
+            })),
+          ),
         );
-        attachmentPhotos.forEach((photo) =>
-          form.append("attachment", photo.file),
+        attachmentEntries.forEach((entry) =>
+          entry.photos.forEach((photo) =>
+            form.append(`attachmentPhoto:${entry.key}`, photo.file),
+          ),
         );
 
         const response = await fetch(
@@ -705,7 +812,7 @@ export function VisitorFlow({
                 consent: true,
                 identityPhotos: 2,
                 vehiclePhotos: 1,
-                attachmentPhotos: 1,
+                attachmentItems: 1,
               },
               { ...flow, identification: "off", vehicle: "off", notes: "off", attachments: "off", consent: "off" },
             );
@@ -980,14 +1087,15 @@ export function VisitorFlow({
             subtitle={t("visitor.vehicleHint")}
             onBack={() => back("vehicle")}
             onNext={() => {
-              if (!value("vehiclePlate").trim())
+              if (!noVehicle && !value("vehiclePlate").trim())
                 return setError(t("errors.plate_required"));
-              if (vehiclePhotos.length < 1)
+              if (!noVehicle && vehiclePhotos.length < 1)
                 return setError(t("errors.plate_photo_required"));
               advance("vehicle");
             }}
             nextDisabled={
-              !value("vehiclePlate").trim() || vehiclePhotos.length < 1
+              !noVehicle &&
+              (!value("vehiclePlate").trim() || vehiclePhotos.length < 1)
             }
             error={error}
           >
@@ -1010,6 +1118,11 @@ export function VisitorFlow({
               onPlate={(next) => set("vehiclePlate", next.toUpperCase())}
               photos={vehiclePhotos}
               required
+              declined={noVehicle}
+              onDecline={(next) => {
+                setError("");
+                setNoVehicle(next);
+              }}
               onAdd={() => {
                 setError("");
                 setCapturing({ kind: "vehicle" });
@@ -1076,6 +1189,11 @@ export function VisitorFlow({
                   onPlate={(next) => set("vehiclePlate", next.toUpperCase())}
                   photos={vehiclePhotos}
                   required={false}
+                  declined={noVehicle}
+                  onDecline={(next) => {
+                    setError("");
+                    setNoVehicle(next);
+                  }}
                   onAdd={() => {
                     setError("");
                     setCapturing({ kind: "vehicle" });
@@ -1133,7 +1251,24 @@ export function VisitorFlow({
             copy={captureCopy}
             onCancel={() => setCapturing(null)}
             onCaptured={(file, preview) => {
-              setAttachmentPhotos((current) => [...current, { file, preview }]);
+              const key = capturing.key;
+              const photo = { file, preview };
+              if (requested.some((item) => item.id === key))
+                setAnswers((current) => ({
+                  ...current,
+                  [key]: {
+                    text: current[key]?.text ?? "",
+                    photos: [...(current[key]?.photos ?? []), photo],
+                  },
+                }));
+              else
+                setExtras((current) =>
+                  current.map((item) =>
+                    item.key === key
+                      ? { ...item, photos: [...item.photos, photo] }
+                      : item,
+                  ),
+                );
               setCapturing(null);
             }}
           />
@@ -1143,35 +1278,163 @@ export function VisitorFlow({
             total={totalSteps}
             title={t("visitor.attachments")}
             subtitle={
-              flow.attachments === "required"
-                ? t("visitor.attachmentsRequired")
-                : t("visitor.attachmentsOptional")
+              requested.length
+                ? t("visitor.attachmentsRequested", {
+                    org: invitation.organizationName,
+                  })
+                : baseFlow.attachments === "required"
+                  ? t("visitor.attachmentsRequired")
+                  : t("visitor.attachmentsOptional")
             }
             onBack={() => back("attachments")}
             onNext={() => {
-              if (flow.attachments === "required" && attachmentPhotos.length < 1)
+              if (requirementsMissing)
+                return setError(t("errors.requirement_missing"));
+              if (
+                baseFlow.attachments === "required" &&
+                extrasWithContent.length < 1
+              )
                 return setError(t("errors.attachment_required"));
               advance("attachments");
             }}
             nextDisabled={
-              flow.attachments === "required" && attachmentPhotos.length < 1
+              requirementsMissing ||
+              (baseFlow.attachments === "required" &&
+                extrasWithContent.length < 1)
             }
             error={error}
           >
-            <PhotoList
-              photos={attachmentPhotos}
-              addLabel={t("visitor.addPhoto")}
-              emptyHint={t("visitor.attachmentEmpty")}
-              onAdd={() => {
-                setError("");
-                setCapturing({ kind: "attachment" });
-              }}
-              onRemove={(index) =>
-                setAttachmentPhotos((current) =>
-                  current.filter((_, item) => item !== index),
-                )
-              }
-            />
+            <div className="space-y-4">
+              {requested.map((item) => {
+                const answer = answers[item.id] ?? { text: "", photos: [] };
+                return (
+                  <section
+                    key={item.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-semibold leading-snug">{item.title}</h3>
+                      {item.required && (
+                        <span className="shrink-0 rounded-full bg-[#071426] px-2 py-0.5 text-[11px] font-semibold text-white">
+                          {t("visitor.attachmentRequired")}
+                        </span>
+                      )}
+                    </div>
+                    {item.description && (
+                      <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-500">
+                        {item.description}
+                      </p>
+                    )}
+                    <div className="mt-3 space-y-3">
+                      {item.askText && (
+                        <Field
+                          label={t("visitor.attachmentAnswer")}
+                          optional={!item.required}
+                        >
+                          <textarea
+                            rows={2}
+                            maxLength={2000}
+                            className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-[16px] outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
+                            placeholder={t("visitor.attachmentTextPlaceholder")}
+                            value={answer.text}
+                            onChange={(event) =>
+                              setAnswers((current) => ({
+                                ...current,
+                                [item.id]: {
+                                  photos: current[item.id]?.photos ?? [],
+                                  text: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </Field>
+                      )}
+                      {item.askPhoto && (
+                        <PhotoList
+                          photos={answer.photos}
+                          addLabel={t("visitor.attachmentAddPhoto")}
+                          emptyHint={t("visitor.attachmentEmpty")}
+                          onAdd={() => {
+                            setError("");
+                            setCapturing({ kind: "attachment", key: item.id });
+                          }}
+                          onRemove={(index) =>
+                            setAnswers((current) => ({
+                              ...current,
+                              [item.id]: {
+                                text: current[item.id]?.text ?? "",
+                                photos: (current[item.id]?.photos ?? []).filter(
+                                  (_, position) => position !== index,
+                                ),
+                              },
+                            }))
+                          }
+                        />
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+
+              {extrasEnabled && (
+                <section className={cn(requested.length > 0 && "pt-2")}>
+                  {requested.length > 0 && (
+                    <>
+                      <h3 className="font-semibold">{t("visitor.extraAttachments")}</h3>
+                      <p className="mt-0.5 text-sm text-slate-500">
+                        {t("visitor.extraAttachmentsHint")}
+                      </p>
+                    </>
+                  )}
+                  <div className="mt-3 space-y-3">
+                    {extras.map((item, index) => (
+                      <ExtraAttachmentCard
+                        key={item.key}
+                        index={index}
+                        item={item}
+                        onChange={(patch) =>
+                          setExtras((current) =>
+                            current.map((entry) =>
+                              entry.key === item.key ? { ...entry, ...patch } : entry,
+                            ),
+                          )
+                        }
+                        onRemove={() =>
+                          setExtras((current) =>
+                            current.filter((entry) => entry.key !== item.key),
+                          )
+                        }
+                        onAddPhoto={() => {
+                          setError("");
+                          setCapturing({ kind: "attachment", key: item.key });
+                        }}
+                      />
+                    ))}
+                    {extras.length < MAX_EXTRA_ATTACHMENTS && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setExtras((current) => [
+                            ...current,
+                            {
+                              key: crypto.randomUUID(),
+                              title: "",
+                              text: "",
+                              photos: [],
+                            },
+                          ]);
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 bg-white p-4 text-sm font-semibold transition active:scale-[.99]"
+                      >
+                        <Plus size={18} />
+                        {t("visitor.addAttachment")}
+                      </button>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
           </StepShell>
         ))}
 
@@ -1197,7 +1460,9 @@ export function VisitorFlow({
             </p>
             {flow.identification !== "off" ? (
               <p className="mt-3">
-                {t("visitor.retention", { days: invitation.retentionDays })}
+                {invitation.retentionDays === null
+                  ? t("visitor.retentionUnlimited")
+                  : t("visitor.retention", { days: invitation.retentionDays })}
               </p>
             ) : (
               <p className="mt-3">{t("visitor.noIdNotice")}</p>
@@ -1468,11 +1733,79 @@ function CaptureScreen({
   );
 }
 
+function ExtraAttachmentCard({
+  index,
+  item,
+  onChange,
+  onRemove,
+  onAddPhoto,
+}: {
+  index: number;
+  item: ExtraAttachment;
+  onChange: (
+    patch: Partial<Pick<ExtraAttachment, "title" | "text" | "photos">>,
+  ) => void;
+  onRemove: () => void;
+  onAddPhoto: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold">
+          {t("visitor.attachmentN", { n: index + 1 })}
+        </h4>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold"
+        >
+          {t("visitor.removeAttachment")}
+        </button>
+      </div>
+      <div className="space-y-3">
+        <Field label={t("visitor.attachmentTitleField")} optional>
+          <input
+            maxLength={120}
+            className={fieldClass}
+            placeholder={t("visitor.attachmentTitlePlaceholder")}
+            value={item.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+        </Field>
+        <Field label={t("visitor.attachmentTextField")} optional>
+          <textarea
+            rows={2}
+            maxLength={2000}
+            className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-[16px] outline-none focus:border-[#10aaa5] focus:ring-4 focus:ring-[#10cfc9]/15"
+            placeholder={t("visitor.attachmentTextPlaceholder")}
+            value={item.text}
+            onChange={(event) => onChange({ text: event.target.value })}
+          />
+        </Field>
+        <PhotoList
+          photos={item.photos}
+          addLabel={t("visitor.attachmentAddPhoto")}
+          emptyHint={t("visitor.attachmentEmpty")}
+          onAdd={onAddPhoto}
+          onRemove={(position) =>
+            onChange({
+              photos: item.photos.filter((_, current) => current !== position),
+            })
+          }
+        />
+      </div>
+    </section>
+  );
+}
+
 function VehicleFields({
   plate,
   onPlate,
   photos,
   required,
+  declined,
+  onDecline,
   onAdd,
   onRemove,
 }: {
@@ -1480,12 +1813,52 @@ function VehicleFields({
   onPlate: (value: string) => void;
   photos: PhotoItem[];
   required: boolean;
+  /** El visitante declaró que no trae vehículo. */
+  declined: boolean;
+  onDecline: (declined: boolean) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
 }) {
   const { t } = useI18n();
+  const declineToggle = (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={declined}
+      onClick={() => onDecline(!declined)}
+      className={cn(
+        "flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition active:scale-[.99]",
+        declined
+          ? "border-[#10cfc9] bg-[#10cfc9]/[.07]"
+          : "border-slate-200 bg-white",
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border",
+          declined
+            ? "border-[#0d9d99] bg-[#0d9d99] text-white"
+            : "border-slate-300 bg-white",
+        )}
+      >
+        {declined && <Check size={14} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">
+          {t("visitor.noVehicle")}
+        </span>
+        <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+          {t("visitor.noVehicleHint")}
+        </span>
+      </span>
+    </button>
+  );
+
+  if (declined) return declineToggle;
+
   return (
     <div className="space-y-4">
+      {declineToggle}
       <Field label={t("visitor.plate")} optional={!required}>
         <input
           className={fieldClass}

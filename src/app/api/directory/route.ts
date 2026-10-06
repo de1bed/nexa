@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireApiContext } from "@/lib/server/session";
 import { whatsappConfigured } from "@/lib/server/whatsapp";
-import {
-  parseVisitorFlow,
-  requireIdentificationFromFlow,
-} from "@/lib/visitor-flow";
+import { serializeSettings, settingsColumns } from "@/lib/server/org-settings";
+import { mapRequirement, requirementColumns } from "@/lib/server/requirements";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +18,13 @@ export async function GET() {
   const { db, organizationId, organizationName, role, userId, displayName } =
     guard.context;
 
-  const [{ data: locations }, { data: members }, { data: settings }] =
-    await Promise.all([
+  const [
+    { data: locations },
+    { data: members },
+    { data: settings },
+    { data: me },
+    { data: requirements },
+  ] = await Promise.all([
       db
         .from("locations")
         .select("id,name,address,timezone,active")
@@ -38,11 +41,22 @@ export async function GET() {
         .in("role", ["superadmin", "admin", "host"]),
       db
         .from("organization_settings")
-        .select(
-          "document_retention_days,allow_document_preview_for_guards,require_identification,visitor_flow,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version",
-        )
+        .select(settingsColumns)
         .eq("organization_id", organizationId)
         .maybeSingle(),
+      db
+        .from("organization_members")
+        .select("default_location_id")
+        .eq("organization_id", organizationId)
+        .eq("profile_id", userId)
+        .maybeSingle(),
+      db
+        .from("organization_requirements")
+        .select(requirementColumns)
+        .eq("organization_id", organizationId)
+        .eq("active", true)
+        .order("sort_order")
+        .order("created_at"),
     ]);
 
   const hosts = (members ?? [])
@@ -65,7 +79,12 @@ export async function GET() {
   return NextResponse.json(
     {
       organization: { id: organizationId, name: organizationName },
-      viewer: { id: userId, name: displayName, role },
+      viewer: {
+        id: userId,
+        name: displayName,
+        role,
+        defaultLocationId: (me?.default_location_id as string | null) ?? null,
+      },
       // Qué vías de envío tiene configurada esta instalación.
       channels: {
         email: Boolean(process.env.RESEND_API_KEY),
@@ -73,23 +92,10 @@ export async function GET() {
       },
       locations: locations ?? [],
       hosts,
-      settings: (() => {
-        const visitorFlow = parseVisitorFlow(
-          settings?.visitor_flow,
-          settings?.require_identification !== false,
-        );
-        return {
-          documentRetentionDays: settings?.document_retention_days ?? 30,
-          allowDocumentPreviewForGuards:
-            settings?.allow_document_preview_for_guards ?? false,
-          requireIdentification: requireIdentificationFromFlow(visitorFlow),
-          visitorFlow,
-          earlyEntryMinutes: settings?.early_entry_minutes ?? 15,
-          lateEntryMinutes: settings?.late_entry_minutes ?? 30,
-          privacyNotice: settings?.privacy_notice ?? "",
-          privacyNoticeVersion: settings?.privacy_notice_version ?? "mvp-1",
-        };
-      })(),
+      requirements: (requirements ?? []).map((row) =>
+        mapRequirement(row as unknown as Record<string, unknown>),
+      ),
+      settings: serializeSettings(settings),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

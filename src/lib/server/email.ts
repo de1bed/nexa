@@ -242,6 +242,36 @@ export async function sendHostArrivalEmail(input: {
   });
 }
 
+/** Alguien se registró en recepción con el QR de autorregistro. */
+export async function sendHostWalkinEmail(input: {
+  to: string;
+  hostName: string;
+  visitorName: string;
+  company?: string;
+  locationName: string;
+  purpose: string;
+  visitUrl: string;
+}): Promise<DeliveryResult> {
+  const company = input.company
+    ? ` de <b>${escapeHtml(input.company)}</b>`
+    : "";
+  return deliver({
+    to: input.to,
+    subject: `${input.visitorName} se registró en recepción para verte`,
+    logLabel: "autorregistro",
+    logPayload: { visitorName: input.visitorName, visitUrl: input.visitUrl },
+    html: layout({
+      preheader: `${input.visitorName} está en ${input.locationName}.`,
+      title: "Tienes una visita sin cita",
+      body: `Hola ${escapeHtml(input.hostName)}: <b>${escapeHtml(input.visitorName)}</b>${company} se registró en ${escapeHtml(input.locationName)} con el QR de recepción. Motivo: ${escapeHtml(input.purpose)}.`,
+      ctaLabel: "Ver la visita",
+      ctaUrl: input.visitUrl,
+      footnote:
+        "Si no esperabas esta visita, avisa a la caseta o cancélala desde el panel.",
+    }),
+  });
+}
+
 export async function sendTeamInviteEmail(input: {
   to: string;
   fullName: string;

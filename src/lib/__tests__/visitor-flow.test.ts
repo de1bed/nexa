@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  attachmentHasContent,
   defaultVisitorFlow,
   extrasVisible,
   firstRegistrationStep,
+  flowWithRequests,
   parseVisitorFlow,
   registrationSteps,
+  requestedComplete,
   requireIdentificationFromFlow,
   stepAfter,
   stepBefore,
@@ -22,7 +25,7 @@ const complete = {
   consent: true,
   identityPhotos: 2,
   vehiclePhotos: 1,
-  attachmentPhotos: 1,
+  attachmentItems: 1,
 };
 
 describe("política de registro", () => {
@@ -123,5 +126,51 @@ describe("política de registro", () => {
         flow,
       ),
     ).toBeNull();
+  });
+
+  it("deja declarar que no se trae vehículo aunque sea obligatorio", () => {
+    const requiredVehicle = parseVisitorFlow({ vehicle: "required" });
+    expect(
+      validateRegistration(
+        { ...complete, vehiclePlate: "", vehiclePhotos: 0, vehicleDeclined: true },
+        requiredVehicle,
+      ),
+    ).toBeNull();
+  });
+
+  it("abre el paso de anexos cuando la invitación trae requisitos", () => {
+    expect(registrationSteps(flowWithRequests(defaultVisitorFlow, 0))).not.toContain(
+      "attachments",
+    );
+    expect(registrationSteps(flowWithRequests(defaultVisitorFlow, 2))).toContain(
+      "attachments",
+    );
+    const required = parseVisitorFlow({ attachments: "required" });
+    expect(flowWithRequests(required, 1).attachments).toBe("required");
+  });
+
+  it("exige solo lo que pide cada requisito obligatorio", () => {
+    const photoAndText = { askPhoto: true, askText: true, required: true };
+    expect(requestedComplete(photoAndText, { text: "", photos: 1 })).toBe(false);
+    expect(requestedComplete(photoAndText, { text: "Folio 12", photos: 1 })).toBe(true);
+    expect(
+      requestedComplete({ ...photoAndText, required: false }, { text: "", photos: 0 }),
+    ).toBe(true);
+    expect(
+      validateRegistration(
+        { ...complete, requirementsMissing: true },
+        defaultVisitorFlow,
+      ),
+    ).toBe("requirement_missing");
+  });
+
+  it("cuenta un anexo libre con cualquiera de sus tres campos", () => {
+    expect(attachmentHasContent({ title: "", text: "", photos: 0 })).toBe(false);
+    expect(attachmentHasContent({ title: "Equipo", text: "", photos: 0 })).toBe(true);
+    expect(attachmentHasContent({ title: "", text: "", photos: 1 })).toBe(true);
+    const required = parseVisitorFlow({ attachments: "required" });
+    expect(
+      validateRegistration({ ...complete, attachmentItems: 0 }, required),
+    ).toBe("attachment_required");
   });
 });

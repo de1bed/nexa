@@ -17,7 +17,8 @@ export async function GET(
 
   try {
     const { token } = await ctx.params;
-    const { data, error } = await createAdminClient()
+    const db = createAdminClient();
+    const { data, error } = await db
       .rpc("resolve_invitation", { p_token: token })
       .maybeSingle();
 
@@ -27,9 +28,28 @@ export async function GET(
         { status: 404 },
       );
 
-    return NextResponse.json(data, {
-      headers: { "Cache-Control": "no-store" },
-    });
+    // Lo que la empresa le pide en esta visita. Solo lo necesario para el formulario.
+    const { data: requested } = await db
+      .from("visit_attachments")
+      .select("id,title,description,ask_photo,ask_text,required")
+      .eq("visit_id", (data as { visit_id: string }).visit_id)
+      .eq("source", "requested")
+      .order("sort_order");
+
+    return NextResponse.json(
+      {
+        ...(data as Record<string, unknown>),
+        requested_attachments: (requested ?? []).map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          askPhoto: item.ask_photo,
+          askText: item.ask_text,
+          required: item.required,
+        })),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     console.error("Public invitation failed", error);
     return NextResponse.json(

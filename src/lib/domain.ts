@@ -51,6 +51,13 @@ export type Visit = {
   visitorNotes?: string;
   accessRequirements?: string;
   vehiclePlate?: string;
+  /** El visitante declaró que no trae vehículo. */
+  vehicleDeclined?: boolean;
+  /** El pase vale en todas las sedes de la empresa (opción por omisión). */
+  allLocations?: boolean;
+  /** Si no vale en todas: sedes adicionales donde sí vale (la principal siempre vale). */
+  accessLocationIds?: string[];
+  accessLocationNames?: string[];
   documentType?: string;
   documentMasked?: string;
   invitationToken?: string;
@@ -98,6 +105,35 @@ export type Location = {
   active: boolean;
 };
 
+/** Requisito que la empresa da de alta para pedírselo al visitante. */
+export type Requirement = {
+  id: string;
+  title: string;
+  /** Texto que la empresa deja escrito para orientar al visitante. */
+  description: string;
+  askPhoto: boolean;
+  askText: boolean;
+  required: boolean;
+  /** Se marca solo al crear una invitación nueva. */
+  applyByDefault: boolean;
+  active: boolean;
+};
+
+/** Anexo de una visita: un requisito pedido o uno que agregó el visitante. */
+export type VisitAttachment = {
+  id: string;
+  source: "requested" | "visitor";
+  requirementId?: string;
+  title: string;
+  description: string;
+  askPhoto: boolean;
+  askText: boolean;
+  required: boolean;
+  responseText?: string;
+  photoCount: number;
+  completedAt?: string;
+};
+
 export type MemberStatus = "invited" | "active" | "suspended";
 
 export type TeamMember = {
@@ -109,6 +145,9 @@ export type TeamMember = {
   status: MemberStatus;
   departmentId?: string;
   department?: string;
+  /** Caseta habitual del integrante (guardias). */
+  defaultLocationId?: string;
+  defaultLocation?: string;
   joinedAt?: string;
   invitedAt?: string;
   inviteDelivery?: "sent" | "failed" | "development";
@@ -122,6 +161,8 @@ export const memberStatusLabels: Record<MemberStatus, string> = {
 
 export type OrganizationSettings = {
   documentRetentionDays: number;
+  /** Sin fecha de borrado. Es la opción por omisión. */
+  documentRetentionUnlimited: boolean;
   allowDocumentPreviewForGuards: boolean;
   requireIdentification: boolean;
   visitorFlow: VisitorFlowConfig;
@@ -237,6 +278,18 @@ export function accessWindow(
   if (now < opens) return "early" as const;
   if (now > closes) return "late" as const;
   return "valid" as const;
+}
+
+/** ¿El pase de la visita vale en esta sede? La principal siempre vale. */
+export function validAtLocation(
+  visit: Pick<Visit, "allLocations" | "locationId" | "accessLocationIds">,
+  locationId: string,
+) {
+  return (
+    visit.allLocations !== false ||
+    visit.locationId === locationId ||
+    (visit.accessLocationIds ?? []).includes(locationId)
+  );
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CalendarClock,
   Check,
+  ClipboardList,
   Loader2,
   Mail,
   MapPin,
@@ -21,7 +22,7 @@ import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, Card, Field, cn, fieldClass } from "./ui";
-import { CopyField, ShareButton } from "./ui-client";
+import { CopyField, ShareButton, Toggle } from "./ui-client";
 import { invitationSchema, normalizeMeetingUrl } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
 import { visitPurposeMessageKey } from "@/lib/i18n";
@@ -128,7 +129,15 @@ export function InvitationForm() {
     live,
     settings,
     organization,
+    requirements,
   } = useWorkspace();
+  // Lo que se tocó a mano; lo demás sigue la marca «aplicar por omisión».
+  const [requirementChoice, setRequirementChoice] = useState<
+    Record<string, boolean>
+  >({});
+  const selectedRequirements = requirements.filter(
+    (item) => requirementChoice[item.id] ?? item.applyByDefault,
+  );
   const [created, setCreated] = useState<{ visit: Visit; url: string } | null>(
     null,
   );
@@ -152,6 +161,8 @@ export function InvitationForm() {
     accessRequirements: "",
     sendEmail: false,
     sendWhatsApp: false,
+    allLocations: true,
+    accessLocationIds: [] as string[],
   });
 
   const canDelegate = viewer.role !== "host";
@@ -212,6 +223,11 @@ export function InvitationForm() {
         accessRequirements: payload.accessRequirements || undefined,
         sendEmail: payload.sendEmail,
         sendWhatsApp: payload.sendWhatsApp,
+        allLocations: payload.allLocations,
+        accessLocationIds: payload.allLocations
+          ? []
+          : [...new Set([activeLocation, ...payload.accessLocationIds])],
+        requirementIds: selectedRequirements.map((item) => item.id),
       });
       setCreated({ visit: result.visit, url: result.invitationUrl });
       if (payload.sendEmail && result.emailDelivery === "sent")
@@ -371,7 +387,11 @@ export function InvitationForm() {
       phone={form.phone}
       company={form.company}
       privacyNotice={settings.privacyNotice}
-      retentionDays={settings.documentRetentionDays}
+      retentionDays={
+                settings.documentRetentionUnlimited
+                  ? null
+                  : settings.documentRetentionDays
+              }
     />
   );
 
@@ -498,6 +518,63 @@ export function InvitationForm() {
                 ))}
               </select>
             </Field>
+
+            {locations.length > 1 && (
+              <div className="space-y-3">
+                <Toggle
+                  checked={form.allLocations}
+                  onChange={(value) => update("allLocations", value)}
+                  label={t("invite.allLocations")}
+                  description={
+                    form.allLocations
+                      ? t("invite.allLocationsOn")
+                      : t("invite.allLocationsOff")
+                  }
+                />
+                {!form.allLocations && (
+                  <fieldset className="rounded-2xl border border-slate-200 bg-white p-2">
+                    <legend className="sr-only">{t("invite.accessLocations")}</legend>
+                    {locations.map((location) => {
+                      const primary = location.id === activeLocation;
+                      const checked =
+                        primary || form.accessLocationIds.includes(location.id);
+                      return (
+                        <label
+                          key={location.id}
+                          className={cn(
+                            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm",
+                            primary ? "text-slate-500" : "cursor-pointer active:bg-slate-50",
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-[#0d9d99]"
+                            checked={checked}
+                            disabled={primary}
+                            onChange={(event) =>
+                              update(
+                                "accessLocationIds",
+                                event.target.checked
+                                  ? [...form.accessLocationIds, location.id]
+                                  : form.accessLocationIds.filter(
+                                      (id) => id !== location.id,
+                                    ),
+                              )
+                            }
+                          />
+                          <span className="min-w-0 flex-1 font-medium text-[#071426]">
+                            {location.name}
+                          </span>
+                          {primary && (
+                            <span className="text-xs">{t("invite.primaryLocation")}</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                )}
+              </div>
+            )}
 
             <Field
               label={t("invite.internalPlace")}
@@ -690,6 +767,67 @@ export function InvitationForm() {
             </Field>
           </div>
         </Card>
+
+        {requirements.length > 0 && (
+          <Card className="p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <ClipboardList size={18} />
+              {t("invite.requirementsTitle")}
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              {t("invite.requirementsHint")}
+            </p>
+            <div className="mt-4 space-y-2">
+              {requirements.map((item) => {
+                const checked = requirementChoice[item.id] ?? item.applyByDefault;
+                return (
+                  <label
+                    key={item.id}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition",
+                      checked
+                        ? "border-[#10cfc9] bg-[#10cfc9]/[.06]"
+                        : "border-slate-200 bg-white",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4 shrink-0 accent-[#0d9d99]"
+                      checked={checked}
+                      onChange={(event) =>
+                        setRequirementChoice((current) => ({
+                          ...current,
+                          [item.id]: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-[#071426]">
+                        {item.title}
+                      </span>
+                      {item.description && (
+                        <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                          {item.description}
+                        </span>
+                      )}
+                      <span className="mt-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        {[
+                          item.askPhoto ? t("requirements.photo") : "",
+                          item.askText ? t("requirements.text") : "",
+                          item.required
+                            ? t("requirements.required")
+                            : t("requirements.optional"),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         <Card className="p-5">
           <h2 className="mb-1 font-semibold">{t("invite.deliveryTitle")}</h2>

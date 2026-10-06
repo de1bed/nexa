@@ -11,6 +11,7 @@ import { maskEmail, maskPhone } from "@/lib/security";
 import { sendInvitationWhatsApp } from "@/lib/server/whatsapp";
 import { normalizeMeetingUrl } from "@/lib/schemas";
 import { clampPassDays, passExpiresAt } from "@/lib/pass-window";
+import { createAdminClient } from "@/lib/server/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,11 @@ const createSchema = z
       }, "El enlace de la junta no es válido"),
     sendEmail: z.boolean().default(false),
     sendWhatsApp: z.boolean().default(false),
+    // Por omisión el QR vale en todas las sedes de la empresa.
+    allLocations: z.boolean().default(true),
+    accessLocationIds: z.array(z.uuid()).max(100).default([]),
+    // Requisitos del catálogo que se copian a esta visita.
+    requirementIds: z.array(z.uuid()).max(30).default([]),
   })
   .refine((value) => value.endsAt > value.startsAt, {
     path: ["endsAt"],
@@ -143,6 +149,45 @@ export async function POST(request: Request) {
         { status: 400 },
       );
 
+    // Sedes donde vale el pase cuando no son todas. La principal siempre vale.
+    const accessLocationIds = input.allLocations
+      ? []
+      : [...new Set([location.id, ...input.accessLocationIds])];
+    let accessLocations: Array<{ id: string; name: string }> = [];
+    if (accessLocationIds.length) {
+      const { data: valid } = await db
+        .from("locations")
+        .select("id,name")
+        .eq("organization_id", organizationId)
+        .eq("active", true)
+        .in("id", accessLocationIds)
+        .order("name");
+      accessLocations = valid ?? [];
+      if (accessLocations.length !== accessLocationIds.length)
+        return NextResponse.json(
+          { error: "Una de las sedes elegidas no está disponible" },
+          { status: 400 },
+        );
+    }
+
+    const requirementIds = [...new Set(input.requirementIds)];
+    let requirements: Array<Record<string, unknown>> = [];
+    if (requirementIds.length) {
+      const { data: rows } = await db
+        .from("organization_requirements")
+        .select("id,title,description,ask_photo,ask_text,required,sort_order")
+        .eq("organization_id", organizationId)
+        .eq("active", true)
+        .in("id", requirementIds)
+        .order("sort_order");
+      requirements = rows ?? [];
+      if (requirements.length !== requirementIds.length)
+        return NextResponse.json(
+          { error: "Uno de los requisitos ya no está disponible" },
+          { status: 400 },
+        );
+    }
+
     const { data: hostProfile } = await db
       .from("profiles")
       .select("full_name,email")
@@ -166,6 +211,7 @@ export async function POST(request: Request) {
         access_requirements: input.accessRequirements || null,
         internal_place: input.internalPlace || null,
         meeting_url: normalizeMeetingUrl(input.meetingUrl) ?? null,
+        all_locations: input.allLocations,
         created_by: userId,
       })
       .select(visitSelect)
@@ -173,6 +219,47 @@ export async function POST(request: Request) {
     if (visitError || !visit) throw visitError ?? new Error("insert failed");
 
     const visitId = (visit as unknown as { id: string }).id;
+
+    // Copia de los requisitos: editar el catálogo después no cambia esta visita.
+    if (requirements.length) {
+      const { error: requirementError } = await db
+        .from("visit_attachments")
+        .insert(
+          requirements.map((requirement, index) => ({
+            organization_id: organizationId,
+            visit_id: visitId,
+            requirement_id: requirement.id,
+            source: "requested",
+            title: requirement.title,
+            description: requirement.description ?? "",
+            ask_photo: requirement.ask_photo,
+            ask_text: requirement.ask_text,
+            required: requirement.required,
+            sort_order: index,
+          })),
+        );
+      if (requirementError) {
+        await createAdminClient().from("visits").delete().eq("id", visitId);
+        throw requirementError;
+      }
+    }
+
+    if (accessLocationIds.length) {
+      const { error: accessError } = await db
+        .from("visit_access_locations")
+        .insert(
+          accessLocationIds.map((locationId) => ({
+            visit_id: visitId,
+            location_id: locationId,
+            organization_id: organizationId,
+          })),
+        );
+      if (accessError) {
+        // visits no tiene política de borrado: la limpieza va con service role.
+        await createAdminClient().from("visits").delete().eq("id", visitId);
+        throw accessError;
+      }
+    }
     const invitationToken = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(invitationToken).digest("hex");
 
@@ -317,6 +404,9 @@ export async function POST(request: Request) {
           inviteePhone: input.phone || undefined,
           inviteeCompany: input.company || undefined,
           invitationToken,
+          allLocations: input.allLocations,
+          accessLocationIds,
+          accessLocationNames: accessLocations.map((item) => item.name),
         },
         invitationToken,
         invitationUrl,

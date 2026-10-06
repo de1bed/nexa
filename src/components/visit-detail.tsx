@@ -33,6 +33,7 @@ import {
 } from "./ui";
 import { LiveDuration, Sheet, ShareButton } from "./ui-client";
 import { StaffPassPanel } from "./staff-pass";
+import { VisitAttachments } from "./visit-attachments";
 import { AddToCalendar } from "./add-to-calendar";
 import { visitCalendarEvent } from "@/lib/calendar";
 import { timeInsideMs } from "@/lib/domain";
@@ -242,6 +243,20 @@ export function VisitDetail({ id }: { id: string }) {
               value={visit.location}
               hint={visit.locationAddress}
             />
+            <Detail
+              icon={MapPin}
+              label={t("guard.validAt")}
+              value={
+                visit.allLocations !== false
+                  ? t("guard.allSites")
+                  : [
+                      visit.location,
+                      ...(visit.accessLocationNames ?? []).filter(
+                        (name) => name !== visit.location,
+                      ),
+                    ].join(", ")
+              }
+            />
             {visit.internalPlace && (
               <Detail
                 icon={MapPin}
@@ -263,8 +278,12 @@ export function VisitDetail({ id }: { id: string }) {
               label={t("invite.purpose")}
               value={t(visitPurposeMessageKey(visit.purpose)) || visit.purpose}
             />
-            {visit.vehiclePlate && (
-              <Detail icon={Car} label={t("visits.plates")} value={visit.vehiclePlate} />
+            {visit.vehicleDeclined ? (
+              <Detail icon={Car} label={t("visits.plates")} value={t("guard.noVehicle")} />
+            ) : (
+              visit.vehiclePlate && (
+                <Detail icon={Car} label={t("visits.plates")} value={visit.vehiclePlate} />
+              )
             )}
             <Detail
               icon={(visit.identityCaptured ?? visit.documentCaptured) ? BadgeCheck : FileWarning}
@@ -393,6 +412,12 @@ export function VisitDetail({ id }: { id: string }) {
             </Button>
           )}
         </Card>
+
+        <VisitAttachments
+          visitId={id}
+          live={live}
+          onViewPhotos={() => void viewDocument("attachment")}
+        />
 
         <Card className="p-5 sm:p-6">
             <h2 className="mb-5 font-semibold">{t("visits.timeline")}</h2>

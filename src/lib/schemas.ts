@@ -47,6 +47,8 @@ export const invitationSchema = z
     accessRequirements: optionalText(500),
     sendEmail: z.boolean(),
     sendWhatsApp: z.boolean(),
+    allLocations: z.boolean(),
+    accessLocationIds: z.array(z.string()),
   })
   .refine((value) => value.endTime > value.startTime, {
     message: "La hora final debe ser posterior a la inicial",
@@ -112,6 +114,8 @@ export const teamUpdateSchema = z.object({
   active: z.boolean().optional(),
   status: z.enum(["invited", "active", "suspended"]).optional(),
   departmentId: z.uuid().nullable().optional(),
+  /** Caseta habitual (pensada para guardias). */
+  defaultLocationId: z.uuid().nullable().optional(),
 });
 
 export const teamAcceptSchema = z.object({
@@ -127,8 +131,25 @@ export const locationSchema = z.object({
   timezone: z.string().trim().min(3).max(80),
 });
 
+export const requirementSchema = z
+  .object({
+    title: z.string().trim().min(1, "Escribe un título").max(120),
+    description: z.string().trim().max(1000).default(""),
+    askPhoto: z.boolean(),
+    askText: z.boolean(),
+    required: z.boolean(),
+    applyByDefault: z.boolean(),
+  })
+  .refine((value) => value.askPhoto || value.askText, {
+    message: "Pide al menos una foto o un texto",
+    path: ["askPhoto"],
+  });
+
+export type RequirementInput = z.infer<typeof requirementSchema>;
+
 export const settingsSchema = z.object({
   documentRetentionDays: z.number().int().min(1).max(365),
+  documentRetentionUnlimited: z.boolean().default(true),
   allowDocumentPreviewForGuards: z.boolean(),
   requireIdentification: z.boolean().optional(),
   visitorFlow: z.object({

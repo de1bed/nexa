@@ -44,7 +44,9 @@ export async function GET(
 
   const { data: documents } = await db
     .from("visitor_documents")
-    .select("id,storage_path,mime_type,document_type,retention_expires_at")
+    .select(
+      "id,storage_path,mime_type,document_type,retention_expires_at,attachment:visit_attachments(title)",
+    )
     .eq("visit_id", id)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
@@ -69,8 +71,9 @@ export async function GET(
             mimeType: document.mime_type,
             kind: documentKind(document.document_type as string),
             label:
-              documentSideLabels[document.document_type as string] ??
-              (document.document_type as string) ??
+              attachmentTitle(document.attachment) ||
+              documentSideLabels[document.document_type as string] ||
+              (document.document_type as string) ||
               "Documento",
             retentionExpiresAt: document.retention_expires_at,
           }
@@ -97,4 +100,13 @@ export async function GET(
     { documents: available, expiresInSeconds: 60 },
     { headers: { "Cache-Control": "no-store" } },
   );
+}
+
+/** Las fotos de un anexo se rotulan con su título, si lo tiene. */
+function attachmentTitle(value: unknown) {
+  const row = (Array.isArray(value) ? value[0] : value) as
+    | { title?: string }
+    | null
+    | undefined;
+  return row?.title?.trim() ?? "";
 }

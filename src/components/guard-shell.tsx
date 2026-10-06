@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, History, PenLine, ScanLine, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  History,
+  PenLine,
+  ScanLine,
+  Users,
+} from "lucide-react";
 import { Brand } from "./brand";
 import { SessionExit } from "./session-exit";
 import { LanguageSwitcher } from "./language-switcher";
@@ -69,6 +76,7 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
 
       <main className="pb-dock mx-auto max-w-3xl px-4 pt-6 sm:px-6">
         <DemoBanner dark />
+        <StationPicker />
         {children}
       </main>
 
@@ -96,6 +104,51 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       <span className="sr-only">{viewer.name}</span>
+    </div>
+  );
+}
+
+/**
+ * Caseta en la que trabaja este dispositivo. Solo aparece si la empresa tiene
+ * más de una sede: con eso la caseta sabe si un pase vale aquí.
+ */
+function StationPicker() {
+  const { locations, stationId, setStationId } = useWorkspace();
+  const { t } = useI18n();
+  if (locations.length < 2) return null;
+
+  return (
+    <div
+      className={cn(
+        "mb-5 rounded-2xl border p-3",
+        stationId
+          ? "border-white/10 bg-white/[.04]"
+          : "border-amber-400/30 bg-amber-400/10",
+      )}
+    >
+      <label className="flex items-center gap-3">
+        <Building2 size={18} className="shrink-0 text-[#10cfc9]" />
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          {t("guard.station")}
+        </span>
+        <select
+          value={stationId ?? ""}
+          onChange={(event) => setStationId(event.target.value)}
+          className="h-10 min-w-0 flex-1 rounded-xl border border-white/15 bg-[#071426] px-3 text-sm font-semibold text-white outline-none focus:border-[#10cfc9]"
+        >
+          {!stationId && <option value="">{t("guard.chooseStation")}</option>}
+          {locations.map((location) => (
+            <option key={location.id} value={location.id}>
+              {location.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!stationId && (
+        <p className="mt-2 text-xs leading-5 text-amber-100">
+          {t("guard.chooseStationHint")}
+        </p>
+      )}
     </div>
   );
 }

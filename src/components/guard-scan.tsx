@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, EmptyState, StatusPill, cn } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
-import { accessWindow, type Visit } from "@/lib/domain";
+import { accessWindow, validAtLocation, type Visit } from "@/lib/domain";
 import { visitPurposeMessageKey } from "@/lib/i18n";
 import { tokenFromScan } from "@/lib/demo-public";
 import { findShowcaseVisit } from "@/lib/showcase-store";
@@ -41,7 +41,9 @@ function haptic(pattern: number | number[]) {
 
 export function GuardScan() {
   const { t, formatDateTime } = useI18n();
-  const { live, visits, decide, settings, reload } = useWorkspace();
+  const { live, visits, decide, settings, reload, stationId, locations } =
+    useWorkspace();
+  const station = locations.find((item) => item.id === stationId);
   const [mode, setMode] = useState<Mode>("home");
   const [visit, setVisit] = useState<Visit | null>(null);
   const [tokenState, setTokenState] = useState<string>("valid");
@@ -171,6 +173,10 @@ export function GuardScan() {
   const outsideWindow = window_ !== "valid" && !insideNow;
   const blocked = ["revoked", "cancelled", "expired", "invalid"].includes(
     tokenState,
+  );
+  // El pase no vale en la sede de esta caseta. La salida sí se registra en cualquiera.
+  const wrongSite = Boolean(
+    visit && stationId && !insideNow && !validAtLocation(visit, stationId),
   );
 
   async function applyDecision(decision: Decision, denialReason?: string) {
@@ -307,7 +313,7 @@ export function GuardScan() {
               <div
                 className={cn(
                   "flex items-center justify-between px-5 py-4",
-                  blocked
+                  blocked || wrongSite
                     ? "bg-red-50"
                     : outsideWindow
                       ? "bg-amber-50"
@@ -317,14 +323,14 @@ export function GuardScan() {
                 <span
                   className={cn(
                     "flex items-center gap-2 text-sm font-semibold",
-                    blocked
+                    blocked || wrongSite
                       ? "text-red-700"
                       : outsideWindow
                         ? "text-amber-700"
                         : "text-emerald-700",
                   )}
                 >
-                  {blocked ? (
+                  {blocked || wrongSite ? (
                     <ShieldX size={19} />
                   ) : outsideWindow ? (
                     <Clock3 size={19} />
@@ -333,7 +339,9 @@ export function GuardScan() {
                   )}
                   {blocked
                     ? t("guard.blocked")
-                    : outsideWindow
+                    : wrongSite
+                      ? t("guard.wrongSite")
+                      : outsideWindow
                       ? window_ === "early"
                         ? t("guard.early")
                         : t("guard.late")
@@ -372,7 +380,20 @@ export function GuardScan() {
 
                 <dl className="mt-5 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm">
                   <Row label={t("guard.host")} value={visit.hostName} icon={UserRoundCheck} />
-                  <Row label={t("guard.location")} value={visit.location} icon={Building2} />
+                  <Row
+                    label={t("guard.validAt")}
+                    value={
+                      visit.allLocations !== false
+                        ? t("guard.allSites")
+                        : [
+                            visit.location,
+                            ...(visit.accessLocationNames ?? []).filter(
+                              (name) => name !== visit.location,
+                            ),
+                          ].join(", ")
+                    }
+                    icon={Building2}
+                  />
                   <Row
                     label={t("guard.purpose")}
                     value={t(visitPurposeMessageKey(visit.purpose)) || visit.purpose}
@@ -383,17 +404,21 @@ export function GuardScan() {
                     value={formatDateTime(visit.startsAt)}
                     icon={Clock3}
                   />
-                  {visit.vehiclePlate && (
-                    <Row label={t("guard.plates")} value={visit.vehiclePlate} icon={Car} />
+                  {visit.vehicleDeclined ? (
+                    <Row label={t("guard.plates")} value={t("guard.noVehicle")} icon={Car} />
+                  ) : (
+                    visit.vehiclePlate && (
+                      <Row label={t("guard.plates")} value={visit.vehiclePlate} icon={Car} />
+                    )
                   )}
                   <Row
                     label={t("guard.identification")}
                     value={
-                      visit.documentCaptured
+                      visit.identityCaptured
                         ? t("guard.capturedRestricted")
                         : t("guard.notCaptured")
                     }
-                    icon={visit.documentCaptured ? BadgeCheck : FileWarning}
+                    icon={visit.identityCaptured ? BadgeCheck : FileWarning}
                   />
                 </dl>
 
@@ -410,7 +435,16 @@ export function GuardScan() {
               </div>
             </div>
 
-            {outsideWindow && visit.status !== "checked_in" && !blocked && (
+            {wrongSite && !blocked && (
+              <div
+                role="alert"
+                className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100"
+              >
+                {t("guard.wrongSiteHint", { site: station?.name ?? "" })}
+              </div>
+            )}
+
+            {outsideWindow && visit.status !== "checked_in" && !blocked && !wrongSite && (
               <label className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
                 <input
                   type="checkbox"
@@ -449,7 +483,12 @@ export function GuardScan() {
                   variant="accent"
                   size="lg"
                   block
-                  disabled={busy || blocked || (outsideWindow && !overrideWindow)}
+                  disabled={
+                    busy ||
+                    blocked ||
+                    wrongSite ||
+                    (outsideWindow && !overrideWindow)
+                  }
                   onClick={() => applyDecision("checked_in")}
                   className="h-16 text-lg"
                 >

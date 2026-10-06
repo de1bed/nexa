@@ -4,18 +4,22 @@ import { documentFlags } from "@/lib/visitor-flow";
 
 /**
  * Proyección única de `visits` hacia el contrato de dominio.
+ * `visit_access_locations` crea una segunda relación visits↔locations, por eso
+ * la sede principal se pide con el nombre de su llave foránea.
  * Cualquier ruta que devuelva visitas usa este select y este mapeo, de modo que
  * el cliente recibe siempre la misma forma.
  */
 export const visitSelect =
   "id,organization_id,location_id,host_id,status,origin,purpose,visitor_company," +
   "starts_at,ends_at,pass_valid_days,checked_in_at,checked_out_at,denial_reason,vehicle_plate," +
+  "vehicle_declined,all_locations," +
   "internal_notes,visitor_notes,access_requirements,internal_place,meeting_url,consented_at," +
   "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
   "host:profiles!visits_host_id_fkey(full_name,email)," +
-  "location:locations(name,address)," +
+  "location:locations!visits_location_id_fkey(name,address)," +
   "documents:visitor_documents(id,deleted_at,document_type)," +
-  "invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company,completed_at,revoked_at)";
+  "invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company,completed_at,revoked_at)," +
+  "access:visit_access_locations(location_id,location:locations(name))";
 
 export const eventSelect =
   "id,visit_id,event_type,occurred_at,reason," +
@@ -51,6 +55,15 @@ export function mapVisit(row: Row): Visit {
         deleted_at?: string | null;
         document_type?: string | null;
       }>)
+    : [];
+  const access = Array.isArray(row.access)
+    ? (row.access as Array<{ location_id?: string; location?: unknown }>)
+        .map((item) => ({
+          id: String(item.location_id ?? ""),
+          name: pick<{ name?: string }>(item.location)?.name ?? "",
+        }))
+        .filter((item) => item.id)
+        .sort((a, b) => a.name.localeCompare(b.name, "es"))
     : [];
   const flags = documentFlags(
     documents
@@ -88,6 +101,10 @@ export function mapVisit(row: Row): Visit {
     internalPlace: (row.internal_place as string) ?? undefined,
     meetingUrl: (row.meeting_url as string) ?? undefined,
     vehiclePlate: (row.vehicle_plate as string) ?? undefined,
+    vehicleDeclined: Boolean(row.vehicle_declined),
+    allLocations: row.all_locations !== false,
+    accessLocationIds: access.map((item) => item.id),
+    accessLocationNames: access.map((item) => item.name),
     documentType: visitor?.document_type ?? undefined,
     documentMasked: visitor?.document_number_masked ?? undefined,
     ...flags,

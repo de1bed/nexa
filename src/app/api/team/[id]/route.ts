@@ -22,17 +22,20 @@ export async function PATCH(
       input.role === undefined &&
       input.active === undefined &&
       input.status === undefined &&
-      input.departmentId === undefined
+      input.departmentId === undefined &&
+      input.defaultLocationId === undefined
     )
       return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
 
-    const departmentOnly =
-      input.departmentId !== undefined &&
+    // Área y caseta no tocan el acceso: cada quien puede cambiar las suyas.
+    const placementOnly =
+      (input.departmentId !== undefined ||
+        input.defaultLocationId !== undefined) &&
       input.role === undefined &&
       input.active === undefined &&
       input.status === undefined;
     // Nadie puede quitarse a sí mismo la administración y dejar la empresa huérfana.
-    if (id === userId && !departmentOnly)
+    if (id === userId && !placementOnly)
       return NextResponse.json(
         { error: "No puedes modificar tu propio acceso" },
         { status: 400 },
@@ -78,6 +81,20 @@ export async function PATCH(
           return NextResponse.json({ error: "Esa área no existe" }, { status: 400 });
       }
       payload.department_id = input.departmentId;
+    }
+    if (input.defaultLocationId !== undefined) {
+      if (input.defaultLocationId) {
+        const { data: site } = await db
+          .from("locations")
+          .select("id")
+          .eq("id", input.defaultLocationId)
+          .eq("organization_id", organizationId)
+          .eq("active", true)
+          .maybeSingle();
+        if (!site)
+          return NextResponse.json({ error: "Esa sede no existe" }, { status: 400 });
+      }
+      payload.default_location_id = input.defaultLocationId;
     }
     if (input.role !== undefined) payload.role = input.role;
     if (input.status !== undefined) payload.status = input.status;

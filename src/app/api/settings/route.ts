@@ -7,38 +7,9 @@ import {
   parseVisitorFlow,
   requireIdentificationFromFlow,
 } from "@/lib/visitor-flow";
+import { serializeSettings, settingsColumns } from "@/lib/server/org-settings";
 
 export const dynamic = "force-dynamic";
-
-const columns =
-  "document_retention_days,allow_document_preview_for_guards,require_identification,visitor_flow,early_entry_minutes,late_entry_minutes,privacy_notice,privacy_notice_version";
-
-function serializeSettings(data: {
-  document_retention_days?: number | null;
-  allow_document_preview_for_guards?: boolean | null;
-  require_identification?: boolean | null;
-  visitor_flow?: unknown;
-  early_entry_minutes?: number | null;
-  late_entry_minutes?: number | null;
-  privacy_notice?: string | null;
-  privacy_notice_version?: string | null;
-} | null) {
-  const visitorFlow = parseVisitorFlow(
-    data?.visitor_flow,
-    data?.require_identification !== false,
-  );
-  return {
-    documentRetentionDays: data?.document_retention_days ?? 30,
-    allowDocumentPreviewForGuards:
-      data?.allow_document_preview_for_guards ?? false,
-    requireIdentification: requireIdentificationFromFlow(visitorFlow),
-    visitorFlow,
-    earlyEntryMinutes: data?.early_entry_minutes ?? 15,
-    lateEntryMinutes: data?.late_entry_minutes ?? 30,
-    privacyNotice: data?.privacy_notice ?? "",
-    privacyNoticeVersion: data?.privacy_notice_version ?? "mvp-1",
-  };
-}
 
 export async function GET() {
   const guard = await requireApiContext();
@@ -48,7 +19,7 @@ export async function GET() {
 
   const { data } = await db
     .from("organization_settings")
-    .select(columns)
+    .select(settingsColumns)
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -71,7 +42,9 @@ export async function PATCH(request: Request) {
 
     const { data: current } = await db
       .from("organization_settings")
-      .select("privacy_notice,privacy_notice_version")
+      .select(
+        "privacy_notice,privacy_notice_version,document_retention_days,document_retention_unlimited",
+      )
       .eq("organization_id", organizationId)
       .maybeSingle();
 
@@ -86,6 +59,7 @@ export async function PATCH(request: Request) {
     const payload = {
       organization_id: organizationId,
       document_retention_days: input.documentRetentionDays,
+      document_retention_unlimited: input.documentRetentionUnlimited,
       allow_document_preview_for_guards: input.allowDocumentPreviewForGuards,
       require_identification: requireIdentification,
       visitor_flow: visitorFlow,
@@ -103,12 +77,27 @@ export async function PATCH(request: Request) {
       : await db.from("organization_settings").insert(payload);
     if (error) throw error;
 
+    // Los documentos ya guardados siguen la política nueva: ilimitada les quita
+    // la fecha de borrado; un plazo fijo se la pone a los que no tenían.
+    const retentionChanged =
+      !current ||
+      current.document_retention_unlimited !== input.documentRetentionUnlimited ||
+      current.document_retention_days !== input.documentRetentionDays;
+    if (retentionChanged) {
+      const { error: retentionError } = await db.rpc(
+        "apply_document_retention",
+        { p_org: organizationId },
+      );
+      if (retentionError) throw retentionError;
+    }
+
     await writeAudit({
       organizationId,
       actorId: userId,
       eventType: "settings_modified",
       metadata: {
         document_retention_days: input.documentRetentionDays,
+        document_retention_unlimited: input.documentRetentionUnlimited,
         guard_preview: input.allowDocumentPreviewForGuards,
         visitor_flow: visitorFlow,
         privacy_notice_version: version,

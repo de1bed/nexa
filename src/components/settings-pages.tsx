@@ -47,6 +47,8 @@ import {
   type TeamMember,
 } from "@/lib/domain";
 import { InvitationPreview } from "./invitation-preview";
+import { RequirementsCard } from "./requirements-card";
+import { WalkinCard } from "./walkin-card";
 import { OrgAccessPanel, type AreaOption } from "./org-access-panel";
 import {
   defaultVisitorFlow,
@@ -55,6 +57,7 @@ import {
   type StepPolicy,
   type VisitorFlowKey,
 } from "@/lib/visitor-flow";
+import { retentionDayOptions } from "@/lib/retention";
 import { appUrl } from "@/lib/config";
 import { useI18n } from "./i18n-provider";
 
@@ -102,7 +105,7 @@ function formatTimeSince(dateString: string): string {
 /* ========================================================================== */
 
 export function TeamPage() {
-  const { live, viewer, reload } = useWorkspace();
+  const { live, viewer, reload, locations } = useWorkspace();
   const { t } = useI18n();
   const [members, setMembers] = useState<TeamMember[]>(live ? [] : showcaseTeam);
   const [joinCodes, setJoinCodes] = useState<JoinCode[]>([]);
@@ -285,7 +288,10 @@ export function TeamPage() {
 
   async function updateMember(
     member: TeamMember,
-    patch: Partial<Omit<TeamMember, "departmentId">> & { departmentId?: string | null },
+    patch: Partial<Omit<TeamMember, "departmentId" | "defaultLocationId">> & {
+      departmentId?: string | null;
+      defaultLocationId?: string | null;
+    },
   ) {
     setBusy(true);
     try {
@@ -298,6 +304,7 @@ export function TeamPage() {
             active: patch.active,
             status: patch.status,
             departmentId: patch.departmentId,
+            defaultLocationId: patch.defaultLocationId,
           }),
         });
         if (!response.ok)
@@ -306,10 +313,19 @@ export function TeamPage() {
       setMembers((current) =>
         current.map((item) => {
           if (item.id !== member.id) return item;
-          const next = { ...item, ...patch, departmentId: patch.departmentId ?? item.departmentId };
+          const next = {
+            ...item,
+            ...patch,
+            departmentId: patch.departmentId ?? item.departmentId,
+            defaultLocationId: patch.defaultLocationId ?? item.defaultLocationId,
+          };
           if (patch.departmentId === null) {
             next.departmentId = undefined;
             next.department = undefined;
+          }
+          if (patch.defaultLocationId === null) {
+            next.defaultLocationId = undefined;
+            next.defaultLocation = undefined;
           }
           if (patch.status) {
             next.active = patch.status === "active";
@@ -857,6 +873,35 @@ export function TeamPage() {
               </Field>
             )}
 
+            {editing.role === "guard" && locations.length > 1 && (
+              <Field
+                label={t("team.defaultStation")}
+                hint={t("team.defaultStationHint")}
+              >
+                <select
+                  className={fieldClass}
+                  value={editing.defaultLocationId ?? ""}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const defaultLocationId = event.target.value;
+                    void updateMember(editing, {
+                      defaultLocationId: defaultLocationId || null,
+                      defaultLocation: locations.find(
+                        (site) => site.id === defaultLocationId,
+                      )?.name,
+                    });
+                  }}
+                >
+                  <option value="">{t("team.noStation")}</option>
+                  {locations.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
             {editing.id !== viewer.id && (
               <div className="space-y-2">
                 {editing.status === "invited" && (
@@ -1297,12 +1342,20 @@ export function SettingsPage() {
               )}
               organizationName={organization.name}
               privacyNotice={settings.privacyNotice}
-              retentionDays={settings.documentRetentionDays}
+              retentionDays={
+                settings.documentRetentionUnlimited
+                  ? null
+                  : settings.documentRetentionDays
+              }
             />
           </div>
           </div>
 
           <div className="max-w-3xl space-y-5">
+          <RequirementsCard />
+
+          <WalkinCard />
+
           <Card className="p-5 sm:p-6">
             <h2 className="flex items-center gap-2 font-semibold">
               <Shield size={18} />
@@ -1313,23 +1366,48 @@ export function SettingsPage() {
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {[7, 15, 30, 60, 90].map((days) => (
-                <button
-                  key={days}
-                  type="button"
-                  onClick={() =>
-                    setSettings({ ...settings, documentRetentionDays: days })
-                  }
-                  className={cn(
-                    "h-11 rounded-2xl border px-4 text-sm font-semibold transition",
-                    settings.documentRetentionDays === days
-                      ? "border-[#10cfc9] bg-[#10cfc9]/12 text-[#0d9d99]"
-                      : "border-slate-200 bg-white text-slate-600",
-                  )}
-                >
-                  {t("common.days", { n: days })}
-                </button>
-              ))}
+              <button
+                type="button"
+                aria-pressed={settings.documentRetentionUnlimited}
+                onClick={() =>
+                  setSettings({ ...settings, documentRetentionUnlimited: true })
+                }
+                className={cn(
+                  "h-11 rounded-2xl border px-4 text-sm font-semibold transition",
+                  settings.documentRetentionUnlimited
+                    ? "border-[#10cfc9] bg-[#10cfc9]/12 text-[#0d9d99]"
+                    : "border-slate-200 bg-white text-slate-600",
+                )}
+              >
+                {t("settings.retentionUnlimited")}
+              </button>
+              {retentionDayOptions.map((days) => {
+                const selected =
+                  !settings.documentRetentionUnlimited &&
+                  settings.documentRetentionDays === days;
+                return (
+                  <button
+                    key={days}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setSettings({
+                        ...settings,
+                        documentRetentionUnlimited: false,
+                        documentRetentionDays: days,
+                      })
+                    }
+                    className={cn(
+                      "h-11 rounded-2xl border px-4 text-sm font-semibold transition",
+                      selected
+                        ? "border-[#10cfc9] bg-[#10cfc9]/12 text-[#0d9d99]"
+                        : "border-slate-200 bg-white text-slate-600",
+                    )}
+                  >
+                    {t("common.days", { n: days })}
+                  </button>
+                );
+              })}
             </div>
 
             <Callout tone="neutral" className="mt-4">
