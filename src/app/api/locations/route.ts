@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { locationSchema } from "@/lib/schemas";
 import { writeAudit } from "@/lib/server/audit";
-import { mapBooth } from "@/lib/server/booths";
+import { mapBooth, missingBoothSchema } from "@/lib/server/booths";
 import type { Booth } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
@@ -28,13 +28,13 @@ export async function GET() {
         .order("name"),
     ]);
 
-  if (error || boothError)
+  if (error || (boothError && !missingBoothSchema(boothError)))
     return NextResponse.json(
       { error: "No fue posible cargar las ubicaciones" },
       { status: 500 },
     );
 
-  const booths = (boothRows ?? []).map((row) => mapBooth(row));
+  const booths = boothError ? [] : (boothRows ?? []).map((row) => mapBooth(row));
   const byLocation = new Map<string, Booth[]>();
   for (const booth of booths) {
     const list = byLocation.get(booth.locationId) ?? [];

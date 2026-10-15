@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { boothSchema } from "@/lib/schemas";
 import { writeAudit } from "@/lib/server/audit";
-import { mapBooth } from "@/lib/server/booths";
+import { mapBooth, missingBoothSchema } from "@/lib/server/booths";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Ya existe una caseta con ese nombre en esta ubicación" },
         { status: 409 },
+      );
+    if (error && missingBoothSchema(error))
+      return NextResponse.json(
+        {
+          error:
+            "Las casetas todavía no están en la base de esta instalación.",
+        },
+        { status: 503 },
       );
     if (error || !data) throw error ?? new Error("booth");
 

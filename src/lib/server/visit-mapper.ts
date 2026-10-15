@@ -1,6 +1,7 @@
 import "server-only";
 import type { AccessEvent, AccessEventType, Visit } from "@/lib/domain";
 import { documentFlags } from "@/lib/visitor-flow";
+import { missingBoothSchema } from "@/lib/server/booths";
 
 /**
  * Proyección única de `visits` hacia el contrato de dominio.
@@ -27,10 +28,42 @@ export const visitSelect =
   "actor:profiles!access_events_actor_id_fkey(full_name)," +
   "booth:booths!access_events_booth_id_fkey(name))";
 
+/** Misma proyección, sin casetas, para bases que todavía no tienen esa tabla. */
+export const visitSelectLegacy =
+  "id,organization_id,location_id,host_id,status,origin,purpose,visitor_company," +
+  "starts_at,ends_at,pass_valid_days,checked_in_at,checked_out_at,denial_reason,vehicle_plate," +
+  "vehicle_declined,all_locations," +
+  "internal_notes,visitor_notes,access_requirements,internal_place,meeting_url,consented_at," +
+  "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
+  "host:profiles!visits_host_id_fkey(full_name,email)," +
+  "location:locations!visits_location_id_fkey(name,address)," +
+  "documents:visitor_documents(id,deleted_at,document_type)," +
+  "invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company,completed_at,revoked_at)," +
+  "access:visit_access_locations(location_id,location:locations(name))," +
+  "decisions:access_events(event_type,occurred_at,metadata," +
+  "actor:profiles!access_events_actor_id_fkey(full_name))";
+
 export const eventSelect =
   "id,visit_id,event_type,occurred_at,reason,metadata," +
   "actor:profiles!access_events_actor_id_fkey(full_name)," +
   "booth:booths!access_events_booth_id_fkey(name)";
+
+export const eventSelectLegacy =
+  "id,visit_id,event_type,occurred_at,reason,metadata," +
+  "actor:profiles!access_events_actor_id_fkey(full_name)";
+
+type SchemaError = { message?: string; details?: string; hint?: string } | null;
+
+/** Reintenta sin casetas si la base todavía no tiene esa migración. */
+export async function selectWithBoothFallback<T>(
+  run: (columns: string) => PromiseLike<{ data: T; error: SchemaError }>,
+  full: string,
+  legacy: string,
+): Promise<{ data: T; error: SchemaError }> {
+  const first = await run(full);
+  if (first.error && missingBoothSchema(first.error)) return run(legacy);
+  return first;
+}
 
 type Row = Record<string, unknown>;
 

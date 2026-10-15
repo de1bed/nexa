@@ -7,6 +7,7 @@ import { issueTeamInvite } from "@/lib/server/team-invite";
 import { teamInviteSchema } from "@/lib/schemas";
 import { maskEmail } from "@/lib/security";
 import type { MemberRole, MemberStatus } from "@/lib/domain";
+import { selectWithBoothFallback } from "@/lib/server/visit-mapper";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,21 @@ export async function GET() {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
   const { db, organizationId } = guard.context;
 
-  const { data, error } = await db
-    .from("organization_members")
-    .select(
-      "profile_id,role,active,status,department_id,default_location_id,default_booth_id,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name),default_location:locations(name),default_booth:booths!organization_members_default_booth_id_fkey(name)",
-    )
-    .eq("organization_id", organizationId)
-    .order("created_at");
+  const teamSelect =
+    "profile_id,role,active,status,department_id,default_location_id,default_booth_id,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name),default_location:locations(name),default_booth:booths!organization_members_default_booth_id_fkey(name)";
+  const teamSelectLegacy =
+    "profile_id,role,active,status,department_id,default_location_id,created_at,joined_at,invite_delivery,profile:profiles!organization_members_profile_id_fkey(full_name,email),department:departments(name),default_location:locations(name)";
+
+  const { data, error } = await selectWithBoothFallback(
+    (columns) =>
+      db
+        .from("organization_members")
+        .select(columns)
+        .eq("organization_id", organizationId)
+        .order("created_at"),
+    teamSelect,
+    teamSelectLegacy,
+  );
 
   if (error)
     return NextResponse.json(

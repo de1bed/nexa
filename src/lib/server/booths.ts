@@ -3,6 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Booth } from "@/lib/domain";
 import { resolveRecordingBooth } from "@/lib/booth-choice";
 
+/** La instalación todavía no tiene la migración de casetas. */
+export function missingBoothSchema(
+  error: { message?: string; details?: string; hint?: string } | null,
+): boolean {
+  if (!error) return false;
+  const text = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`;
+  return /booth/i.test(text);
+}
+
 export function mapBooth(row: {
   id: string;
   location_id: string;

@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { sendHostArrivalEmail } from "@/lib/server/email";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
-import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
+import {
+  mapVisit,
+  selectWithBoothFallback,
+  visitSelect,
+  visitSelectLegacy,
+} from "@/lib/server/visit-mapper";
 import { maskEmail } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
@@ -34,12 +39,17 @@ export async function GET(
   const { db, organizationId } = guard.context;
   const { id } = await ctx.params;
 
-  const { data, error } = await db
-    .from("visits")
-    .select(visitSelect)
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
+  const { data, error } = await selectWithBoothFallback(
+    (columns) =>
+      db
+        .from("visits")
+        .select(columns)
+        .eq("id", id)
+        .eq("organization_id", organizationId)
+        .maybeSingle(),
+    visitSelect,
+    visitSelectLegacy,
+  );
 
   if (error || !data)
     return NextResponse.json({ error: "Visita no disponible" }, { status: 404 });
@@ -139,12 +149,17 @@ export async function PATCH(
         );
     }
 
-    const { data: updated } = await db
-      .from("visits")
-      .select(visitSelect)
-      .eq("id", id)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
+    const { data: updated } = await selectWithBoothFallback(
+      (columns) =>
+        db
+          .from("visits")
+          .select(columns)
+          .eq("id", id)
+          .eq("organization_id", organizationId)
+          .maybeSingle(),
+      visitSelect,
+      visitSelectLegacy,
+    );
     const visit = updated
       ? mapVisit(updated as unknown as Record<string, unknown>)
       : null;

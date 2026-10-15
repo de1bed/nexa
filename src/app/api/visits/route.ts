@@ -5,7 +5,15 @@ import { sendHostCalendarEmail, sendInvitationEmail } from "@/lib/server/email";
 import { visitCalendarEvent } from "@/lib/calendar";
 import { requireApiContext } from "@/lib/server/session";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
-import { eventSelect, mapEvent, mapVisit, visitSelect } from "@/lib/server/visit-mapper";
+import {
+  eventSelect,
+  eventSelectLegacy,
+  mapEvent,
+  mapVisit,
+  selectWithBoothFallback,
+  visitSelect,
+  visitSelectLegacy,
+} from "@/lib/server/visit-mapper";
 import { appUrl } from "@/lib/config";
 import { maskEmail, maskPhone } from "@/lib/security";
 import { sendInvitationWhatsApp } from "@/lib/server/whatsapp";
@@ -72,18 +80,28 @@ export async function GET() {
 
   try {
     const [{ data: visits, error }, { data: events }] = await Promise.all([
-      db
-        .from("visits")
-        .select(visitSelect)
-        .eq("organization_id", organizationId)
-        .order("starts_at", { ascending: false })
-        .limit(500),
-      db
-        .from("access_events")
-        .select(eventSelect)
-        .eq("organization_id", organizationId)
-        .order("occurred_at", { ascending: false })
-        .limit(300),
+      selectWithBoothFallback(
+        (columns) =>
+          db
+            .from("visits")
+            .select(columns)
+            .eq("organization_id", organizationId)
+            .order("starts_at", { ascending: false })
+            .limit(500),
+        visitSelect,
+        visitSelectLegacy,
+      ),
+      selectWithBoothFallback(
+        (columns) =>
+          db
+            .from("access_events")
+            .select(columns)
+            .eq("organization_id", organizationId)
+            .order("occurred_at", { ascending: false })
+            .limit(300),
+        eventSelect,
+        eventSelectLegacy,
+      ),
     ]);
     if (error) throw error;
 
@@ -194,7 +212,7 @@ export async function POST(request: Request) {
       .eq("id", hostId)
       .maybeSingle();
 
-    const { data: visit, error: visitError } = await db
+    const { data: created, error: visitError } = await db
       .from("visits")
       .insert({
         organization_id: organizationId,
@@ -214,11 +232,18 @@ export async function POST(request: Request) {
         all_locations: input.allLocations,
         created_by: userId,
       })
-      .select(visitSelect)
+      .select("id")
       .single();
-    if (visitError || !visit) throw visitError ?? new Error("insert failed");
+    if (visitError || !created) throw visitError ?? new Error("insert failed");
 
-    const visitId = (visit as unknown as { id: string }).id;
+    const visitId = created.id;
+    const { data: visit, error: readError } = await selectWithBoothFallback(
+      (columns) =>
+        db.from("visits").select(columns).eq("id", visitId).maybeSingle(),
+      visitSelect,
+      visitSelectLegacy,
+    );
+    if (readError || !visit) throw readError ?? new Error("insert failed");
 
     // Copia de los requisitos: editar el catálogo después no cambia esta visita.
     if (requirements.length) {
