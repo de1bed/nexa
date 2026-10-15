@@ -23,14 +23,16 @@ export async function PATCH(
       input.active === undefined &&
       input.status === undefined &&
       input.departmentId === undefined &&
-      input.defaultLocationId === undefined
+      input.defaultLocationId === undefined &&
+      input.defaultBoothId === undefined
     )
       return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
 
     // Área y caseta no tocan el acceso: cada quien puede cambiar las suyas.
     const placementOnly =
       (input.departmentId !== undefined ||
-        input.defaultLocationId !== undefined) &&
+        input.defaultLocationId !== undefined ||
+        input.defaultBoothId !== undefined) &&
       input.role === undefined &&
       input.active === undefined &&
       input.status === undefined;
@@ -82,7 +84,24 @@ export async function PATCH(
       }
       payload.department_id = input.departmentId;
     }
-    if (input.defaultLocationId !== undefined) {
+    if (input.defaultBoothId !== undefined) {
+      if (input.defaultBoothId) {
+        const { data: booth } = await db
+          .from("booths")
+          .select("id,location_id")
+          .eq("id", input.defaultBoothId)
+          .eq("organization_id", organizationId)
+          .eq("active", true)
+          .maybeSingle();
+        if (!booth)
+          return NextResponse.json({ error: "Esa caseta no existe" }, { status: 400 });
+        payload.default_booth_id = booth.id;
+        payload.default_location_id = booth.location_id;
+      } else {
+        payload.default_booth_id = null;
+        payload.default_location_id = null;
+      }
+    } else if (input.defaultLocationId !== undefined) {
       if (input.defaultLocationId) {
         const { data: site } = await db
           .from("locations")
@@ -95,6 +114,7 @@ export async function PATCH(
           return NextResponse.json({ error: "Esa sede no existe" }, { status: 400 });
       }
       payload.default_location_id = input.defaultLocationId;
+      payload.default_booth_id = null;
     }
     if (input.role !== undefined) payload.role = input.role;
     if (input.status !== undefined) payload.status = input.status;

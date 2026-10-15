@@ -10,7 +10,9 @@ import {
   revokeQr,
   staleVisitIds,
 } from "../visit-service";
-import { initialShowcaseState } from "../demo-data";
+import { getInitialShowcaseState } from "../demo-data";
+
+const initialShowcaseState = getInitialShowcaseState();
 import type { Visit } from "../domain";
 
 let visit: Visit;

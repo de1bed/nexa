@@ -4,6 +4,13 @@ import { translate } from "./catalog";
 
 type Vars = Record<string, string | number>;
 
+/**
+ * Zona fija para pintar fechas en servidor y navegador con el mismo texto.
+ * Sin ella, Node y el navegador pueden diferir una hora y React marca error
+ * de hidratación. Tijuana es la sede principal de la operación.
+ */
+const APP_TIME_ZONE = "America/Tijuana";
+
 export { translate } from "./catalog";
 
 export function t(path: string, vars?: Vars) {
@@ -24,6 +31,7 @@ export function formatDateTime(
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: APP_TIME_ZONE,
   }).format(date);
 }
 
@@ -36,6 +44,7 @@ export function formatDate(
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "medium",
+    timeZone: APP_TIME_ZONE,
   }).format(date);
 }
 
@@ -48,13 +57,15 @@ export function formatTime(
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     timeStyle: "short",
+    timeZone: APP_TIME_ZONE,
   }).format(date);
 }
 
 export function formatWeekday(value: Date, locale: Locale = getLocale()) {
-  return new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short" }).format(
-    value,
-  );
+  return new Intl.DateTimeFormat(intlLocale(locale), {
+    weekday: "short",
+    timeZone: APP_TIME_ZONE,
+  }).format(value);
 }
 
 export function formatFullDate(value: string | Date, locale: Locale = getLocale()) {
@@ -63,6 +74,7 @@ export function formatFullDate(value: string | Date, locale: Locale = getLocale(
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "full",
     timeStyle: "short",
+    timeZone: APP_TIME_ZONE,
   }).format(date);
 }
 

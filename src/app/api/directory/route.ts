@@ -20,6 +20,7 @@ export async function GET() {
 
   const [
     { data: locations },
+    { data: boothRows },
     { data: members },
     { data: settings },
     { data: me },
@@ -28,6 +29,12 @@ export async function GET() {
       db
         .from("locations")
         .select("id,name,address,timezone,active")
+        .eq("organization_id", organizationId)
+        .eq("active", true)
+        .order("name"),
+      db
+        .from("booths")
+        .select("id,location_id,name,notes,active")
         .eq("organization_id", organizationId)
         .eq("active", true)
         .order("name"),
@@ -46,7 +53,7 @@ export async function GET() {
         .maybeSingle(),
       db
         .from("organization_members")
-        .select("default_location_id")
+        .select("default_location_id,default_booth_id")
         .eq("organization_id", organizationId)
         .eq("profile_id", userId)
         .maybeSingle(),
@@ -84,6 +91,7 @@ export async function GET() {
         name: displayName,
         role,
         defaultLocationId: (me?.default_location_id as string | null) ?? null,
+        defaultBoothId: (me?.default_booth_id as string | null) ?? null,
       },
       // Qué vías de envío tiene configurada esta instalación.
       channels: {
@@ -91,6 +99,13 @@ export async function GET() {
         whatsapp: whatsappConfigured(),
       },
       locations: locations ?? [],
+      booths: (boothRows ?? []).map((row) => ({
+        id: row.id as string,
+        locationId: row.location_id as string,
+        name: row.name as string,
+        notes: (row.notes as string | null) ?? "",
+        active: Boolean(row.active),
+      })),
       hosts,
       requirements: (requirements ?? []).map((row) =>
         mapRequirement(row as unknown as Record<string, unknown>),

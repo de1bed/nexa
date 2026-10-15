@@ -326,14 +326,17 @@ export async function POST(request: Request) {
       privacy_notice:
         "Los datos personales que proporcionas se utilizan únicamente para gestionar, controlar y auditar tu acceso a nuestras instalaciones.",
     });
-    const { error: locationError } = await admin.from("locations").insert(
-      input.locations.map((site) => ({
-        organization_id: org.id,
-        name: site.name,
-        address: site.address,
-        timezone: "America/Mexico_City",
-      })),
-    );
+    const { data: createdSites, error: locationError } = await admin
+      .from("locations")
+      .insert(
+        input.locations.map((site) => ({
+          organization_id: org.id,
+          name: site.name,
+          address: site.address,
+          timezone: "America/Mexico_City",
+        })),
+      )
+      .select("id");
     if (locationError) {
       await admin.from("organizations").delete().eq("id", org.id);
       const code = "code" in locationError ? String(locationError.code) : "";
@@ -343,6 +346,16 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       throw locationError;
+    }
+    if (createdSites?.length) {
+      const { error: boothError } = await admin.from("booths").insert(
+        createdSites.map((site) => ({
+          organization_id: org.id,
+          location_id: site.id,
+          name: "Caseta principal",
+        })),
+      );
+      if (boothError) console.error("Default booth failed", boothError);
     }
 
     const email = input.adminEmail.toLowerCase();
@@ -635,6 +648,12 @@ export async function PATCH(request: Request) {
         name: site.name as string,
         address: site.address as string,
       };
+      const { error: boothError } = await admin.from("booths").insert({
+        organization_id: input.organizationId,
+        location_id: site.id,
+        name: "Caseta principal",
+      });
+      if (boothError) console.error("Default booth failed", boothError);
       await logPlatformEvent({
         organizationId: input.organizationId,
         actorId: actor.id,

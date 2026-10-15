@@ -1,7 +1,7 @@
 "use client";
 
-import { initialShowcaseState } from "./demo-data";
-import type { AccessEvent, Visit, WorkspaceState } from "./domain";
+import { getInitialShowcaseState } from "./demo-data";
+import type { AccessEvent, Booth, Visit, WorkspaceState } from "./domain";
 
 /**
  * Estado compartido del modo vitrina, expuesto como store externo para
@@ -13,6 +13,7 @@ import type { AccessEvent, Visit, WorkspaceState } from "./domain";
  */
 
 const STORAGE_KEY = "nexa-visit-showcase-v3";
+const BOOTH_KEY = "nexa-visit-showcase-booths";
 const CHANNEL = "nexa-visit-showcase";
 
 const listeners = new Set<() => void>();
@@ -21,22 +22,23 @@ const listeners = new Set<() => void>();
  * `useSyncExternalStore` compara por identidad, así que el snapshot debe
  * conservar la misma referencia mientras el estado no cambie.
  */
-let snapshot: WorkspaceState = initialShowcaseState;
+let snapshot: WorkspaceState = getInitialShowcaseState();
 let hydrated = false;
 
 function readStorage(): WorkspaceState {
-  if (typeof window === "undefined") return initialShowcaseState;
+  const seed = getInitialShowcaseState();
+  if (typeof window === "undefined") return seed;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return initialShowcaseState;
+    if (!raw) return seed;
     const parsed = JSON.parse(raw) as Partial<WorkspaceState>;
-    if (!Array.isArray(parsed.visits)) return initialShowcaseState;
+    if (!Array.isArray(parsed.visits)) return seed;
     return {
       visits: parsed.visits,
       events: Array.isArray(parsed.events) ? parsed.events : [],
     };
   } catch {
-    return initialShowcaseState;
+    return seed;
   }
 }
 
@@ -59,7 +61,7 @@ export function getShowcaseSnapshot(): WorkspaceState {
 
 /** En el servidor siempre se pinta el estado semilla, sin `localStorage`. */
 export function getShowcaseServerSnapshot(): WorkspaceState {
-  return initialShowcaseState;
+  return getInitialShowcaseState();
 }
 
 export function saveShowcaseState(state: WorkspaceState) {
@@ -82,9 +84,158 @@ export function mutateShowcaseState(
   return next;
 }
 
+const boothListeners = new Set<() => void>();
+const emptyBooths: Booth[] = [];
+let boothSnapshot: Booth[] = emptyBooths;
+let boothsHydrated = false;
+
+function readBoothStorage(): Booth[] {
+  if (typeof window === "undefined") return emptyBooths;
+  try {
+    const raw = window.localStorage.getItem(BOOTH_KEY);
+    if (!raw) return emptyBooths;
+    const parsed = JSON.parse(raw) as Booth[];
+    return Array.isArray(parsed) ? parsed : emptyBooths;
+  } catch {
+    return emptyBooths;
+  }
+}
+
+function publishBooths(next: Booth[]) {
+  boothSnapshot = next;
+  boothListeners.forEach((listener) => listener());
+}
+
+export type DemoChange = {
+  id: string;
+  at: string;
+  actor: string;
+  eventType: string;
+  name?: string;
+};
+
+const CHANGE_KEY = "nexa-visit-showcase-changes";
+const emptyChanges: DemoChange[] = [];
+let changeSnapshot: DemoChange[] = emptyChanges;
+let changesHydrated = false;
+const changeListeners = new Set<() => void>();
+
+function readChangeStorage(): DemoChange[] {
+  if (typeof window === "undefined") return emptyChanges;
+  try {
+    const raw = window.localStorage.getItem(CHANGE_KEY);
+    if (!raw) return emptyChanges;
+    const parsed = JSON.parse(raw) as DemoChange[];
+    return Array.isArray(parsed) ? parsed : emptyChanges;
+  } catch {
+    return emptyChanges;
+  }
+}
+
+function publishChanges(next: DemoChange[]) {
+  changeSnapshot = next;
+  changeListeners.forEach((listener) => listener());
+}
+
+export function getDemoChangeSnapshot(): DemoChange[] {
+  if (!changesHydrated && typeof window !== "undefined") {
+    changesHydrated = true;
+    changeSnapshot = readChangeStorage();
+  }
+  return changeSnapshot;
+}
+
+export function getDemoChangeServerSnapshot(): DemoChange[] {
+  return emptyChanges;
+}
+
+export function subscribeDemoChanges(listener: () => void) {
+  changeListeners.add(listener);
+  const fromStorage = readChangeStorage();
+  changesHydrated = true;
+  if (fromStorage !== changeSnapshot) changeSnapshot = fromStorage;
+  const onExternal = () => publishChanges(readChangeStorage());
+  window.addEventListener("storage", onExternal);
+  return () => {
+    changeListeners.delete(listener);
+    window.removeEventListener("storage", onExternal);
+  };
+}
+
+export function appendDemoChange(entry: Omit<DemoChange, "id" | "at">) {
+  const next = [
+    {
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      ...entry,
+    },
+    ...getDemoChangeSnapshot(),
+  ].slice(0, 200);
+  try {
+    window.localStorage.setItem(CHANGE_KEY, JSON.stringify(next));
+  } catch {
+    // Sigue en memoria aunque no se pueda persistir.
+  }
+  publishChanges(next);
+}
+
 export function resetShowcaseState() {
-  saveShowcaseState(initialShowcaseState);
-  return initialShowcaseState;
+  const seed = getInitialShowcaseState();
+  saveShowcaseState(seed);
+  try {
+    window.localStorage.removeItem(BOOTH_KEY);
+    window.localStorage.removeItem(CHANGE_KEY);
+  } catch {
+    // Sin almacenamiento, el reinicio igual borra las visitas.
+  }
+  publishBooths(emptyBooths);
+  publishChanges(emptyChanges);
+  return seed;
+}
+
+/** Misma referencia mientras las casetas de demostración no cambien. */
+export function getDemoBoothSnapshot(): Booth[] {
+  if (!boothsHydrated && typeof window !== "undefined") {
+    boothsHydrated = true;
+    boothSnapshot = readBoothStorage();
+  }
+  return boothSnapshot;
+}
+
+export function getDemoBoothServerSnapshot(): Booth[] {
+  return emptyBooths;
+}
+
+export function readDemoBooths(): Booth[] {
+  return getDemoBoothSnapshot();
+}
+
+export function subscribeDemoBooths(listener: () => void) {
+  boothListeners.add(listener);
+  const fromStorage = readBoothStorage();
+  boothsHydrated = true;
+  if (fromStorage !== boothSnapshot) boothSnapshot = fromStorage;
+
+  const onExternal = () => publishBooths(readBoothStorage());
+  window.addEventListener("storage", onExternal);
+  return () => {
+    boothListeners.delete(listener);
+    window.removeEventListener("storage", onExternal);
+  };
+}
+
+/** Alta o edición de una caseta en la demostración. Se recuerda en este navegador. */
+export function upsertDemoBooth(booth: Booth) {
+  const current = getDemoBoothSnapshot();
+  const next = current.some((item) => item.id === booth.id)
+    ? current.map((item) => (item.id === booth.id ? booth : item))
+    : [...current, booth];
+  try {
+    window.localStorage.setItem(BOOTH_KEY, JSON.stringify(next));
+  } catch {
+    // Sigue en memoria de la página aunque no se pueda persistir.
+  }
+  publishBooths(next);
 }
 
 /**

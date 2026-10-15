@@ -11,6 +11,7 @@ import {
   MapPin,
   Plus,
   ScanLine,
+  ScrollText,
   Settings,
   Shield,
   UserRoundCheck,
@@ -56,6 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { href: "/app/reports", labelKey: "nav.reports", shortKey: "nav.reports", icon: BarChart3 },
   ] satisfies NavItem[];
   const adminSecondary = [
+    { href: "/app/audit", labelKey: "nav.changes", shortKey: "nav.changes", icon: ScrollText },
     { href: "/app/team", labelKey: "nav.team", shortKey: "nav.team", icon: Users },
     { href: "/app/locations", labelKey: "nav.locations", shortKey: "nav.locations", icon: MapPin },
     { href: "/app/settings", labelKey: "nav.settings", shortKey: "nav.settingsShort", icon: Settings },

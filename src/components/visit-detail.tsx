@@ -14,6 +14,7 @@ import {
   Images,
   Link2,
   MapPin,
+  ScanLine,
   QrCode,
   ShieldCheck,
   Ticket,
@@ -243,6 +244,35 @@ export function VisitDetail({ id }: { id: string }) {
               value={visit.location}
               hint={visit.locationAddress}
             />
+            {(visit.checkInBooth || visit.checkOutBooth || visit.denialBooth) && (
+              <Detail
+                icon={ScanLine}
+                label={t("reports.booth")}
+                value={[
+                  visit.checkInBooth
+                    ? `${t("reports.entryBooth")}: ${visit.checkInBooth}`
+                    : visit.denialBooth || "",
+                  visit.checkOutBooth
+                    ? `${t("reports.exitBooth")}: ${visit.checkOutBooth}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                hint={[
+                  visit.checkInBy
+                    ? `${t("reports.entryGuard")}: ${visit.checkInBy}`
+                    : "",
+                  visit.deniedBy
+                    ? `${t("reports.denialGuard")}: ${visit.deniedBy}`
+                    : "",
+                  visit.checkOutBy
+                    ? `${t("reports.exitGuard")}: ${visit.checkOutBy}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              />
+            )}
             <Detail
               icon={MapPin}
               label={t("guard.validAt")}
@@ -429,6 +459,7 @@ export function VisitDetail({ id }: { id: string }) {
                   <p className="text-sm font-medium">{t(`events.${event.type}`)}</p>
                   <p className="text-xs text-slate-500">
                     {formatDateTime(event.at)} · {event.actor}
+                    {event.booth ? ` · ${event.booth}` : ""}
                   </p>
                   {event.detail && (
                     <p className="mt-1 text-xs text-red-600">{event.detail}</p>

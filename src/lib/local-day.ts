@@ -27,6 +27,22 @@ export function localMonthKey(value: string | Date) {
   return localDayKey(value).slice(0, 7);
 }
 
+export function localYearKey(value: string | Date) {
+  return localDayKey(value).slice(0, 4);
+}
+
+export type ReportPreset = "today" | "week" | "month" | "year" | "last30";
+
+/** Rango civil local que usa la bitácora al elegir hoy, semana, mes o año. */
+export function reportRange(preset: ReportPreset, from = new Date()) {
+  const to = localDayKey(from);
+  if (preset === "today") return { from: to, to };
+  if (preset === "week") return { from: localWeekKey(from), to };
+  if (preset === "month") return { from: `${localMonthKey(from)}-01`, to };
+  if (preset === "year") return { from: `${from.getFullYear()}-01-01`, to };
+  return { from: shiftLocalDay(-29, from), to };
+}
+
 export function parseLocalDay(key: string) {
   const [year, month, day] = key.split("-").map(Number);
   if (!year || !month || !day) return null;

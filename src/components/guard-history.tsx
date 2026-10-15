@@ -115,9 +115,9 @@ export function GuardHistory() {
                           {visit?.visitorName ?? "Visita"}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-400">
-                          {t(`events.${event.type}`)} ·{" "}
-                          {formatTime(event.at)}{" "}
-                          · {event.actor}
+                          {t(`events.${event.type}`)} · {formatTime(event.at)} ·{" "}
+                          {event.actor}
+                          {event.booth ? ` · ${event.booth}` : ""}
                         </p>
                         {event.detail && (
                           <p className="mt-1 text-xs text-red-300">

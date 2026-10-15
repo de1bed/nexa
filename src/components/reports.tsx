@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   BarChart3,
+  Camera,
   Clock3,
   Download,
   LogIn,
   Printer,
+  ShieldAlert,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -23,22 +26,32 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { recordedBooth, recordedGuard } from "@/lib/booth-choice";
 import { useMyVisits, useWorkspace } from "./workspace-provider";
 import { Button, Card, EmptyState, Field, MetricTile, fieldClass } from "./ui";
 import { LiveDuration, Sheet, useNow } from "./ui-client";
 import { safeCsvCell } from "@/lib/security";
-import { timeInsideMs, type Visit, type VisitStatus } from "@/lib/domain";
+import {
+  timeInsideMs,
+  type AccessEvent,
+  type Visit,
+  type VisitStatus,
+} from "@/lib/domain";
 import {
   localDayKey,
   localMonthKey,
   localWeekKey,
+  localYearKey,
   parseLocalDay,
+  reportRange,
   shiftLocalDay,
+  type ReportPreset,
 } from "@/lib/local-day";
 import { visitPurposeMessageKey } from "@/lib/i18n";
 import { useI18n } from "./i18n-provider";
 
-type Period = "daily" | "weekly" | "monthly";
+type Period = "daily" | "weekly" | "monthly" | "yearly";
+type RangePreset = ReportPreset | "custom";
 
 const palette = ["#10cfc9", "#2563eb", "#071426", "#f59e0b", "#8b5cf6", "#059669"];
 
@@ -73,6 +86,18 @@ function downloadCsv(filename: string, lines: string[][]) {
   URL.revokeObjectURL(url);
 }
 
+function evidenceLabel(
+  visit: Visit,
+  t: (key: string) => string,
+) {
+  const parts = [
+    (visit.identityCaptured || visit.documentCaptured) && t("reports.idPhoto"),
+    visit.vehiclePhotosCaptured && t("reports.vehiclePhoto"),
+    visit.attachmentsCaptured && t("reports.attachments"),
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "—";
+}
+
 function stayLabel(
   visit: Visit,
   formatDuration: (ms: number) => string,
@@ -82,21 +107,35 @@ function stayLabel(
 }
 
 export function Reports() {
-  const { organization, viewer, syncedAt, live } = useWorkspace();
+  const { organization, viewer, syncedAt, live, booths, locations, events } =
+    useWorkspace();
   const { t, formatDateTime, formatDuration, intl } = useI18n();
   const visits = useMyVisits();
   const hostView = viewer.role === "host";
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [preset, setPreset] = useState<RangePreset>("last30");
+  const initialRange = reportRange("last30");
   const [filters, setFilters] = useState({
-    from: shiftLocalDay(-29),
-    to: shiftLocalDay(0),
+    from: initialRange.from,
+    to: initialRange.to,
     location: "all",
+    booth: "all",
     host: "all",
     company: "all",
     purpose: "all",
     status: "all" as VisitStatus | "all",
   });
   const [period, setPeriod] = useState<Period>("daily");
+
+  function applyPreset(next: ReportPreset) {
+    const range = reportRange(next);
+    setPreset(next);
+    setFilters((current) => ({ ...current, ...range }));
+    if (next === "today" || next === "week") setPeriod("daily");
+    else if (next === "month") setPeriod("weekly");
+    else if (next === "year") setPeriod("monthly");
+    else setPeriod("daily");
+  }
 
   const options = useMemo(
     () => ({
@@ -113,11 +152,15 @@ export function Reports() {
       visits.filter((visit) => {
         return (
           (filters.location === "all" || visit.location === filters.location) &&
+          (filters.booth === "all" ||
+            visit.checkInBoothId === filters.booth ||
+            visit.checkOutBoothId === filters.booth ||
+            visit.denialBoothId === filters.booth) &&
           (filters.host === "all" || visit.hostName === filters.host) &&
           (filters.company === "all" || visit.company === filters.company)
         );
       }),
-    [visits, filters.location, filters.host, filters.company],
+    [visits, filters.location, filters.booth, filters.host, filters.company],
   );
 
   const insideNow = useMemo(
@@ -187,11 +230,13 @@ export function Reports() {
       const day = localDayKey(iso);
       if (day < filters.from || day > filters.to) return;
       const key =
-        period === "monthly"
-          ? localMonthKey(iso)
-          : period === "weekly"
-            ? localWeekKey(iso)
-            : day;
+        period === "yearly"
+          ? localYearKey(iso)
+          : period === "monthly"
+            ? localMonthKey(iso)
+            : period === "weekly"
+              ? localWeekKey(iso)
+              : day;
       const current = buckets.get(key) ?? { entries: 0, exits: 0 };
       current[field] += 1;
       buckets.set(key, current);
@@ -204,9 +249,11 @@ export function Reports() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, counts]) => ({
         name:
-          period === "monthly"
-            ? formatLocalMonth(key, intl)
-            : formatLocalDay(key, intl, "short"),
+          period === "yearly"
+            ? key
+            : period === "monthly"
+              ? formatLocalMonth(key, intl)
+              : formatLocalDay(key, intl, "short"),
         entries: counts.entries,
         exits: counts.exits,
       }));
@@ -214,6 +261,12 @@ export function Reports() {
     return {
       entered,
       averageMs,
+      withId: rows.filter(
+        (visit) => visit.identityCaptured || visit.documentCaptured,
+      ).length,
+      withVehicle: rows.filter((visit) => visit.vehiclePhotosCaptured).length,
+      withAttachments: rows.filter((visit) => visit.attachmentsCaptured).length,
+      denied: rows.filter((visit) => visit.status === "denied").length,
       purposes: count(
         (visit) => t(visitPurposeMessageKey(visit.purpose)) || visit.purpose,
       ).slice(0, 6),
@@ -248,6 +301,10 @@ export function Reports() {
         "Entrada",
         "Tiempo dentro",
         "Identificación",
+        t("reports.entryBooth"),
+        t("reports.entryGuard"),
+        t("reports.evidence"),
+        t("reports.dossier"),
       ],
       ...insideNow.map((visit) => [
         visit.visitorName,
@@ -258,6 +315,10 @@ export function Reports() {
         formatDateTime(visit.checkedInAt),
         stayLabel(visit, formatDuration),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
+        recordedBooth(visit),
+        recordedGuard(visit, events, "in"),
+        evidenceLabel(visit, t),
+        `${window.location.origin}/app/visits/${visit.id}`,
       ]),
       [],
       ["BITÁCORA DEL PERIODO"],
@@ -275,6 +336,14 @@ export function Reports() {
         "Estado",
         "Identificación",
         "Placas",
+        t("reports.entryBooth"),
+        t("reports.entryGuard"),
+        t("reports.exitBooth"),
+        t("reports.exitGuard"),
+        t("reports.denialGuard"),
+        t("reports.evidence"),
+        t("visits.deniedLabel"),
+        t("reports.dossier"),
       ],
       ...rows.map((visit) => [
         visit.visitorName,
@@ -289,7 +358,15 @@ export function Reports() {
         stayLabel(visit, formatDuration),
         t(`status.${visit.status}`),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
-        visit.vehiclePlate || "",
+        visit.vehiclePlate || (visit.vehicleDeclined ? t("guard.noVehicle") : ""),
+        visit.checkInBooth || visit.denialBooth || "",
+        recordedGuard(visit, events, visit.status === "denied" ? "deny" : "in"),
+        visit.checkOutBooth || "",
+        recordedGuard(visit, events, "out"),
+        recordedGuard(visit, events, "deny"),
+        evidenceLabel(visit, t),
+        visit.denialReason || "",
+        `${window.location.origin}/app/visits/${visit.id}`,
       ]),
     ];
 
@@ -301,11 +378,20 @@ export function Reports() {
 
   const activeFilters = [
     filters.location,
+    filters.booth,
     filters.host,
     filters.company,
     filters.purpose,
     filters.status,
   ].filter((value) => value !== "all").length;
+  const periodName =
+    period === "daily"
+      ? t("reports.daily")
+      : period === "weekly"
+        ? t("reports.weekly")
+        : period === "monthly"
+          ? t("reports.monthly")
+          : t("reports.yearly");
 
   return (
     <>
@@ -324,6 +410,14 @@ export function Reports() {
           </p>
         </div>
         <div className="no-print flex gap-2">
+          {!hostView && (
+            <Link
+              href="/app/audit"
+              className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-[#071426]"
+            >
+              {t("changes.open")}
+            </Link>
+          )}
           <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Printer size={16} />
             {t("reports.print")}
@@ -363,7 +457,36 @@ export function Reports() {
             {t("reports.liveHint")}
           </p>
         )}
+        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[.14em] text-slate-400">
+            {t("reports.howToRead")}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            {t("reports.howToReadBody")}
+          </p>
+        </div>
       </Card>
+
+      <div className="no-print mb-3 flex flex-wrap gap-2">
+        {(
+          [
+            ["today", "reports.today"],
+            ["week", "reports.thisWeek"],
+            ["month", "reports.thisMonth"],
+            ["year", "reports.thisYear"],
+            ["last30", "reports.last30"],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            size="sm"
+            variant={preset === value ? "primary" : "outline"}
+            onClick={() => applyPreset(value)}
+          >
+            {t(label)}
+          </Button>
+        ))}
+      </div>
 
       <div className="no-print mb-5 flex flex-wrap gap-2">
         <Button
@@ -380,7 +503,7 @@ export function Reports() {
             </span>
           )}
         </Button>
-        {(["daily", "weekly", "monthly"] as Period[]).map((value) => (
+        {(["daily", "weekly", "monthly", "yearly"] as Period[]).map((value) => (
           <Button
             key={value}
             size="sm"
@@ -391,7 +514,9 @@ export function Reports() {
               ? t("reports.daily")
               : value === "weekly"
                 ? t("reports.weekly")
-                : t("reports.monthly")}
+                : value === "monthly"
+                  ? t("reports.monthly")
+                  : t("reports.yearly")}
           </Button>
         ))}
       </div>
@@ -416,6 +541,30 @@ export function Reports() {
           icon={Clock3}
           tone="warning"
         />
+        <MetricTile
+          label={t("reports.withId")}
+          value={stats.withId}
+          icon={Camera}
+          tone="info"
+        />
+        <MetricTile
+          label={t("reports.withVehicle")}
+          value={stats.withVehicle}
+          icon={Camera}
+          tone="accent"
+        />
+        <MetricTile
+          label={t("reports.withAttachments")}
+          value={stats.withAttachments}
+          icon={Camera}
+          tone="success"
+        />
+        <MetricTile
+          label={t("reports.denied")}
+          value={stats.denied}
+          icon={ShieldAlert}
+          tone="warning"
+        />
       </section>
 
       <section className="mt-6">
@@ -423,7 +572,7 @@ export function Reports() {
           <div>
             <h2 className="text-lg font-semibold">{t("reports.insideNow")}</h2>
             <p className="text-sm text-slate-500">
-              Aforo en vivo. No depende del rango de fechas.
+              {t("reports.liveOccupancy")}
             </p>
           </div>
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
@@ -438,10 +587,7 @@ export function Reports() {
             description={t("reports.nobodyInsideHint")}
           />
         ) : (
-          <AuditTable
-            visits={insideNow}
-            mode="inside"
-          />
+          <AuditTable visits={insideNow} events={events} mode="inside" />
         )}
       </section>
 
@@ -462,14 +608,14 @@ export function Reports() {
             description="Amplía el periodo o quita algunos filtros."
           />
         ) : (
-          <AuditTable visits={rows} mode="log" />
+          <AuditTable visits={rows} events={events} mode="log" />
         )}
       </section>
 
       {rows.length > 0 && (
         <section className="no-print mt-8 grid gap-5 xl:grid-cols-2">
           <ChartCard
-            title={`${t("reports.movement")} (${period === "daily" ? t("reports.daily") : period === "weekly" ? t("reports.weekly") : t("reports.monthly")})`}
+            title={`${t("reports.movement")} (${periodName})`}
           >
             <BarChart data={stats.timeline}>
               <CartesianGrid vertical={false} stroke="#edf0f4" />
@@ -559,9 +705,10 @@ export function Reports() {
                 type="date"
                 className={fieldClass}
                 value={filters.from}
-                onChange={(event) =>
-                  setFilters({ ...filters, from: event.target.value })
-                }
+                onChange={(event) => {
+                  setPreset("custom");
+                  setFilters({ ...filters, from: event.target.value });
+                }}
               />
             </Field>
             <Field label="Hasta">
@@ -569,9 +716,10 @@ export function Reports() {
                 type="date"
                 className={fieldClass}
                 value={filters.to}
-                onChange={(event) =>
-                  setFilters({ ...filters, to: event.target.value })
-                }
+                onChange={(event) => {
+                  setPreset("custom");
+                  setFilters({ ...filters, to: event.target.value });
+                }}
               />
             </Field>
           </div>
@@ -582,6 +730,25 @@ export function Reports() {
             options={options.locations}
             onChange={(value) => setFilters({ ...filters, location: value })}
           />
+          <Field label={t("reports.booth")}>
+            <select
+              className={fieldClass}
+              value={filters.booth}
+              onChange={(event) =>
+                setFilters({ ...filters, booth: event.target.value })
+              }
+            >
+              <option value="all">{t("reports.all")}</option>
+              {booths
+                .filter((booth) => booth.active)
+                .map((booth) => (
+                  <option key={booth.id} value={booth.id}>
+                    {locations.find((site) => site.id === booth.locationId)?.name} ·{" "}
+                    {booth.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
           {!hostView && (
             <SelectFilter
               label="Anfitrión"
@@ -637,17 +804,19 @@ export function Reports() {
               variant="outline"
               size="lg"
               className="flex-1"
-              onClick={() =>
+              onClick={() => {
+                setPreset("last30");
                 setFilters({
-                  from: shiftLocalDay(-29),
-                  to: shiftLocalDay(0),
+                  from: reportRange("last30").from,
+                  to: reportRange("last30").to,
                   location: "all",
+                  booth: "all",
                   host: "all",
                   company: "all",
                   purpose: "all",
                   status: "all",
-                })
-              }
+                });
+              }}
             >
               Limpiar
             </Button>
@@ -668,9 +837,11 @@ export function Reports() {
 
 function AuditTable({
   visits,
+  events,
   mode,
 }: {
   visits: Visit[];
+  events: AccessEvent[];
   mode: "inside" | "log";
 }) {
   const { t, formatDateTime, formatDuration } = useI18n();
@@ -684,6 +855,7 @@ function AuditTable({
               <th className="px-4 py-3 font-semibold">Empresa</th>
               <th className="px-4 py-3 font-semibold">Anfitrión</th>
               <th className="px-4 py-3 font-semibold">Ubicación</th>
+              <th className="px-4 py-3 font-semibold">{t("reports.booth")}</th>
               {mode === "log" && (
                 <th className="px-4 py-3 font-semibold">Programada</th>
               )}
@@ -695,20 +867,52 @@ function AuditTable({
               {mode === "log" && (
                 <th className="px-4 py-3 font-semibold">Estado</th>
               )}
+              <th className="px-4 py-3 font-semibold">{t("reports.evidence")}</th>
+              <th className="px-4 py-3 font-semibold">{t("reports.dossier")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {visits.map((visit) => (
               <tr key={visit.id} className="align-top">
                 <td className="px-4 py-3">
-                  <p className="font-semibold">{visit.visitorName}</p>
+                  <Link
+                    href={`/app/visits/${visit.id}`}
+                    className="font-semibold underline-offset-2 hover:underline"
+                  >
+                    {visit.visitorName}
+                  </Link>
                   <p className="text-xs text-slate-400">{visit.purpose}</p>
+                  {visit.documentMasked && (
+                    <p className="text-xs text-slate-400">{visit.documentMasked}</p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-slate-600">
                       {visit.company || t("common.noCompany")}
                 </td>
                 <td className="px-4 py-3">{visit.hostName}</td>
-                <td className="px-4 py-3">{visit.location}</td>
+                <td className="px-4 py-3">
+                  {visit.location}
+                  {visit.checkInSite && visit.checkInSite !== visit.location && (
+                    <p className="text-xs text-slate-400">
+                      {t("reports.enteredAt", { site: visit.checkInSite })}
+                    </p>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <p>{recordedBooth(visit) || "—"}</p>
+                  {mode === "log" && visit.checkOutBooth && (
+                    <p className="text-xs text-slate-400">
+                      {t("reports.exitBooth")}: {visit.checkOutBooth}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400">
+                    {recordedGuard(
+                      visit,
+                      events,
+                      visit.status === "denied" ? "deny" : "in",
+                    ) || "—"}
+                  </p>
+                </td>
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                     {formatDateTime(visit.startsAt)}
@@ -732,8 +936,22 @@ function AuditTable({
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3">
                     {t(`status.${visit.status}`)}
+                    {visit.denialReason && (
+                      <p className="max-w-40 text-xs text-red-600">{visit.denialReason}</p>
+                    )}
                   </td>
                 )}
+                <td className="px-4 py-3 text-xs text-slate-600">
+                  {evidenceLabel(visit, t)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  <Link
+                    href={`/app/visits/${visit.id}`}
+                    className="text-sm font-semibold text-[#0d9d99]"
+                  >
+                    {t("reports.openDossier")}
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

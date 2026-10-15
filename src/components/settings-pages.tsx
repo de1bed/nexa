@@ -35,11 +35,18 @@ import {
 import { Sheet, Toggle, CopyField, ShareButton } from "./ui-client";
 import { AddressField } from "./address-field";
 import {
+  appendDemoChange,
+  readDemoBooths,
+  upsertDemoBooth,
+} from "@/lib/showcase-store";
+import {
+  showcaseBooths,
   showcaseLocations,
   showcaseSettings,
   showcaseTeam,
 } from "@/lib/demo-data";
 import {
+  type Booth,
   type Location,
   type MemberRole,
   type MemberStatus,
@@ -105,7 +112,7 @@ function formatTimeSince(dateString: string): string {
 /* ========================================================================== */
 
 export function TeamPage() {
-  const { live, viewer, reload, locations } = useWorkspace();
+  const { live, viewer, reload, locations, booths } = useWorkspace();
   const { t } = useI18n();
   const [members, setMembers] = useState<TeamMember[]>(live ? [] : showcaseTeam);
   const [joinCodes, setJoinCodes] = useState<JoinCode[]>([]);
@@ -288,9 +295,12 @@ export function TeamPage() {
 
   async function updateMember(
     member: TeamMember,
-    patch: Partial<Omit<TeamMember, "departmentId" | "defaultLocationId">> & {
+    patch: Partial<
+      Omit<TeamMember, "departmentId" | "defaultLocationId" | "defaultBoothId">
+    > & {
       departmentId?: string | null;
       defaultLocationId?: string | null;
+      defaultBoothId?: string | null;
     },
   ) {
     setBusy(true);
@@ -305,6 +315,7 @@ export function TeamPage() {
             status: patch.status,
             departmentId: patch.departmentId,
             defaultLocationId: patch.defaultLocationId,
+            defaultBoothId: patch.defaultBoothId,
           }),
         });
         if (!response.ok)
@@ -318,6 +329,7 @@ export function TeamPage() {
             ...patch,
             departmentId: patch.departmentId ?? item.departmentId,
             defaultLocationId: patch.defaultLocationId ?? item.defaultLocationId,
+            defaultBoothId: patch.defaultBoothId ?? item.defaultBoothId,
           };
           if (patch.departmentId === null) {
             next.departmentId = undefined;
@@ -326,6 +338,10 @@ export function TeamPage() {
           if (patch.defaultLocationId === null) {
             next.defaultLocationId = undefined;
             next.defaultLocation = undefined;
+          }
+          if (patch.defaultBoothId === null) {
+            next.defaultBoothId = undefined;
+            next.defaultBooth = undefined;
           }
           if (patch.status) {
             next.active = patch.status === "active";
@@ -873,32 +889,71 @@ export function TeamPage() {
               </Field>
             )}
 
-            {editing.role === "guard" && locations.length > 1 && (
+            {editing.role === "guard" &&
+              (booths.filter((booth) => booth.active).length > 1 ||
+                locations.length > 1) && (
               <Field
                 label={t("team.defaultStation")}
                 hint={t("team.defaultStationHint")}
               >
-                <select
-                  className={fieldClass}
-                  value={editing.defaultLocationId ?? ""}
-                  disabled={busy}
-                  onChange={(event) => {
-                    const defaultLocationId = event.target.value;
-                    void updateMember(editing, {
-                      defaultLocationId: defaultLocationId || null,
-                      defaultLocation: locations.find(
-                        (site) => site.id === defaultLocationId,
-                      )?.name,
-                    });
-                  }}
-                >
-                  <option value="">{t("team.noStation")}</option>
-                  {locations.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.name}
-                    </option>
-                  ))}
-                </select>
+                {booths.some((booth) => booth.active) ? (
+                  <select
+                    className={fieldClass}
+                    value={editing.defaultBoothId ?? ""}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const defaultBoothId = event.target.value;
+                      const booth = booths.find((item) => item.id === defaultBoothId);
+                      void updateMember(editing, {
+                        defaultBoothId: defaultBoothId || null,
+                        defaultBooth: booth?.name,
+                        defaultLocationId: booth?.locationId ?? null,
+                        defaultLocation: locations.find(
+                          (site) => site.id === booth?.locationId,
+                        )?.name,
+                      });
+                    }}
+                  >
+                    <option value="">{t("team.noStation")}</option>
+                    {locations.map((site) => {
+                      const siteBooths = booths.filter(
+                        (booth) => booth.locationId === site.id && booth.active,
+                      );
+                      if (siteBooths.length === 0) return null;
+                      return (
+                        <optgroup key={site.id} label={site.name}>
+                          {siteBooths.map((booth) => (
+                            <option key={booth.id} value={booth.id}>
+                              {booth.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <select
+                    className={fieldClass}
+                    value={editing.defaultLocationId ?? ""}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const defaultLocationId = event.target.value;
+                      void updateMember(editing, {
+                        defaultLocationId: defaultLocationId || null,
+                        defaultLocation: locations.find(
+                          (site) => site.id === defaultLocationId,
+                        )?.name,
+                      });
+                    }}
+                  >
+                    <option value="">{t("team.noStation")}</option>
+                    {locations.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </Field>
             )}
 
@@ -956,11 +1011,20 @@ export function TeamPage() {
 /* Ubicaciones                                                                */
 /* ========================================================================== */
 
+type Site = Location & { booths: Booth[] };
+
+function sitesFrom(locations: Location[], booths: Booth[]): Site[] {
+  return locations.map((location) => ({
+    ...location,
+    booths: booths.filter((booth) => booth.locationId === location.id),
+  }));
+}
+
 export function LocationsPage() {
-  const { live, reload } = useWorkspace();
+  const { live, reload, viewer } = useWorkspace();
   const { t } = useI18n();
-  const [locations, setLocations] = useState<Location[]>(
-    live ? [] : showcaseLocations,
+  const [locations, setLocations] = useState<Site[]>(
+    live ? [] : sitesFrom(showcaseLocations, showcaseBooths),
   );
   const [loading, setLoading] = useState(live);
   const [open, setOpen] = useState(false);
@@ -970,6 +1034,12 @@ export function LocationsPage() {
     address: "",
     timezone: "America/Mexico_City",
   });
+  const [boothForm, setBoothForm] = useState<{
+    locationId: string;
+    boothId?: string;
+    name: string;
+    notes: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!live) return;
@@ -979,8 +1049,14 @@ export function LocationsPage() {
       try {
         const response = await fetch("/api/locations", { cache: "no-store" });
         if (!response.ok) throw new Error(await readError(response, "Error"));
-        const payload = (await response.json()) as { locations: Location[] };
-        if (active) setLocations(payload.locations ?? []);
+        const payload = (await response.json()) as { locations: Site[] };
+        if (active)
+          setLocations(
+            (payload.locations ?? []).map((location) => ({
+              ...location,
+              booths: location.booths ?? [],
+            })),
+          );
       } catch (reason) {
         if (active)
           toast.error(
@@ -998,6 +1074,21 @@ export function LocationsPage() {
     };
   }, [live]);
 
+  useEffect(() => {
+    if (live) return;
+    const extra = readDemoBooths();
+    if (extra.length === 0) return;
+    setLocations((current) =>
+      current.map((location) => {
+        const overrides = extra.filter((booth) => booth.locationId === location.id);
+        if (overrides.length === 0) return location;
+        const byId = new Map(location.booths.map((booth) => [booth.id, booth]));
+        for (const booth of overrides) byId.set(booth.id, booth);
+        return { ...location, booths: [...byId.values()] };
+      }),
+    );
+  }, [live]);
+
   async function create(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -1010,12 +1101,29 @@ export function LocationsPage() {
         });
         if (!response.ok)
           throw new Error(await readError(response, "No fue posible crear"));
-        const payload = (await response.json()) as { location: Location };
-        setLocations((current) => [...current, payload.location]);
-      } else {
+        const payload = (await response.json()) as { location: Site };
         setLocations((current) => [
           ...current,
-          { id: crypto.randomUUID(), ...form, active: true },
+          { ...payload.location, booths: payload.location.booths ?? [] },
+        ]);
+      } else {
+        const id = crypto.randomUUID();
+        const booth: Booth = {
+          id: crypto.randomUUID(),
+          locationId: id,
+          name: "Caseta principal",
+          notes: "",
+          active: true,
+        };
+        upsertDemoBooth(booth);
+        appendDemoChange({
+          actor: viewer.name,
+          eventType: "location_created",
+          name: form.name,
+        });
+        setLocations((current) => [
+          ...current,
+          { id, ...form, active: true, booths: [booth] },
         ]);
       }
       toast.success("Ubicación creada");
@@ -1028,6 +1136,128 @@ export function LocationsPage() {
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function saveBooth(event: React.FormEvent) {
+    event.preventDefault();
+    if (!boothForm) return;
+    setBusy(true);
+    const draft = boothForm;
+    try {
+      if (live) {
+        const response = await fetch(
+          draft.boothId ? `/api/booths/${draft.boothId}` : "/api/booths",
+          {
+            method: draft.boothId ? "PATCH" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              draft.boothId
+                ? { name: draft.name, notes: draft.notes }
+                : {
+                    locationId: draft.locationId,
+                    name: draft.name,
+                    notes: draft.notes,
+                  },
+            ),
+          },
+        );
+        if (!response.ok)
+          throw new Error(await readError(response, t("locations.boothFail")));
+        const payload = (await response.json()) as { booth: Booth };
+        setLocations((current) =>
+          current.map((location) => {
+            if (location.id !== payload.booth.locationId) return location;
+            const exists = location.booths.some((booth) => booth.id === payload.booth.id);
+            return {
+              ...location,
+              booths: exists
+                ? location.booths.map((booth) =>
+                    booth.id === payload.booth.id ? payload.booth : booth,
+                  )
+                : [...location.booths, payload.booth],
+            };
+          }),
+        );
+        void reload();
+      } else {
+        const booth: Booth = {
+          id: draft.boothId ?? crypto.randomUUID(),
+          locationId: draft.locationId,
+          name: draft.name,
+          notes: draft.notes,
+          active: true,
+        };
+        const saved = locations
+          .find((location) => location.id === draft.locationId)
+          ?.booths.find((item) => item.id === booth.id);
+        const nextBooth = { ...booth, active: saved?.active ?? true };
+        upsertDemoBooth(nextBooth);
+        appendDemoChange({
+          actor: viewer.name,
+          eventType: draft.boothId ? "booth_updated" : "booth_created",
+          name: draft.name,
+        });
+        setLocations((current) =>
+          current.map((location) => {
+            if (location.id !== draft.locationId) return location;
+            const exists = location.booths.some((item) => item.id === nextBooth.id);
+            return {
+              ...location,
+              booths: exists
+                ? location.booths.map((item) =>
+                    item.id === nextBooth.id ? nextBooth : item,
+                  )
+                : [...location.booths, nextBooth],
+            };
+          }),
+        );
+      }
+      toast.success(draft.boothId ? t("locations.boothUpdated") : t("locations.boothCreated"));
+      setBoothForm(null);
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : t("locations.boothFail"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleBooth(booth: Booth) {
+    const active = !booth.active;
+    try {
+      if (live) {
+        const response = await fetch(`/api/booths/${booth.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active }),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, t("locations.updateFail")));
+        void reload();
+      }
+      const next = { ...booth, active };
+      if (!live) {
+        upsertDemoBooth(next);
+        appendDemoChange({
+          actor: viewer.name,
+          eventType: active ? "booth_activated" : "booth_deactivated",
+          name: booth.name,
+        });
+      }
+      setLocations((current) =>
+        current.map((location) =>
+          location.id === booth.locationId
+            ? {
+                ...location,
+                booths: location.booths.map((item) =>
+                  item.id === booth.id ? next : item,
+                ),
+              }
+            : location,
+        ),
+      );
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : t("locations.updateFail"));
     }
   }
 
@@ -1112,8 +1342,79 @@ export function LocationsPage() {
                       : "bg-slate-100 text-slate-500",
                   )}
                 >
-                  {location.active ? "Activa" : "Inactiva"}
+                  {location.active ? t("locations.active") : t("locations.inactive")}
                 </button>
+              </div>
+
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[.14em] text-slate-400">
+                    {t("locations.booths")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBoothForm({
+                        locationId: location.id,
+                        name: "",
+                        notes: "",
+                      })
+                    }
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#0d9d99]"
+                  >
+                    <Plus size={15} />
+                    {t("locations.newBooth")}
+                  </button>
+                </div>
+                {location.booths.length === 0 ? (
+                  <p className="text-sm leading-5 text-slate-500">
+                    {t("locations.boothEmpty")}
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {location.booths.map((booth) => (
+                      <li
+                        key={booth.id}
+                        className="flex items-start gap-3 rounded-2xl bg-slate-50 px-3 py-2.5"
+                      >
+                        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-white text-[#0d9d99]">
+                          <ScanLine size={16} />
+                        </span>
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() =>
+                            setBoothForm({
+                              locationId: location.id,
+                              boothId: booth.id,
+                              name: booth.name,
+                              notes: booth.notes,
+                            })
+                          }
+                        >
+                          <span className="block truncate text-sm font-semibold">
+                            {booth.name}
+                          </span>
+                          <span className="block text-xs leading-5 text-slate-500">
+                            {booth.notes || t("locations.boothNotesEmpty")}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleBooth(booth)}
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                            booth.active
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-white text-slate-500",
+                          )}
+                        >
+                          {booth.active ? t("locations.active") : t("locations.inactive")}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </Card>
           ))}
@@ -1168,6 +1469,43 @@ export function LocationsPage() {
             Crear ubicación
           </Button>
         </form>
+      </Sheet>
+
+      <Sheet
+        open={Boolean(boothForm)}
+        onClose={() => setBoothForm(null)}
+        title={boothForm?.boothId ? t("locations.editBooth") : t("locations.newBooth")}
+        description={t("locations.boothHint")}
+      >
+        {boothForm && (
+          <form onSubmit={saveBooth} className="space-y-4">
+            <Field label={t("locations.boothName")}>
+              <input
+                required
+                className={fieldClass}
+                placeholder={t("locations.boothPlaceholder")}
+                value={boothForm.name}
+                onChange={(event) =>
+                  setBoothForm({ ...boothForm, name: event.target.value })
+                }
+              />
+            </Field>
+            <Field label={t("locations.boothNotes")} hint={t("locations.boothNotesHint")}>
+              <textarea
+                className={cn(fieldClass, "min-h-24 py-3")}
+                maxLength={400}
+                value={boothForm.notes}
+                onChange={(event) =>
+                  setBoothForm({ ...boothForm, notes: event.target.value })
+                }
+              />
+            </Field>
+            <Button type="submit" variant="accent" size="lg" block disabled={busy}>
+              {busy ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+              {boothForm.boothId ? t("locations.boothSave") : t("locations.boothCreate")}
+            </Button>
+          </form>
+        )}
       </Sheet>
     </>
   );

@@ -109,19 +109,23 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Caseta en la que trabaja este dispositivo. Solo aparece si la empresa tiene
- * más de una sede: con eso la caseta sabe si un pase vale aquí.
+ * Caseta en la que trabaja este dispositivo. Aparece cuando hay más de una
+ * caseta, o —si todavía no hay casetas dadas de alta— más de una sede.
  */
 function StationPicker() {
-  const { locations, stationId, setStationId } = useWorkspace();
+  const { locations, booths, boothId, setBoothId, stationId, setStationId } =
+    useWorkspace();
   const { t } = useI18n();
-  if (locations.length < 2) return null;
+  const activeBooths = booths.filter((booth) => booth.active);
+  const choosingBooth = activeBooths.length > 0;
+  if (choosingBooth ? activeBooths.length < 2 : locations.length < 2) return null;
+  const selected = choosingBooth ? Boolean(boothId) : Boolean(stationId);
 
   return (
     <div
       className={cn(
         "mb-5 rounded-2xl border p-3",
-        stationId
+        selected
           ? "border-white/10 bg-white/[.04]"
           : "border-amber-400/30 bg-amber-400/10",
       )}
@@ -132,19 +136,39 @@ function StationPicker() {
           {t("guard.station")}
         </span>
         <select
-          value={stationId ?? ""}
-          onChange={(event) => setStationId(event.target.value)}
+          value={choosingBooth ? (boothId ?? "") : (stationId ?? "")}
+          onChange={(event) =>
+            choosingBooth
+              ? setBoothId(event.target.value)
+              : setStationId(event.target.value)
+          }
           className="h-10 min-w-0 flex-1 rounded-xl border border-white/15 bg-[#071426] px-3 text-sm font-semibold text-white outline-none focus:border-[#10cfc9]"
         >
-          {!stationId && <option value="">{t("guard.chooseStation")}</option>}
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.name}
-            </option>
-          ))}
+          {!selected && <option value="">{t("guard.chooseStation")}</option>}
+          {choosingBooth
+            ? locations.map((location) => {
+                const siteBooths = activeBooths.filter(
+                  (booth) => booth.locationId === location.id,
+                );
+                if (siteBooths.length === 0) return null;
+                return (
+                  <optgroup key={location.id} label={location.name}>
+                    {siteBooths.map((booth) => (
+                      <option key={booth.id} value={booth.id}>
+                        {booth.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })
+            : locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
         </select>
       </label>
-      {!stationId && (
+      {!selected && (
         <p className="mt-2 text-xs leading-5 text-amber-100">
           {t("guard.chooseStationHint")}
         </p>

@@ -11,6 +11,7 @@ import {
 } from "react";
 import { isLiveMode } from "@/lib/config";
 import {
+  showcaseBooths,
   showcaseLocations,
   showcaseOrganization,
   showcaseRequirements,
@@ -22,12 +23,17 @@ import {
   getShowcaseSnapshot,
   loadShowcaseState,
   patchShowcaseVisit,
+  getDemoBoothServerSnapshot,
+  getDemoBoothSnapshot,
+  subscribeDemoBooths,
   subscribeShowcase,
   upsertShowcaseVisit,
 } from "@/lib/showcase-store";
 import { DEMO_INVITE_TOKEN, DEMO_PASS_TOKEN } from "@/lib/demo-public";
+import { resolveRecordingBooth } from "@/lib/booth-choice";
 import type {
   AccessEventType,
+  Booth,
   Location,
   MemberRole,
   OrganizationSettings,
@@ -86,12 +92,16 @@ type Channels = { email: boolean; whatsapp: boolean };
 type Directory = {
   organization: { id: string; name: string };
   locations: Location[];
+  booths: Booth[];
   hosts: HostOption[];
   /** Catálogo de requisitos activos de la empresa. */
   requirements: Requirement[];
   settings: OrganizationSettings;
   channels: Channels;
-  viewer?: { defaultLocationId?: string | null };
+  viewer?: {
+    defaultLocationId?: string | null;
+    defaultBoothId?: string | null;
+  };
 };
 
 type WorkspaceValue = Omit<Directory, "viewer"> & {
@@ -103,8 +113,14 @@ type WorkspaceValue = Omit<Directory, "viewer"> & {
   visits: Visit[];
   events: WorkspaceState["events"];
   /**
-   * Sede de la caseta en este dispositivo. El guardia la elige; si no, se usa
-   * la que le asignó administración, y si la empresa tiene una sola sede, esa.
+   * Caseta de este dispositivo. El guardia la elige; si no, se usa la que le
+   * asignó administración, y si solo hay una caseta activa, esa.
+   */
+  boothId?: string;
+  setBoothId: (boothId: string) => void;
+  /**
+   * Sede de esa caseta. Sin casetas dadas de alta, es la sede elegida en el
+   * dispositivo, igual que antes.
    */
   stationId?: string;
   setStationId: (locationId: string) => void;
@@ -232,6 +248,7 @@ export function WorkspaceProvider({
   const [directory, setDirectory] = useState<Directory>({
     organization: live ? initialOrganization : showcaseOrganization,
     locations: live ? [] : showcaseLocations,
+    booths: live ? [] : showcaseBooths,
     hosts: live ? [] : showcaseHosts,
     requirements: live ? [] : showcaseRequirements,
     settings: showcaseSettings,
@@ -243,19 +260,61 @@ export function WorkspaceProvider({
   const [syncedAt, setSyncedAt] = useState<string>();
 
   const state = live ? remoteState : showcaseState;
+  const demoBooths = useSyncExternalStore(
+    subscribeDemoBooths,
+    getDemoBoothSnapshot,
+    getDemoBoothServerSnapshot,
+  );
+  const booths = useMemo(() => {
+    if (live) return directory.booths;
+    const byId = new Map<string, Booth>();
+    for (const booth of showcaseBooths) byId.set(booth.id, booth);
+    for (const booth of demoBooths) byId.set(booth.id, booth);
+    return [...byId.values()];
+  }, [live, directory.booths, demoBooths]);
 
   // Caseta del dispositivo: se recuerda por empresa en este navegador.
+  const boothKey = `nexa-guard-booth:${directory.organization.id}`;
   const stationKey = `nexa-guard-station:${directory.organization.id}`;
+  const boothChoice = useSyncExternalStore(
+    subscribeStation,
+    () => readStation(boothKey),
+    () => null,
+  );
   const stationChoice = useSyncExternalStore(
     subscribeStation,
     () => readStation(stationKey),
     () => null,
   );
+  const setBoothId = useCallback(
+    (nextBoothId: string) => writeStation(boothKey, nextBoothId),
+    [boothKey],
+  );
   const setStationId = useCallback(
     (locationId: string) => writeStation(stationKey, locationId),
     [stationKey],
   );
+  const activeBooths = useMemo(
+    () => booths.filter((booth) => booth.active),
+    [booths],
+  );
+  const boothId = useMemo(() => {
+    if (activeBooths.length === 0) return undefined;
+    const known = (id?: string | null) =>
+      id && activeBooths.some((booth) => booth.id === id) ? id : undefined;
+    const siteBooths = activeBooths.filter(
+      (booth) => booth.locationId === directory.viewer?.defaultLocationId,
+    );
+    const fromSite = siteBooths.length === 1 ? siteBooths[0].id : undefined;
+    return (
+      known(boothChoice) ??
+      known(directory.viewer?.defaultBoothId) ??
+      fromSite ??
+      (activeBooths.length === 1 ? activeBooths[0].id : undefined)
+    );
+  }, [activeBooths, boothChoice, directory.viewer]);
   const stationId = useMemo(() => {
+    if (boothId) return booths.find((booth) => booth.id === boothId)?.locationId;
     const known = (id?: string | null) =>
       id && directory.locations.some((item) => item.id === id) ? id : undefined;
     return (
@@ -263,7 +322,7 @@ export function WorkspaceProvider({
       known(directory.viewer?.defaultLocationId) ??
       (directory.locations.length === 1 ? directory.locations[0].id : undefined)
     );
-  }, [stationChoice, directory.locations, directory.viewer]);
+  }, [boothId, booths, directory.locations, directory.viewer, stationChoice]);
 
   const reload = useCallback(async (silent = false) => {
     if (!live) return;
@@ -383,6 +442,16 @@ export function WorkspaceProvider({
         form.set("locationId", draft.locationId);
         form.set("purpose", draft.purpose);
         form.set("consent", "true");
+        const requested = booths.find(
+          (item) => item.id === boothId && item.locationId === draft.locationId,
+        );
+        const booth = resolveRecordingBooth({
+          booths,
+          boothId: requested?.id,
+          locationId: draft.locationId,
+          decision: "check_in",
+        });
+        if (booth) form.set("boothId", booth.id);
         if (draft.documentFile) form.set("document", draft.documentFile);
 
         const response = await fetch("/api/visits/manual", {
@@ -407,6 +476,15 @@ export function WorkspaceProvider({
         showcaseLocations[0];
       const host =
         showcaseHosts.find((item) => item.id === draft.hostId) ?? showcaseHosts[0];
+      const requested = booths.find(
+        (item) => item.id === boothId && item.locationId === location.id,
+      );
+      const booth = resolveRecordingBooth({
+        booths,
+        boothId: requested?.id,
+        locationId: location.id,
+        decision: "check_in",
+      });
 
       const visit: Visit = {
         id: crypto.randomUUID(),
@@ -422,6 +500,10 @@ export function WorkspaceProvider({
         startsAt: now.toISOString(),
         endsAt: new Date(now.getTime() + 3600000).toISOString(),
         checkedInAt: now.toISOString(),
+        checkInBoothId: booth?.id,
+        checkInBooth: booth?.name,
+        checkInSite: location.name,
+        checkInBy: viewer.name,
         purpose: draft.purpose,
         status: "checked_in",
         origin: "guard_manual",
@@ -438,14 +520,28 @@ export function WorkspaceProvider({
         type: "check_in",
         at: now.toISOString(),
         actor: viewer.name,
+        booth: booth?.name,
       });
       return visit;
     },
-    [live, viewer],
+    [live, viewer, boothId, booths],
   );
 
   const decide = useCallback<WorkspaceValue["decide"]>(
     async (id, status, options) => {
+      const decision =
+        status === "checked_in"
+          ? "check_in"
+          : status === "checked_out"
+            ? "check_out"
+            : "deny";
+      const booth = resolveRecordingBooth({
+        booths,
+        boothId,
+        locationId: stationId,
+        decision,
+      });
+
       if (live) {
         const response = await fetch(`/api/visits/${id}`, {
           method: "PATCH",
@@ -454,7 +550,8 @@ export function WorkspaceProvider({
             status,
             denialReason: options?.denialReason,
             allowOutsideWindow: options?.allowOutsideWindow ?? false,
-            locationId: stationId,
+            locationId: booth?.locationId ?? stationId,
+            boothId: booth?.id,
           }),
         });
         if (!response.ok)
@@ -483,21 +580,51 @@ export function WorkspaceProvider({
             ? "check_out"
             : "denied";
 
+      const site = directory.locations.find(
+        (item) => item.id === (booth?.locationId ?? stationId),
+      );
       patchShowcaseVisit(
         id,
         status === "checked_in"
-          ? { status, checkedInAt: now }
+          ? {
+              status,
+              checkedInAt: now,
+              checkInBoothId: booth?.id,
+              checkInBooth: booth?.name,
+              checkInSite: site?.name,
+              checkInBy: viewer.name,
+            }
           : status === "checked_out"
-            ? { status, checkedOutAt: now, qrToken: undefined }
+            ? {
+                status,
+                checkedOutAt: now,
+                qrToken: undefined,
+                ...(booth
+                  ? {
+                      checkOutBoothId: booth.id,
+                      checkOutBooth: booth.name,
+                      checkOutSite: site?.name,
+                    }
+                  : {}),
+                checkOutBy: viewer.name,
+              }
             : {
                 status,
                 denialReason: options?.denialReason,
                 qrToken: undefined,
+                deniedBy: viewer.name,
+                denialBoothId: booth?.id,
+                denialBooth: booth?.name,
               },
-        { type: eventType, actor: viewer.name, detail: options?.denialReason },
+        {
+          type: eventType,
+          actor: viewer.name,
+          detail: options?.denialReason,
+          booth: booth?.name,
+        },
       );
     },
-    [live, viewer, stationId],
+    [live, viewer, stationId, boothId, booths, directory.locations],
   );
 
   const cancelVisit = useCallback<WorkspaceValue["cancelVisit"]>(
@@ -572,8 +699,9 @@ export function WorkspaceProvider({
 
   const value = useMemo<WorkspaceValue>(() => {
     // El directorio remoto también trae `viewer`; manda el de la sesión.
-    const { viewer: _remoteViewer, ...catalog } = directory;
+    const { viewer: _remoteViewer, booths: _catalogBooths, ...catalog } = directory;
     void _remoteViewer;
+    void _catalogBooths;
     return {
       live,
       loading,
@@ -581,10 +709,13 @@ export function WorkspaceProvider({
       syncedAt,
       viewer,
       ...catalog,
+      booths,
       visits: state.visits,
       events: state.events,
       stationId,
       setStationId,
+      boothId,
+      setBoothId,
       reload,
       createInvitation,
       createManualVisit,
@@ -600,9 +731,12 @@ export function WorkspaceProvider({
       syncedAt,
       viewer,
       directory,
+      booths,
       state,
       stationId,
       setStationId,
+      boothId,
+      setBoothId,
       reload,
       createInvitation,
       createManualVisit,

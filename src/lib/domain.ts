@@ -44,6 +44,21 @@ export type Visit = {
   passValidDays?: number;
   checkedInAt?: string;
   checkedOutAt?: string;
+  /** Caseta que registró la entrada. */
+  checkInBoothId?: string;
+  checkInBooth?: string;
+  /** Sede de esa caseta, si entró por un sitio distinto al de la invitación. */
+  checkInSite?: string;
+  checkOutBoothId?: string;
+  checkOutBooth?: string;
+  checkOutSite?: string;
+  /** Guardia que registró la entrada, con el nombre de ese momento. */
+  checkInBy?: string;
+  checkOutBy?: string;
+  /** Caseta y guardia del rechazo, cuando no hubo entrada. */
+  denialBoothId?: string;
+  denialBooth?: string;
+  deniedBy?: string;
   purpose: string;
   status: VisitStatus;
   origin: VisitOrigin;
@@ -95,6 +110,8 @@ export type AccessEvent = {
   at: string;
   actor: string;
   detail?: string;
+  /** Caseta que registró el evento, cuando aplica. */
+  booth?: string;
 };
 
 export type Location = {
@@ -102,6 +119,15 @@ export type Location = {
   name: string;
   address: string;
   timezone: string;
+  active: boolean;
+};
+
+/** Punto físico de control dentro de una sede. Una sede puede tener varias. */
+export type Booth = {
+  id: string;
+  locationId: string;
+  name: string;
+  notes: string;
   active: boolean;
 };
 
@@ -145,9 +171,12 @@ export type TeamMember = {
   status: MemberStatus;
   departmentId?: string;
   department?: string;
-  /** Caseta habitual del integrante (guardias). */
+  /** Sede habitual del integrante (guardias). */
   defaultLocationId?: string;
   defaultLocation?: string;
+  /** Caseta habitual. Si la sede tiene varias, esta es la que abre el dispositivo. */
+  defaultBoothId?: string;
+  defaultBooth?: string;
   joinedAt?: string;
   invitedAt?: string;
   inviteDelivery?: "sent" | "failed" | "development";

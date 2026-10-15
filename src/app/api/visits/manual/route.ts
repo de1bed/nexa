@@ -5,6 +5,8 @@ import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { sendHostArrivalEmail } from "@/lib/server/email";
 import { maskEmail } from "@/lib/security";
 import { mapVisit, visitSelect } from "@/lib/server/visit-mapper";
+import { resolveAccessBooth } from "@/lib/server/booths";
+import { BOOTH_REQUIRED } from "@/lib/booth-choice";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import {
   identityFileMeta,
@@ -24,6 +26,7 @@ const schema = z.object({
   locationId: z.uuid("Ubicación inválida"),
   purpose: z.string().trim().min(2).max(160),
   consent: z.literal("true"),
+  boothId: z.uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -78,6 +81,21 @@ export async function POST(request: Request) {
         { status: 400 },
       );
 
+    const booth = await resolveAccessBooth(db, {
+      organizationId,
+      locationId: location.id,
+      boothId: input.boothId,
+      decision: "check_in",
+    });
+    const boothId = booth.id;
+    const { data: actor } = await db
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    const actorName =
+      (actor?.full_name as string | undefined) || "Sistema";
+
     const { data: visitor, error: visitorError } = await db
       .from("visitors")
       .insert({
@@ -109,6 +127,7 @@ export async function POST(request: Request) {
         consented_at: now.toISOString(),
         privacy_notice_version: "mvp-1",
         created_by: userId,
+        check_in_booth_id: boothId,
       })
       .select("id")
       .single();
@@ -155,16 +174,27 @@ export async function POST(request: Request) {
       organization_id: organizationId,
       visit_id: created.id,
       location_id: location.id,
+      booth_id: boothId,
       actor_id: userId,
       event_type: "manual_check_in",
-      metadata: { document_captured: hasDocument },
+      metadata: {
+        document_captured: hasDocument,
+        booth_id: boothId,
+        booth_name: booth.name,
+        actor_name: actorName,
+      },
     });
     await writeAudit({
       organizationId,
       actorId: userId,
       visitId: created.id,
       eventType: "manual_check_in",
-      metadata: { document_captured: hasDocument },
+      metadata: {
+        document_captured: hasDocument,
+        booth_id: boothId,
+        booth_name: booth.name,
+        actor_name: actorName,
+      },
     });
 
     const { data: full } = await db
@@ -205,6 +235,12 @@ export async function POST(request: Request) {
         { error: "Datos inválidos", issues: error.issues },
         { status: 400 },
       );
+    if (
+      error instanceof Error &&
+      (error.message === BOOTH_REQUIRED ||
+        error.message.startsWith("La caseta"))
+    )
+      return NextResponse.json({ error: error.message }, { status: 400 });
     console.error("Manual visit failed", error);
     return NextResponse.json(
       { error: "No fue posible registrar el acceso" },

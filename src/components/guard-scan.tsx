@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BOOTH_REQUIRED, resolveRecordingBooth } from "@/lib/booth-choice";
 import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, EmptyState, StatusPill, cn } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
@@ -41,8 +42,17 @@ function haptic(pattern: number | number[]) {
 
 export function GuardScan() {
   const { t, formatDateTime } = useI18n();
-  const { live, visits, decide, settings, reload, stationId, locations } =
-    useWorkspace();
+  const {
+    live,
+    visits,
+    decide,
+    settings,
+    reload,
+    stationId,
+    locations,
+    boothId,
+    booths,
+  } = useWorkspace();
   const station = locations.find((item) => item.id === stationId);
   const [mode, setMode] = useState<Mode>("home");
   const [visit, setVisit] = useState<Visit | null>(null);
@@ -178,6 +188,19 @@ export function GuardScan() {
   const wrongSite = Boolean(
     visit && stationId && !insideNow && !validAtLocation(visit, stationId),
   );
+  const boothMissing = (() => {
+    try {
+      resolveRecordingBooth({
+        booths,
+        boothId,
+        locationId: stationId,
+        decision: "check_in",
+      });
+      return false;
+    } catch (error) {
+      return error instanceof Error && error.message === BOOTH_REQUIRED;
+    }
+  })();
 
   async function applyDecision(decision: Decision, denialReason?: string) {
     if (!visit) return;
@@ -435,6 +458,15 @@ export function GuardScan() {
               </div>
             </div>
 
+            {boothMissing && !insideNow && !blocked && (
+              <div
+                role="alert"
+                className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100"
+              >
+                {t("guard.boothRequired")}
+              </div>
+            )}
+
             {wrongSite && !blocked && (
               <div
                 role="alert"
@@ -487,6 +519,7 @@ export function GuardScan() {
                     busy ||
                     blocked ||
                     wrongSite ||
+                    boothMissing ||
                     (outsideWindow && !overrideWindow)
                   }
                   onClick={() => applyDecision("checked_in")}
@@ -502,7 +535,7 @@ export function GuardScan() {
                   variant="light"
                   size="lg"
                   block
-                  disabled={busy}
+                  disabled={busy || boothMissing}
                   onClick={() => setDenyOpen(true)}
                   className="border-red-400/30 bg-red-500/10 text-red-200"
                 >

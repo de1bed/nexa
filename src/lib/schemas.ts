@@ -114,8 +114,10 @@ export const teamUpdateSchema = z.object({
   active: z.boolean().optional(),
   status: z.enum(["invited", "active", "suspended"]).optional(),
   departmentId: z.uuid().nullable().optional(),
-  /** Caseta habitual (pensada para guardias). */
+  /** Sede habitual (pensada para guardias). */
   defaultLocationId: z.uuid().nullable().optional(),
+  /** Caseta habitual. Si viene, la sede se toma de esa caseta. */
+  defaultBoothId: z.uuid().nullable().optional(),
 });
 
 export const teamAcceptSchema = z.object({
@@ -129,6 +131,18 @@ export const locationSchema = z.object({
   name: z.string().trim().min(2).max(120),
   address: z.string().trim().min(5).max(300),
   timezone: z.string().trim().min(3).max(80),
+});
+
+export const boothSchema = z.object({
+  locationId: z.uuid(),
+  name: z.string().trim().min(2, "Escribe el nombre de la caseta").max(80),
+  notes: z.string().trim().max(400).optional(),
+});
+
+export const boothUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(80).optional(),
+  notes: z.string().trim().max(400).optional(),
+  active: z.boolean().optional(),
 });
 
 export const requirementSchema = z

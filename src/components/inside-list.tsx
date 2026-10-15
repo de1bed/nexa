@@ -28,7 +28,13 @@ export function InsideList() {
     return inside.filter((visit) => {
       if (location !== "all" && visit.location !== location) return false;
       if (!needle) return true;
-      return [visit.visitorName, visit.company, visit.hostName, visit.location]
+      return [
+        visit.visitorName,
+        visit.company,
+        visit.hostName,
+        visit.location,
+        visit.checkInBooth,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(needle);
@@ -148,6 +154,7 @@ export function InsideList() {
                   <p className="truncate text-sm text-slate-500">
                     {visit.company || t("common.noCompany")} · {visit.hostName}
                     {visit.location ? ` · ${visit.location}` : ""}
+                    {visit.checkInBooth ? ` · ${visit.checkInBooth}` : ""}
                   </p>
                 </div>
               </div>

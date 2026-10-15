@@ -14,6 +14,8 @@ const schema = z.object({
   allowOutsideWindow: z.boolean().optional(),
   /** Sede de la caseta que registra la decisión. */
   locationId: z.uuid().optional(),
+  /** Caseta concreta. Si viene, la sede se toma de ella. */
+  boothId: z.uuid().optional(),
 });
 
 const decisionByStatus = {
@@ -128,6 +130,7 @@ export async function PATCH(
         p_reason: input.denialReason ?? null,
         p_allow_outside_window: input.allowOutsideWindow ?? false,
         p_location_id: input.locationId ?? null,
+        p_booth_id: input.boothId ?? null,
       });
       if (error)
         return NextResponse.json(
