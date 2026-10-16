@@ -112,7 +112,7 @@ export function AccessRequestForm() {
         <header className="mt-8">
           <p className="text-sm font-semibold text-[#0d9d99]">Solicitar acceso</p>
           <h1 className="mt-2 text-[30px] font-semibold tracking-[-.03em]">
-            Clave de tu empresa
+            Código para unirse
           </h1>
           <p className="mt-3 text-[15px] leading-6 text-slate-500">
             La clave la entrega NEXA al iniciar el servicio. Con ella pides entrar.
@@ -122,7 +122,7 @@ export function AccessRequestForm() {
 
         {!organizationName ? (
           <form onSubmit={lookup} className="mt-7 space-y-4">
-            <Field label="Clave de la empresa" hint="Ejemplo: NEXA-AB2K-7QPM">
+            <Field label="Código para unirse" hint="Ejemplo: NEXA-AB2K-7QPM">
               <input
                 required
                 className={fieldClass}

@@ -120,7 +120,7 @@ export function SignUpForm() {
     <Shell>
       <Brand />
       <header className="mt-9">
-        <p className="text-sm font-semibold text-[#0d9d99]">Clave de empresa</p>
+        <p className="text-sm font-semibold text-[#0d9d99]">Código para unirse</p>
         <h1 className="mt-2 text-[30px] font-semibold leading-tight tracking-[-.035em]">
           Regístrate con la clave
         </h1>

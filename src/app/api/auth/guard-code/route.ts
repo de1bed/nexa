@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const stationId = (await cookies()).get(STATION_COOKIE)?.value;
     if (!stationId)
       return NextResponse.json(
-        { error: "Primero abre la tableta con la clave de empresa y el usuario." },
+        { error: "Primero abre la tableta con su clave y el usuario." },
         { status: 401 },
       );
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (!station?.active)
       return NextResponse.json(
-        { error: "Primero abre la tableta con la clave de empresa y el usuario." },
+        { error: "Primero abre la tableta con su clave y el usuario." },
         { status: 401 },
       );
 

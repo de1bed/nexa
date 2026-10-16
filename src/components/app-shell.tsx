@@ -24,6 +24,7 @@ import { WorkspaceSwitcher } from "./workspace-switcher";
 import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
 import { DemoBanner } from "./demo-banner";
+import { SupportBanner } from "./support-banner";
 import { UpdatesBell } from "./updates-bell";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
@@ -155,6 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10 lg:py-10 print:max-w-none print:px-0 print:py-0">
           <div className="no-print">
             <DemoBanner />
+            <SupportBanner />
           </div>
           {children}
         </div>

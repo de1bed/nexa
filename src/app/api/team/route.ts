@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { createAdminClient } from "@/lib/server/supabase-admin";
+import { platformAdminEmails } from "@/lib/server/platform-admin";
 import { writeAudit, writeNotification } from "@/lib/server/audit";
 import { issueTeamInvite } from "@/lib/server/team-invite";
 import { teamInviteSchema } from "@/lib/schemas";
@@ -99,8 +100,13 @@ export async function GET() {
     member.accessCode = code;
   }
 
+  const hidden = new Set(platformAdminEmails());
   return NextResponse.json(
-    { members },
+    {
+      members: members.filter(
+        (member) => !hidden.has(member.email.trim().toLowerCase()),
+      ),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -5,6 +5,7 @@ import { getSessionContext } from "@/lib/server/session";
 import { isPlatformAdmin, platformAdminEmails } from "@/lib/server/platform-admin";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { issueTeamInvite } from "@/lib/server/team-invite";
+import { formatCompanyCode } from "@/lib/station-access";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,9 @@ export async function GET(request: Request) {
     { data: requests },
     { data: areas },
     { data: sites },
+    { data: booths },
+    { data: stations },
+    { data: guardCodes },
     { data: visits },
     { data: visitRows },
     { data: accounts },
@@ -81,7 +85,9 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     admin
       .from("organizations")
-      .select("id,name,slug,access_key,service_status,archived_at,created_at")
+      .select(
+        "id,name,slug,access_key,tablet_company_code,service_status,archived_at,created_at",
+      )
       .order("created_at", { ascending: false }),
     admin
       .from("organization_members")
@@ -97,6 +103,13 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: true }),
     admin.from("departments").select("id,organization_id,name,active"),
     admin.from("locations").select("id,organization_id,name,address,active"),
+    admin.from("booths").select("id,organization_id,location_id,name,active"),
+    admin
+      .from("station_users")
+      .select("id,organization_id,username,booth_id,active"),
+    admin
+      .from("guard_access_codes")
+      .select("profile_id,organization_id,code_display,active"),
     admin.rpc("platform_visit_counts"),
     admin
       .from("visits")
@@ -121,9 +134,23 @@ export async function GET(request: Request) {
       .limit(40),
   ]);
 
+  const ownerEmails = new Set(platformAdminEmails());
   const companies = (orgs ?? []).map((org) => {
-    const people = (members ?? []).filter(
-      (member) => member.organization_id === org.id,
+    const people = (members ?? []).filter((member) => {
+      if (member.organization_id !== org.id) return false;
+      const profile = member.profile as unknown as { email?: string } | null;
+      return !ownerEmails.has((profile?.email ?? "").toLowerCase());
+    });
+    const orgBooths = (booths ?? []).filter(
+      (booth) => booth.organization_id === org.id && booth.active,
+    );
+    const orgStations = (stations ?? []).filter(
+      (station) => station.organization_id === org.id && station.active,
+    );
+    const orgCodes = new Map(
+      (guardCodes ?? [])
+        .filter((row) => row.organization_id === org.id && row.active && row.code_display)
+        .map((row) => [row.profile_id as string, row.code_display as string]),
     );
     const orgVisits = (
       (visits ?? []) as Array<{
@@ -143,6 +170,29 @@ export async function GET(request: Request) {
       name: org.name as string,
       slug: org.slug as string,
       accessKey: org.access_key as string,
+      tabletCode: org.tablet_company_code
+        ? formatCompanyCode(org.tablet_company_code as string)
+        : "",
+      booths: orgBooths.map((booth) => {
+        const site = (sites ?? []).find((item) => item.id === booth.location_id);
+        const station = orgStations.find((item) => item.booth_id === booth.id);
+        return {
+          id: booth.id as string,
+          name: booth.name as string,
+          locationName: (site?.name as string | undefined) ?? "",
+          username: (station?.username as string | undefined) ?? "",
+        };
+      }),
+      guards: people
+        .filter((member) => member.role === "guard")
+        .map((member) => {
+          const profile = member.profile as unknown as { full_name?: string } | null;
+          return {
+            id: member.profile_id as string,
+            name: profile?.full_name ?? "Guardia",
+            code: orgCodes.get(member.profile_id as string) ?? "",
+          };
+        }),
       serviceStatus: org.service_status as string,
       archivedAt: (org.archived_at as string | null) ?? null,
       createdAt: org.created_at as string,

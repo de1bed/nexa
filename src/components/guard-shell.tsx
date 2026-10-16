@@ -16,6 +16,7 @@ import { SessionExit } from "./session-exit";
 import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
 import { DemoBanner } from "./demo-banner";
+import { SupportBanner } from "./support-banner";
 import { UpdatesBell } from "./updates-bell";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
@@ -86,6 +87,7 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
 
       <main className="pb-dock mx-auto max-w-3xl px-4 pt-6 sm:px-6">
         <DemoBanner dark />
+        <SupportBanner dark />
         {welcome && viewer.role === "guard" && (
           <div className="mb-5 rounded-3xl border border-[#10cfc9]/40 bg-[#10cfc9]/10 p-5">
             <p className="text-sm font-semibold text-[#10cfc9]">

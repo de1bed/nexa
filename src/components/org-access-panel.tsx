@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Copy, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, Field, fieldClass } from "./ui";
+import { useI18n } from "./i18n-provider";
 
 export type AreaOption = { id: string; name: string };
 
@@ -34,6 +35,7 @@ export function OrgAccessPanel({
   departments: AreaOption[];
   onDepartments: (areas: AreaOption[]) => void;
 }) {
+  const { t } = useI18n();
   const [accessKey, setAccessKey] = useState(live ? "" : "NEXA-DEMO-NOVA");
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [platform, setPlatform] = useState(false);
@@ -107,24 +109,20 @@ export function OrgAccessPanel({
   return (
     <div className="mb-8 grid gap-4 lg:grid-cols-2">
       <Card className="p-5">
-        <p className="text-sm font-semibold text-[#0d9d99]">Clave de la empresa</p>
+        <p className="text-sm font-semibold text-[#0d9d99]">{t("team.joinCode")}</p>
         <p className="mt-2 font-mono text-lg tracking-wide">{accessKey || "—"}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Esta clave no abre la tableta. La de la tableta está abajo, en
-          Tabletas de caseta. Anfitriones y administración entran con el correo
-          de su invitación.
-        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{t("team.joinCodeBody")}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             variant="outline"
             disabled={!accessKey}
             onClick={() => {
               void navigator.clipboard.writeText(accessKey);
-              toast.success("Clave copiada");
+              toast.success(t("team.joinCodeCopied"));
             }}
           >
             <Copy size={16} />
-            Copiar clave
+            {t("team.copyJoinCode")}
           </Button>
           {platform && (
             <Link href="/platform">

@@ -7,7 +7,15 @@ import { isPlatformAdmin } from "@/lib/server/platform-admin";
 export const metadata = { title: "Consola NEXA" };
 
 export default async function Page() {
-  if (!isLiveMode()) redirect("/login");
+  if (!isLiveMode()) {
+    return (
+      <main className="min-h-screen bg-[#f4f7fb] px-4 py-8 sm:px-8">
+        <div className="mx-auto max-w-6xl">
+          <PlatformConsole demo />
+        </div>
+      </main>
+    );
+  }
   const context = await getSessionContext();
   if (!context.user) redirect("/login");
   const allowed = await isPlatformAdmin(

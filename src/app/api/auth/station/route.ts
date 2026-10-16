@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const input = schema.parse(await request.json());
     if (!isStationUsername(input.username))
       return NextResponse.json(
-        { error: "Esa clave de empresa o ese usuario no coinciden." },
+        { error: "Esa clave de la tableta o ese usuario no coinciden." },
         { status: 401 },
       );
 
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true });
       }
       return NextResponse.json(
-        { error: "Esa clave de empresa o ese usuario no coinciden." },
+        { error: "Esa clave de la tableta o ese usuario no coinciden." },
         { status: 401 },
       );
     }
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     );
     if (!organization)
       return NextResponse.json(
-        { error: "Esa clave de empresa o ese usuario no coinciden." },
+        { error: "Esa clave de la tableta o ese usuario no coinciden." },
         { status: 401 },
       );
 
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 
     if (!station?.active)
       return NextResponse.json(
-        { error: "Esa clave de empresa o ese usuario no coinciden." },
+        { error: "Esa clave de la tableta o ese usuario no coinciden." },
         { status: 401 },
       );
 
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError)
       return NextResponse.json(
-        { error: "Revisa la clave de empresa y el usuario." },
+        { error: "Revisa la clave de la tableta y el usuario." },
         { status: 400 },
       );
     console.error("Station sign-in failed", error);

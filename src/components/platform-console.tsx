@@ -2,9 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Loader2, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Copy, Eye, EyeOff, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, Field, fieldClass } from "./ui";
+import { SUPPORT_VIEW_COOKIE } from "@/lib/session-constants";
+import { writeDemoSession } from "@/lib/demo-public";
+import { DEMO_COMPANY_CODE, listDemoStations } from "@/lib/demo-stations";
+import { DEMO_GUARD_CODES, readExtraGuardCodes } from "@/lib/demo-guard-codes";
+import {
+  showcaseBooths,
+  showcaseLocations,
+  showcaseOrganization,
+  showcaseTeam,
+} from "@/lib/demo-data";
 
 type Member = {
   id: string;
@@ -36,7 +47,28 @@ type AccessRequest = {
   createdAt: string;
 };
 
-type Panel = "datos" | "gente" | "visitas" | "pagos" | "solicitudes" | "movimientos" | "ficha";
+type Panel =
+  | "datos"
+  | "accesos"
+  | "gente"
+  | "visitas"
+  | "pagos"
+  | "solicitudes"
+  | "movimientos"
+  | "ficha";
+
+type BoothAccess = {
+  id: string;
+  name: string;
+  locationName: string;
+  username: string;
+};
+
+type GuardAccess = {
+  id: string;
+  name: string;
+  code: string;
+};
 
 type LogEvent = {
   id: string;
@@ -51,6 +83,9 @@ type Company = {
   id: string;
   name: string;
   accessKey: string;
+  tabletCode: string;
+  booths: BoothAccess[];
+  guards: GuardAccess[];
   serviceStatus: string;
   archivedAt: string | null;
   createdAt: string;
@@ -219,13 +254,75 @@ function matchesFocus(company: Company, focus: Focus) {
   }
 }
 
+function buildDemoCompany(): Company {
+  const stations = listDemoStations();
+  const extraGuards = readExtraGuardCodes().filter(
+    (guard) => !DEMO_GUARD_CODES.some((item) => item.id === guard.id),
+  );
+  return {
+    id: showcaseOrganization.id,
+    name: showcaseOrganization.name,
+    accessKey: "NEXA-DEMO-NOVA",
+    tabletCode: DEMO_COMPANY_CODE,
+    serviceStatus: "active",
+    archivedAt: null,
+    createdAt: new Date().toISOString(),
+    pendingRequests: 0,
+    departments: ["Dirección", "Operaciones", "Comercial", "Caseta"],
+    locations: showcaseLocations
+      .filter((site) => site.active)
+      .map((site) => ({ id: site.id, name: site.name, address: site.address })),
+    booths: showcaseBooths
+      .filter((booth) => booth.active)
+      .map((booth) => ({
+        id: booth.id,
+        name: booth.name,
+        locationName: showcaseLocations.find((site) => site.id === booth.locationId)?.name ?? "",
+        username: stations.find((station) => station.boothId === booth.id)?.username ?? "",
+      })),
+    guards: [
+      ...DEMO_GUARD_CODES.map((guard) => ({
+        id: guard.id,
+        name: guard.name,
+        code: guard.code,
+      })),
+      ...extraGuards.map((guard) => ({
+        id: guard.id,
+        name: guard.name,
+        code: guard.code,
+      })),
+    ],
+    visits: 0,
+    visitsThisMonth: 0,
+    visitsToday: 0,
+    lastVisitAt: null,
+    invitePending: false,
+    recentVisits: [],
+    planName: "",
+    monthlyAmount: null,
+    currency: "MXN",
+    billingEmail: "",
+    notes: "",
+    payments: [],
+    members: showcaseTeam.map((member) => ({
+      id: member.id,
+      name: member.name,
+      email: member.email,
+      role: member.role,
+      status: member.status,
+      department: member.department ?? "",
+      joinedAt: null,
+    })),
+  };
+}
+
 function formatTotals(totals: Record<string, number>) {
   const entries = Object.entries(totals);
   if (!entries.length) return "$0";
   return entries.map(([currency, amount]) => money(amount, currency)).join(" · ");
 }
 
-export function PlatformConsole() {
+export function PlatformConsole({ demo = false }: { demo?: boolean }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [events, setEvents] = useState<LogEvent[]>([]);
@@ -260,6 +357,8 @@ export function PlatformConsole() {
     reference: "",
     concept: "",
   });
+  const router = useRouter();
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [file, setFile] = useState({
     name: "",
     locations: [] as Array<{ id: string; name: string; address: string }>,
@@ -284,12 +383,17 @@ export function PlatformConsole() {
   }
 
   useEffect(() => {
+    if (demo) {
+      setCompanies([buildDemoCompany()]);
+      setLoading(false);
+      return;
+    }
     void load()
       .catch((reason) => toast.error(reason instanceof Error ? reason.message : "Error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [demo]);
 
-  function openCompany(company: Company, nextPanel: Panel = "datos") {
+  function openCompany(company: Company, nextPanel: Panel = "accesos") {
     setOpen(company.id);
     setPanel(nextPanel);
     setSiteDraft(null);
@@ -376,7 +480,36 @@ export function PlatformConsole() {
     }
   }
 
+  async function enterCompany(company: Company) {
+    if (demo) {
+      writeDemoSession("admin");
+      document.cookie = `${SUPPORT_VIEW_COOKIE}=1; path=/; max-age=86400; samesite=lax`;
+      router.push("/app/team");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/platform/support", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: company.id }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No fue posible abrir la empresa");
+      router.push("/app/team");
+      router.refresh();
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : "No fue posible abrir la empresa");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function patch(organizationId: string, body: Record<string, unknown>) {
+    if (demo) {
+      toast("En la demostración entra a la empresa y haz el cambio desde su administración.");
+      return null;
+    }
     const response = await fetch("/api/platform", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -466,6 +599,7 @@ export function PlatformConsole() {
   const panels: Array<{ id: Panel; label: string }> = selected
     ? [
         { id: "datos", label: "Datos" },
+        { id: "accesos", label: "Accesos" },
         { id: "gente", label: `Gente · ${selected.members.length}` },
         { id: "visitas", label: `Visitas · ${selected.recentVisits.length}` },
         { id: "pagos", label: `Pagos · ${selected.payments.length}` },
@@ -484,8 +618,8 @@ export function PlatformConsole() {
         </Link>
         <h1 className="mt-1 text-3xl font-semibold tracking-[-.03em]">Empresas</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Revisa quién debe, quién pidió acceso y qué empresa está quieta. Abre una
-          para ver su gente y sus pagos.
+          Abre una empresa para ver su clave de tableta, sus usuarios, sus guardias
+          y su gente. Desde ahí entras a la misma pantalla que ve su administrador.
         </p>
       </header>
 
@@ -698,7 +832,7 @@ export function PlatformConsole() {
         >
           {showArchived ? "Ver activas" : `Ver archivadas (${archived.length})`}
         </Button>
-        {!creating && (
+        {!creating && !demo && (
           <Button variant="outline" onClick={() => setCreating(true)}>
             Activar empresa
           </Button>
@@ -888,9 +1022,12 @@ export function PlatformConsole() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => void enterCompany(selected)} disabled={busy}>
+                    Entrar como administrador
+                  </Button>
                   <Button variant="outline" onClick={() => void copy(selected.accessKey)}>
                     <Copy size={16} />
-                    Clave
+                    Código para unirse
                   </Button>
                   {selected.archivedAt ? (
                     <Button
@@ -1033,6 +1170,98 @@ export function PlatformConsole() {
                     }}
                   >
                     Nueva clave
+                  </Button>
+                </div>
+              )}
+
+              {panel === "accesos" && (
+                <div className="mt-5 space-y-5 text-sm">
+                  <p className="text-slate-500">
+                    Esto es lo que usa la tableta de la caseta. El código para unirse es otro:
+                    está en el botón de arriba y no abre la tableta.
+                  </p>
+                  <div>
+                    <p className="font-semibold">Clave de la tableta</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="font-mono text-base text-[#0d9d99]">
+                        {selected.tabletCode || "Todavía no se ha generado"}
+                      </p>
+                      {selected.tabletCode && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void copy(selected.tabletCode)}
+                        >
+                          <Copy size={14} />
+                          Copiar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Usuarios de las casetas</h3>
+                    <ul className="mt-2 divide-y divide-slate-100">
+                      {selected.booths.length === 0 && (
+                        <li className="py-2 text-slate-500">Sin casetas</li>
+                      )}
+                      {selected.booths.map((booth) => (
+                        <li key={booth.id} className="flex items-center justify-between gap-3 py-2">
+                          <span>
+                            <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#0d9d99]">
+                              Usuario
+                            </span>
+                            <span className="font-semibold">
+                              {booth.username || "Sin usuario"}
+                            </span>
+                          </span>
+                          <span className="text-right text-slate-500">
+                            {booth.locationName ? `${booth.locationName} · ` : ""}
+                            {booth.name}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Guardias</h3>
+                    <p className="mt-1 text-slate-500">
+                      El código sirve en cualquier caseta. El ojo lo muestra para que se lo puedas dictar.
+                    </p>
+                    <ul className="mt-2 divide-y divide-slate-100">
+                      {selected.guards.length === 0 && (
+                        <li className="py-2 text-slate-500">Sin guardias</li>
+                      )}
+                      {selected.guards.map((guard) => (
+                        <li key={guard.id} className="flex items-center justify-between gap-3 py-2">
+                          <span className="font-semibold">{guard.name}</span>
+                          <span className="flex items-center gap-2 font-mono text-slate-600">
+                            {guard.code
+                              ? revealed[guard.id]
+                                ? guard.code
+                                : "••••-••••"
+                              : "Sin código"}
+                            {guard.code && (
+                              <button
+                                type="button"
+                                className="grid size-8 place-items-center rounded-full text-slate-500 hover:bg-slate-100"
+                                aria-label={revealed[guard.id] ? "Ocultar código" : "Ver código"}
+                                onClick={() =>
+                                  setRevealed((current) => ({
+                                    ...current,
+                                    [guard.id]: !current[guard.id],
+                                  }))
+                                }
+                              >
+                                {revealed[guard.id] ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <Button onClick={() => void enterCompany(selected)} disabled={busy}>
+                    Entrar como administrador
                   </Button>
                 </div>
               )}

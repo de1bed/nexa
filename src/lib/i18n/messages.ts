@@ -238,12 +238,12 @@ export const es = {
       "En la demostración, Carlos usa 4821-9036 y Lucía usa 7352-6410.",
     tabletTitle: "Abrir la tableta",
     tabletHint:
-      "Primero la clave de empresa y el usuario de la caseta. Después se abre el código del guardia.",
-    tabletCompany: "Clave de empresa",
+      "Primero la clave de la tableta y el usuario de la caseta. Después se abre el código del guardia.",
+    tabletCompany: "Clave de la tableta",
     tabletUser: "Usuario",
     tabletContinue: "Continuar",
-    tabletFail: "Esa clave de empresa o ese usuario no coinciden.",
-    tabletClosed: "Primero abre la tableta con la clave de empresa y el usuario.",
+    tabletFail: "Esa clave de la tableta o ese usuario no coinciden.",
+    tabletClosed: "Primero abre la tableta con su clave y el usuario.",
     tabletDemo:
       "En la demostración, la clave es NOVA-2026 y los usuarios son norte y proveedores. Carlos usa 4821-9036 y Lucía usa 7352-6410.",
     doorTitle: "Elige cómo entrar",
@@ -252,7 +252,7 @@ export const es = {
     doorStaff: "Anfitriones y administración",
     doorStaffHint: "Invitan visitas, ven reportes y configuran la empresa.",
     doorGuard: "Guardias",
-    doorGuardHint: "Clave de empresa, usuario de la caseta y código personal.",
+    doorGuardHint: "Clave de la tableta, usuario de la caseta y código personal.",
     doorBack: "Elegir otro acceso",
     staffDemoHint: "En la demostración entras con un toque. Elige el perfil.",
   },
@@ -262,7 +262,7 @@ export const es = {
     eyebrow: "Así funciona ahora",
     title: "La tableta de la caseta",
     lead: "El guardia no usa correo. La tableta se abre con tres datos, y solo el último cambia de persona.",
-    companyTitle: "Clave de empresa",
+    companyTitle: "Clave de la tableta",
     companyBody:
       "Es una sola para todas las tabletas y no cambia. El administrador la ve en Equipo. Conecta la tableta con la empresa. Después de entrar, el guardia no puede leerla: sale censurada.",
     userTitle: "Usuario de la caseta",
@@ -639,19 +639,27 @@ export const es = {
     invite: "Invitar miembro",
     eyebrow: "Administración",
     description: "Quién puede invitar, recibir visitantes y operar la caseta.",
+    joinCode: "Código para unirse",
+    joinCodeBody:
+      "Con este código alguien pide unirse a la empresa. La tableta no lo usa. La clave que abre la tableta está en Casetas.",
+    copyJoinCode: "Copiar código",
+    joinCodeCopied: "Código copiado",
+    stationUsersTitle: "Usuarios de las casetas",
+    stationUserLabel: "Usuario",
     tabletsTitle: "Casetas",
     tabletsLead:
       "Elige una caseta que ya está en una sede. Con esa elección se crea el usuario para abrir esa tableta.",
     tabletsAbout: "De qué trata esta tarjeta",
     tabletsAboutBody:
       "Cada usuario abre una caseta. La caseta se elige de las que ya diste de alta en una sede. Cualquier guardia puede entrar después con su código.",
+    tabletKeyAbout: "Qué es la clave de la tableta",
     tabletKeyInfo:
-      "Es fija y es la misma en todas las tabletas. No se la muestres al guardia en la pantalla: después de entrar queda censurada.",
+      "Se escribe al abrir la tableta. Es fija y la misma en todas. El código para unirse está en la tarjeta de arriba. Después de entrar queda censurada.",
     tabletUserInfo:
       "El nombre con el que se abre esa caseta. Letras, números y un punto o guion. Mínimo 3 caracteres. Cada usuario pertenece a una sola caseta.",
     tabletBoothInfo:
       "La caseta donde esa tableta registra entradas y salidas. El guardia no puede cambiarla desde la sesión.",
-    tabletStep1: "Copia la clave de empresa. Es una sola y no cambia.",
+    tabletStep1: "Copia la clave de la tableta. Es una sola y no cambia.",
     tabletStep2: "Elige la caseta. El usuario se crea con el nombre de esa caseta.",
     tabletStep3: "Cualquier guardia entra en esa tableta con su código.",
     createGuard: "Crear código de guardia",
@@ -1206,7 +1214,7 @@ export const es = {
       "Hay varias casetas. Elige en cuál estás para validar el pase y dejar registrada la entrada. Se recuerda en este dispositivo.",
     switchGuard: "Cambiar de guardia",
     switchHint:
-      "La clave de empresa y el usuario siguen en esta tableta. Solo escribe el código del guardia que entra de turno.",
+      "La clave de la tableta y el usuario siguen en esta tableta. Solo escribe el código del guardia que entra de turno.",
     welcomeEyebrow: "Bienvenido",
     welcomeHint: "Las entradas y salidas de este turno quedan a tu nombre.",
     welcomeStart: "Empezar",
@@ -1503,12 +1511,12 @@ export const en: DeepStringify<typeof es> = {
     guardCodeDemo: "In the demo, Carlos uses 4821-9036 and Lucía uses 7352-6410.",
     tabletTitle: "Open the tablet",
     tabletHint:
-      "First the company key and the booth user. Then the guard code unlocks.",
-    tabletCompany: "Company key",
+      "First the tablet key and the booth user. Then the guard code unlocks.",
+    tabletCompany: "Tablet key",
     tabletUser: "User",
     tabletContinue: "Continue",
-    tabletFail: "That company key or user does not match.",
-    tabletClosed: "Open the tablet with the company key and user first.",
+    tabletFail: "That tablet key or user does not match.",
+    tabletClosed: "Open the tablet with its key and the user first.",
     tabletDemo:
       "In the demo, the key is NOVA-2026 and the users are norte and proveedores. Carlos uses 4821-9036 and Lucía uses 7352-6410.",
     doorTitle: "Choose how to sign in",
@@ -1517,7 +1525,7 @@ export const en: DeepStringify<typeof es> = {
     doorStaff: "Hosts and admins",
     doorStaffHint: "They invite visitors, read reports, and configure the company.",
     doorGuard: "Guards",
-    doorGuardHint: "Company key, booth user, and a personal code.",
+    doorGuardHint: "Tablet key, booth user, and a personal code.",
     doorBack: "Choose another entrance",
     staffDemoHint: "In the demo you enter with one tap. Pick a profile.",
   },
@@ -1527,7 +1535,7 @@ export const en: DeepStringify<typeof es> = {
     eyebrow: "How it works now",
     title: "The booth tablet",
     lead: "A guard does not use email. The tablet opens with three details, and only the last one changes with the person.",
-    companyTitle: "Company key",
+    companyTitle: "Tablet key",
     companyBody:
       "There is one key for every tablet and it does not change. The admin sees it in Team. It connects the tablet to the company. After sign-in the guard cannot read it: it stays masked.",
     userTitle: "Booth user",
@@ -1902,19 +1910,27 @@ export const en: DeepStringify<typeof es> = {
     invite: "Invite member",
     eyebrow: "Admin",
     description: "Who can invite, receive visitors, and run the booth.",
+    joinCode: "Code to join",
+    joinCodeBody:
+      "Someone uses this code to ask to join the company. The tablet does not use it. The key that opens the tablet is in Booths.",
+    copyJoinCode: "Copy code",
+    joinCodeCopied: "Code copied",
+    stationUsersTitle: "Booth users",
+    stationUserLabel: "User",
     tabletsTitle: "Booths",
     tabletsLead:
       "Pick a booth that already belongs to a site. That choice creates the user that opens that tablet.",
     tabletsAbout: "What this card is for",
     tabletsAboutBody:
       "Each user opens one booth. You pick it from the booths already created at a site. Any guard can sign in afterward with their code.",
+    tabletKeyAbout: "What the tablet key is",
     tabletKeyInfo:
-      "It is fixed and the same on every tablet. Do not leave it visible for the guard: after sign-in it stays masked.",
+      "You type this to open the tablet. It is fixed and the same on every tablet. The code to join is on the card above. After sign-in it stays masked.",
     tabletUserInfo:
       "The name that opens that booth. Letters, numbers, and a dot or hyphen. At least 3 characters. Each user belongs to one booth.",
     tabletBoothInfo:
       "The booth where that tablet records entries and exits. The guard cannot change it from the session.",
-    tabletStep1: "Copy the company key. There is one, and it does not change.",
+    tabletStep1: "Copy the tablet key. There is one, and it does not change.",
     tabletStep2: "Choose the booth. The user is created from that booth name.",
     tabletStep3: "Any guard signs in on that tablet with their code.",
     createGuard: "Create a guard code",
@@ -2470,7 +2486,7 @@ export const en: DeepStringify<typeof es> = {
       "There are several booths. Choose where you are so the pass is checked and the entry is recorded there. It’s remembered on this device.",
     switchGuard: "Switch guard",
     switchHint:
-      "The company key and user stay on this tablet. Type only the code of the guard coming on duty.",
+      "The tablet key and user stay on this tablet. Type only the code of the guard coming on duty.",
     welcomeEyebrow: "Welcome",
     welcomeHint: "Entries and exits on this shift are recorded under your name.",
     welcomeStart: "Start",

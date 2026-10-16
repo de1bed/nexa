@@ -8,7 +8,12 @@ import { useI18n } from "./i18n-provider";
 import { InfoTip } from "./info-tip";
 import { Button, Card, Field, fieldClass } from "./ui";
 import { CopyField } from "./ui-client";
-import { DEMO_COMPANY_CODE, listDemoStations, saveExtraStation } from "@/lib/demo-stations";
+import {
+  DEMO_COMPANY_CODE,
+  DEMO_STATIONS,
+  listDemoStations,
+  saveExtraStation,
+} from "@/lib/demo-stations";
 import { usernameFromBooth } from "@/lib/station-access";
 
 type StationRow = {
@@ -24,12 +29,15 @@ export function TabletAccounts() {
   const { t } = useI18n();
   const activeBooths = booths.filter((booth) => booth.active);
   const [companyCode, setCompanyCode] = useState(live ? "" : DEMO_COMPANY_CODE);
-  const [stations, setStations] = useState<StationRow[]>(live ? [] : listDemoStations());
+  const [stations, setStations] = useState<StationRow[]>(live ? [] : DEMO_STATIONS);
   const [boothId, setBoothId] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!live) return;
+    if (!live) {
+      setStations(listDemoStations());
+      return;
+    }
     let active = true;
     void (async () => {
       try {
@@ -144,20 +152,30 @@ export function TabletAccounts() {
         <div className="mt-4">
           <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             {t("login.tabletCompany")}
-            <InfoTip label={t("login.tabletCompany")}>{t("team.tabletKeyInfo")}</InfoTip>
+            <InfoTip label={t("team.tabletKeyAbout")}>{t("team.tabletKeyInfo")}</InfoTip>
           </p>
           <CopyField value={companyCode} label={t("login.tabletCompany")} />
         </div>
       )}
 
-      <ul className="mt-4 space-y-2">
+      {stations.length > 0 && (
+        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          {t("team.stationUsersTitle")}
+        </p>
+      )}
+      <ul className={stations.length > 0 ? "space-y-2" : "mt-4 space-y-2"}>
         {stations.map((station) => (
           <li
             key={station.id}
             className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-sm"
           >
-            <span className="font-semibold">{station.username}</span>
-            <span className="truncate text-slate-500">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0d9d99]">
+                {t("team.stationUserLabel")}
+              </p>
+              <p className="font-semibold">{station.username}</p>
+            </div>
+            <span className="truncate text-right text-slate-500">
               {placeOf(station.boothId, station.boothName)}
             </span>
           </li>
