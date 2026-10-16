@@ -205,7 +205,7 @@ export const es = {
     liveHint:
       "Entra con tu correo y contraseña. El código solo se pide la primera vez.",
     showcaseExplore:
-      "Explora los tres portales sin credenciales. Los datos viven solo en este navegador.",
+      "Anfitriones y administración entran con un toque. Los guardias usan la clave, el usuario y su código. Los datos se quedan en este navegador.",
     showcaseCallout:
       "Los cambios se quedan en este navegador. No se guardan en ninguna empresa.",
     firstAccess: "Es mi primer acceso o olvidé la contraseña",
@@ -227,6 +227,59 @@ export const es = {
     sendFail: "No pudimos enviar el código.",
     enterFail: "No pudimos entrar.",
     emailPlaceholder: "tu@empresa.com",
+    guardCode: "Código de guardia",
+    guardCodeAction: "Entrar con código de guardia",
+    guardCodeHint:
+      "Sin correo. El administrador entrega este código para la tableta de la caseta.",
+    guardCodePlaceholder: "XXXX-XXXX",
+    guardCodeFail: "Ese código no está activo.",
+    guardCodeBack: "Entrar con correo",
+    guardCodeDemo:
+      "En la demostración, Carlos usa 4821-9036 y Lucía usa 7352-6410.",
+    tabletTitle: "Abrir la tableta",
+    tabletHint:
+      "Primero la clave de empresa y el usuario de la caseta. Después se abre el código del guardia.",
+    tabletCompany: "Clave de empresa",
+    tabletUser: "Usuario",
+    tabletContinue: "Continuar",
+    tabletFail: "Esa clave de empresa o ese usuario no coinciden.",
+    tabletClosed: "Primero abre la tableta con la clave de empresa y el usuario.",
+    tabletDemo:
+      "En la demostración, la clave es NOVA-2026 y los usuarios son norte y proveedores. Carlos usa 4821-9036 y Lucía usa 7352-6410.",
+    doorTitle: "Elige cómo entrar",
+    doorLead:
+      "Anfitriones y administración usan su cuenta. Los guardias abren la tableta de la caseta.",
+    doorStaff: "Anfitriones y administración",
+    doorStaffHint: "Invitan visitas, ven reportes y configuran la empresa.",
+    doorGuard: "Guardias",
+    doorGuardHint: "Clave de empresa, usuario de la caseta y código personal.",
+    doorBack: "Elegir otro acceso",
+    staffDemoHint: "En la demostración entras con un toque. Elige el perfil.",
+  },
+  updates: {
+    bell: "Novedades",
+    unread: "Hay una novedad sin leer",
+    eyebrow: "Así funciona ahora",
+    title: "La tableta de la caseta",
+    lead: "El guardia no usa correo. La tableta se abre con tres datos, y solo el último cambia de persona.",
+    companyTitle: "Clave de empresa",
+    companyBody:
+      "Es una sola para todas las tabletas y no cambia. El administrador la ve en Equipo. Conecta la tableta con la empresa. Después de entrar, el guardia no puede leerla: sale censurada.",
+    userTitle: "Usuario de la caseta",
+    userBody:
+      "El administrador crea uno por caseta. Ese usuario deja la tableta fija ahí. Norte abre la Caseta Norte; otro usuario abre otra caseta.",
+    codeTitle: "Código de guardia",
+    codeBody:
+      "Cada guardia tiene el suyo. Se crea en Equipo, al invitarlo, con la opción sin correo. Con ese código toma el turno y las entradas y salidas quedan a su nombre.",
+    switchTitle: "Cambiar de guardia",
+    switchBody:
+      "En la caseta, ese botón vuelve a mostrar los tres datos, pero la clave y el usuario van censurados. Solo se escribe el código de quien entra. Para volver a ver la clave y el usuario hay que cerrar sesión por completo.",
+    manage:
+      "Todo se administra en Equipo: la clave, los usuarios de cada caseta y el código de cada guardia.",
+    demoNote:
+      "En esta demostración la clave es NOVA-2026, los usuarios son norte y proveedores, Carlos usa 4821-9036 y Lucía usa 7352-6410.",
+    openTeam: "Ir a Equipo",
+    close: "Entendido",
   },
   demo: {
     banner: "Demostración con datos de ejemplo. Lo que hagas se queda en este navegador.",
@@ -586,6 +639,48 @@ export const es = {
     invite: "Invitar miembro",
     eyebrow: "Administración",
     description: "Quién puede invitar, recibir visitantes y operar la caseta.",
+    tabletsTitle: "Casetas",
+    tabletsLead:
+      "Elige una caseta que ya está en una sede. Con esa elección se crea el usuario para abrir esa tableta.",
+    tabletsAbout: "De qué trata esta tarjeta",
+    tabletsAboutBody:
+      "Cada usuario abre una caseta. La caseta se elige de las que ya diste de alta en una sede. Cualquier guardia puede entrar después con su código.",
+    tabletKeyInfo:
+      "Es fija y es la misma en todas las tabletas. No se la muestres al guardia en la pantalla: después de entrar queda censurada.",
+    tabletUserInfo:
+      "El nombre con el que se abre esa caseta. Letras, números y un punto o guion. Mínimo 3 caracteres. Cada usuario pertenece a una sola caseta.",
+    tabletBoothInfo:
+      "La caseta donde esa tableta registra entradas y salidas. El guardia no puede cambiarla desde la sesión.",
+    tabletStep1: "Copia la clave de empresa. Es una sola y no cambia.",
+    tabletStep2: "Elige la caseta. El usuario se crea con el nombre de esa caseta.",
+    tabletStep3: "Cualquier guardia entra en esa tableta con su código.",
+    createGuard: "Crear código de guardia",
+    tabletUserInvalid: "El usuario usa letras, números y un punto o guion. Mínimo 3.",
+    tabletNeedBooth: "Elige la caseta de ese usuario.",
+    tabletUserExists: "Ese usuario ya existe.",
+    tabletCreated: "Usuario de tableta listo",
+    tabletCreateFail: "No fue posible crear el usuario",
+    tabletUserPlaceholder: "caseta.norte",
+    tabletPickBooth: "Elige la caseta",
+    tabletNoBooth: "Sin caseta",
+    tabletCreateUser: "Crear usuario",
+    guardCodeOnly: "Sin correo, solo código",
+    guardCodeOnlyInfo:
+      "Para el personal de caseta. No se crea una cuenta de correo. El código queda a su nombre y sirve en cualquier caseta.",
+    guardsTitle: "Guardias",
+    guardsLead:
+      "Cada guardia tiene un código. Sirve en cualquier caseta. El ojo lo muestra o lo esconde.",
+    guardsAbout: "De qué trata esta tarjeta",
+    guardsAboutBody:
+      "El código identifica al guardia. No lo ata a una caseta: entra en la tableta que ya esté abierta, sea cual sea.",
+    showCode: "Ver código",
+    hideCode: "Ocultar código",
+    codeMissing: "Este código se creó antes y ya no se puede mostrar.",
+    anyBooth: "Entra en cualquier caseta",
+    userWillBe: "El usuario será {name}",
+    boothTaken: "Esa caseta ya tiene usuario.",
+    noBoothLeft: "Todas las casetas ya tienen usuario. Crea otra caseta en Ubicaciones.",
+    createBoothUser: "Crear usuario de la caseta",
     alone: "Todavía estás solo",
     aloneHint: "Invita a tus anfitriones y al personal de seguridad.",
     inviteTitle: "Invitar al equipo",
@@ -1084,7 +1179,7 @@ export const es = {
     immediateAgenda: "Agenda inmediata",
     since: "desde {time}",
     inviteTeam: "Invita a tu equipo",
-    inviteTeamHint: "Anfitriones y guardias entran con un correo.",
+    inviteTeamHint: "Anfitriones entran con correo. Los guardias entran con su código en la tableta.",
     boothHint: "Escanea pases y controla entradas como en recepción.",
   },
   guard: {
@@ -1109,6 +1204,13 @@ export const es = {
     chooseStation: "Elige tu caseta",
     chooseStationHint:
       "Hay varias casetas. Elige en cuál estás para validar el pase y dejar registrada la entrada. Se recuerda en este dispositivo.",
+    switchGuard: "Cambiar de guardia",
+    switchHint:
+      "La clave de empresa y el usuario siguen en esta tableta. Solo escribe el código del guardia que entra de turno.",
+    welcomeEyebrow: "Bienvenido",
+    welcomeHint: "Las entradas y salidas de este turno quedan a tu nombre.",
+    welcomeStart: "Empezar",
+    lockedBooth: "Esta tableta queda en esta caseta.",
     boothRequired: "Elige la caseta antes de registrar el acceso.",
     notCaptured: "No capturada",
     visitorNote: "Nota del visitante:",
@@ -1369,7 +1471,7 @@ export const en: DeepStringify<typeof es> = {
     liveHint:
       "Sign in with your email and password. A code is only asked the first time.",
     showcaseExplore:
-      "Explore the three portals without credentials. Data lives only in this browser.",
+      "Hosts and admins enter with one tap. Guards use the key, the user, and their code. Data stays in this browser.",
     showcaseCallout:
       "Changes stay in this browser. They are not saved to any company.",
     firstAccess: "This is my first sign-in or I forgot my password",
@@ -1391,6 +1493,58 @@ export const en: DeepStringify<typeof es> = {
     sendFail: "We couldn’t send the code.",
     enterFail: "We couldn’t sign you in.",
     emailPlaceholder: "you@company.com",
+    guardCode: "Guard code",
+    guardCodeAction: "Sign in with a guard code",
+    guardCodeHint:
+      "No email. An admin gives this code for the booth tablet.",
+    guardCodePlaceholder: "XXXX-XXXX",
+    guardCodeFail: "That code is not active.",
+    guardCodeBack: "Sign in with email",
+    guardCodeDemo: "In the demo, Carlos uses 4821-9036 and Lucía uses 7352-6410.",
+    tabletTitle: "Open the tablet",
+    tabletHint:
+      "First the company key and the booth user. Then the guard code unlocks.",
+    tabletCompany: "Company key",
+    tabletUser: "User",
+    tabletContinue: "Continue",
+    tabletFail: "That company key or user does not match.",
+    tabletClosed: "Open the tablet with the company key and user first.",
+    tabletDemo:
+      "In the demo, the key is NOVA-2026 and the users are norte and proveedores. Carlos uses 4821-9036 and Lucía uses 7352-6410.",
+    doorTitle: "Choose how to sign in",
+    doorLead:
+      "Hosts and admins use their account. Guards open the booth tablet.",
+    doorStaff: "Hosts and admins",
+    doorStaffHint: "They invite visitors, read reports, and configure the company.",
+    doorGuard: "Guards",
+    doorGuardHint: "Company key, booth user, and a personal code.",
+    doorBack: "Choose another entrance",
+    staffDemoHint: "In the demo you enter with one tap. Pick a profile.",
+  },
+  updates: {
+    bell: "Updates",
+    unread: "There is an unread update",
+    eyebrow: "How it works now",
+    title: "The booth tablet",
+    lead: "A guard does not use email. The tablet opens with three details, and only the last one changes with the person.",
+    companyTitle: "Company key",
+    companyBody:
+      "There is one key for every tablet and it does not change. The admin sees it in Team. It connects the tablet to the company. After sign-in the guard cannot read it: it stays masked.",
+    userTitle: "Booth user",
+    userBody:
+      "The admin creates one user per booth. That user keeps the tablet fixed there. Norte opens Caseta Norte; another user opens another booth.",
+    codeTitle: "Guard code",
+    codeBody:
+      "Each guard has their own. It is created in Team, when inviting them, with the no-email option. That code starts the shift, and entries and exits are recorded under their name.",
+    switchTitle: "Switch guard",
+    switchBody:
+      "On the booth, that button shows the three details again, but the key and the user stay masked. Only the incoming guard code is typed. Seeing the key and the user again requires a full sign-out.",
+    manage:
+      "Everything is managed in Team: the key, the user for each booth, and each guard code.",
+    demoNote:
+      "In this demo the key is NOVA-2026, the users are norte and proveedores, Carlos uses 4821-9036 and Lucía uses 7352-6410.",
+    openTeam: "Go to Team",
+    close: "Got it",
   },
   demo: {
     banner: "Demo with sample data. What you do stays in this browser.",
@@ -1748,6 +1902,48 @@ export const en: DeepStringify<typeof es> = {
     invite: "Invite member",
     eyebrow: "Admin",
     description: "Who can invite, receive visitors, and run the booth.",
+    tabletsTitle: "Booths",
+    tabletsLead:
+      "Pick a booth that already belongs to a site. That choice creates the user that opens that tablet.",
+    tabletsAbout: "What this card is for",
+    tabletsAboutBody:
+      "Each user opens one booth. You pick it from the booths already created at a site. Any guard can sign in afterward with their code.",
+    tabletKeyInfo:
+      "It is fixed and the same on every tablet. Do not leave it visible for the guard: after sign-in it stays masked.",
+    tabletUserInfo:
+      "The name that opens that booth. Letters, numbers, and a dot or hyphen. At least 3 characters. Each user belongs to one booth.",
+    tabletBoothInfo:
+      "The booth where that tablet records entries and exits. The guard cannot change it from the session.",
+    tabletStep1: "Copy the company key. There is one, and it does not change.",
+    tabletStep2: "Choose the booth. The user is created from that booth name.",
+    tabletStep3: "Any guard signs in on that tablet with their code.",
+    createGuard: "Create a guard code",
+    tabletUserInvalid: "The user uses letters, numbers, and a dot or hyphen. At least 3.",
+    tabletNeedBooth: "Choose that user’s booth.",
+    tabletUserExists: "That user already exists.",
+    tabletCreated: "Tablet user ready",
+    tabletCreateFail: "Could not create the user",
+    tabletUserPlaceholder: "north.booth",
+    tabletPickBooth: "Choose the booth",
+    tabletNoBooth: "No booth",
+    tabletCreateUser: "Create user",
+    guardCodeOnly: "No email, code only",
+    guardCodeOnlyInfo:
+      "For booth staff. No email account is created. The code stays under their name and works at any booth.",
+    guardsTitle: "Guards",
+    guardsLead:
+      "Each guard has a code. It works at any booth. The eye shows or hides it.",
+    guardsAbout: "What this card is for",
+    guardsAboutBody:
+      "The code identifies the guard. It does not tie them to one booth: they sign in on whichever tablet is already open.",
+    showCode: "Show code",
+    hideCode: "Hide code",
+    codeMissing: "This code was created earlier and can no longer be shown.",
+    anyBooth: "Signs in at any booth",
+    userWillBe: "The user will be {name}",
+    boothTaken: "That booth already has a user.",
+    noBoothLeft: "Every booth already has a user. Create another booth under Locations.",
+    createBoothUser: "Create the booth user",
     alone: "You’re still the only one",
     aloneHint: "Invite your hosts and security staff.",
     inviteTitle: "Invite to the team",
@@ -2044,7 +2240,7 @@ export const en: DeepStringify<typeof es> = {
     immediateAgenda: "Upcoming schedule",
     since: "since {time}",
     inviteTeam: "Invite your team",
-    inviteTeamHint: "Hosts and guards sign in with an email.",
+    inviteTeamHint: "Hosts sign in with email. Guards sign in with their code on the tablet.",
     boothHint: "Scan passes and control entries as you would at reception.",
   },
   visits: {
@@ -2272,6 +2468,13 @@ export const en: DeepStringify<typeof es> = {
     chooseStation: "Choose your booth",
     chooseStationHint:
       "There are several booths. Choose where you are so the pass is checked and the entry is recorded there. It’s remembered on this device.",
+    switchGuard: "Switch guard",
+    switchHint:
+      "The company key and user stay on this tablet. Type only the code of the guard coming on duty.",
+    welcomeEyebrow: "Welcome",
+    welcomeHint: "Entries and exits on this shift are recorded under your name.",
+    welcomeStart: "Start",
+    lockedBooth: "This tablet stays on this booth.",
     boothRequired: "Choose the booth before recording access.",
     notCaptured: "Not captured",
     visitorNote: "Visitor note:",

@@ -110,8 +110,9 @@ export function OrgAccessPanel({
         <p className="text-sm font-semibold text-[#0d9d99]">Clave de la empresa</p>
         <p className="mt-2 font-mono text-lg tracking-wide">{accessKey || "—"}</p>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          La clave ya no deja entrar a nadie. La gente entra solo si la invitas
-          por correo.
+          Esta clave no abre la tableta. La de la tableta está abajo, en
+          Tabletas de caseta. Anfitriones y administración entran con el correo
+          de su invitación.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button

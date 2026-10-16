@@ -4,7 +4,13 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabase } from "./supabase";
 import { isLiveMode, roleHome } from "@/lib/config";
-import { DEMO_COOKIE, ORG_COOKIE, SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
+import {
+  DEMO_ACTOR_COOKIE,
+  DEMO_ACTOR_NAME_COOKIE,
+  DEMO_COOKIE,
+  ORG_COOKIE,
+  SHOWCASE_ROLE_COOKIE,
+} from "@/lib/session-constants";
 import type { MemberRole } from "@/lib/domain";
 
 export { ORG_COOKIE, SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
@@ -126,12 +132,20 @@ function showcaseIdentity(role: MemberRole) {
  * Redirige siempre a `roleHome[rol]`, que por construcción es una ruta que ese
  * rol sí puede abrir: eso hace imposible el bucle de redirección.
  */
-function showcasePortal(roles: MemberRole[], stored: string | undefined): PortalContext {
+function showcasePortal(
+  roles: MemberRole[],
+  stored: string | undefined,
+  actorId?: string,
+  actorName?: string,
+): PortalContext {
   const role = (showcaseRoles as string[]).includes(stored ?? "")
     ? (stored as MemberRole)
     : "admin";
   if (!roles.includes(role)) redirect(roleHome[role]);
-  const identity = showcaseIdentity(role);
+  const identity =
+    role === "guard" && actorId && actorName
+      ? { id: actorId, name: actorName, email: "" }
+      : showcaseIdentity(role);
   return {
     role,
     organizationId: "org-nova",
@@ -148,11 +162,24 @@ export async function requirePortalRole(
 ): Promise<PortalContext> {
   const jar = await cookies();
   const demo = jar.get(DEMO_COOKIE)?.value === "1";
-  if (!isLiveMode()) return showcasePortal(roles, jar.get(SHOWCASE_ROLE_COOKIE)?.value);
+  const actorId = jar.get(DEMO_ACTOR_COOKIE)?.value;
+  const actorName = decodeURIComponent(jar.get(DEMO_ACTOR_NAME_COOKIE)?.value ?? "");
+  if (!isLiveMode())
+    return showcasePortal(
+      roles,
+      jar.get(SHOWCASE_ROLE_COOKIE)?.value,
+      actorId,
+      actorName,
+    );
 
   const context = await getSessionContext();
   if (demo && !context.user)
-    return showcasePortal(roles, jar.get(SHOWCASE_ROLE_COOKIE)?.value);
+    return showcasePortal(
+      roles,
+      jar.get(SHOWCASE_ROLE_COOKIE)?.value,
+      actorId,
+      actorName,
+    );
   if (!context.user) redirect("/login");
   if (context.memberships.length === 0) redirect("/espera");
   if (!context.selected) redirect("/select-organization");

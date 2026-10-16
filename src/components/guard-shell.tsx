@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -15,15 +16,23 @@ import { SessionExit } from "./session-exit";
 import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
 import { DemoBanner } from "./demo-banner";
+import { UpdatesBell } from "./updates-bell";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
 
 export function GuardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { visits, organization, viewer, live } = useWorkspace();
+  const { visits, organization, viewer, live, lockedBoothId } = useWorkspace();
   const { t } = useI18n();
   const inside = visits.filter((visit) => visit.status === "checked_in").length;
   const isAdmin = viewer.role === "admin" || viewer.role === "superadmin";
+  const [welcome, setWelcome] = useState(false);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("nexa-guard-welcome") !== "1") return;
+    sessionStorage.removeItem("nexa-guard-welcome");
+    setWelcome(true);
+  }, []);
   const nav = [
     { href: "/guard/scan" as const, labelKey: "nav.scan", icon: ScanLine },
     { href: "/guard/manual" as const, labelKey: "nav.manual", icon: PenLine },
@@ -65,6 +74,7 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
                 {organization.name}
               </span>
             )}
+            <UpdatesBell dark teamHref={isAdmin} />
             <LanguageSwitcher dark compact />
             <span className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium">
               {t("nav.insideCount", { n: inside })}
@@ -76,7 +86,41 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
 
       <main className="pb-dock mx-auto max-w-3xl px-4 pt-6 sm:px-6">
         <DemoBanner dark />
+        {welcome && viewer.role === "guard" && (
+          <div className="mb-5 rounded-3xl border border-[#10cfc9]/40 bg-[#10cfc9]/10 p-5">
+            <p className="text-sm font-semibold text-[#10cfc9]">
+              {t("guard.welcomeEyebrow")}
+            </p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-[-.03em]">
+              {viewer.name}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              {t("guard.welcomeHint")}
+            </p>
+            <button
+              type="button"
+              onClick={() => setWelcome(false)}
+              className="mt-4 rounded-xl bg-[#10cfc9] px-4 py-2.5 text-sm font-semibold text-[#043b39]"
+            >
+              {t("guard.welcomeStart")}
+            </button>
+          </div>
+        )}
         <StationPicker />
+        {!pathname.startsWith("/guard/switch") && (
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[.04] px-3 py-3">
+            <p className="min-w-0 truncate text-sm text-slate-300">
+              <span className="text-slate-500">{t("guard.welcomeEyebrow")}</span>
+              <span className="ml-2 font-semibold text-white">{viewer.name}</span>
+            </p>
+            <Link
+              href="/guard/switch"
+              className="shrink-0 rounded-xl bg-[#10cfc9] px-3 py-2 text-sm font-semibold text-[#043b39]"
+            >
+              {t("guard.switchGuard")}
+            </Link>
+          </div>
+        )}
         {children}
       </main>
 
@@ -113,9 +157,26 @@ export function GuardShell({ children }: { children: React.ReactNode }) {
  * caseta, o —si todavía no hay casetas dadas de alta— más de una sede.
  */
 function StationPicker() {
-  const { locations, booths, boothId, setBoothId, stationId, setStationId } =
+  const { locations, booths, boothId, setBoothId, stationId, setStationId, lockedBoothId } =
     useWorkspace();
   const { t } = useI18n();
+  if (lockedBoothId) {
+    const booth = booths.find((item) => item.id === lockedBoothId);
+    return (
+      <div className="mb-5 rounded-2xl border border-white/10 bg-white/[.04] p-3">
+        <div className="flex items-center gap-3">
+          <Building2 size={18} className="shrink-0 text-[#10cfc9]" />
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {t("guard.station")}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {booth?.name ?? t("guard.station")}
+          </span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-slate-400">{t("guard.lockedBooth")}</p>
+      </div>
+    );
+  }
   const activeBooths = booths.filter((booth) => booth.active);
   const choosingBooth = activeBooths.length > 0;
   if (choosingBooth ? activeBooths.length < 2 : locations.length < 2) return null;

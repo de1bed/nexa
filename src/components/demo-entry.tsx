@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { ArrowRight, QrCode, ShieldCheck, UserRound, Users } from "lucide-react";
 import { Brand } from "./brand";
 import { LanguageSwitcher } from "./language-switcher";
@@ -25,7 +26,7 @@ export function DemoEntry() {
   const router = useRouter();
   const { t } = useI18n();
 
-  async function enter(role: Exclude<MemberRole, "superadmin">) {
+  async function enter(role: Exclude<MemberRole, "superadmin" | "guard">) {
     try {
       await createClient().auth.signOut();
     } catch {
@@ -60,7 +61,13 @@ export function DemoEntry() {
             <button
               key={profile.role}
               type="button"
-              onClick={() => enter(profile.role)}
+              onClick={() => {
+              if (profile.role === "guard") {
+                router.push("/login?door=guard" as Route);
+                return;
+              }
+              void enter(profile.role);
+            }}
               className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition active:scale-[.99] active:bg-slate-50"
             >
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
@@ -69,7 +76,7 @@ export function DemoEntry() {
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold">{t(`roles.${profile.role}`)}</span>
                 <span className="mt-0.5 block text-xs leading-5 text-slate-500">
-                  {t(profile.descKey)}
+                  {profile.role === "guard" ? t("login.doorGuardHint") : t(profile.descKey)}
                 </span>
               </span>
               <ArrowRight size={19} className="shrink-0 text-slate-300" />

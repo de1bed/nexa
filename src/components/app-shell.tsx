@@ -24,6 +24,7 @@ import { WorkspaceSwitcher } from "./workspace-switcher";
 import { LanguageSwitcher } from "./language-switcher";
 import { cn } from "./ui";
 import { DemoBanner } from "./demo-banner";
+import { UpdatesBell } from "./updates-bell";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
 
@@ -90,6 +91,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex h-15 items-center justify-between gap-2 px-4">
           <WorkspaceSwitcher compact />
           <div className="flex items-center gap-2">
+            <UpdatesBell
+              teamHref={viewer.role === "admin" || viewer.role === "superadmin"}
+            />
             <LanguageSwitcher compact />
             <SessionExit compact />
           </div>
@@ -98,7 +102,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Barra lateral de escritorio */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white p-5 lg:flex">
-        <Brand />
+        <div className="flex items-center justify-between gap-2">
+          <Brand />
+          <UpdatesBell
+            teamHref={viewer.role === "admin" || viewer.role === "superadmin"}
+          />
+        </div>
         <div className="mt-7">
           <WorkspaceSwitcher />
         </div>

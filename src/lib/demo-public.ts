@@ -1,4 +1,9 @@
-import { DEMO_COOKIE, SHOWCASE_ROLE_COOKIE } from "./session-constants";
+import {
+  DEMO_ACTOR_COOKIE,
+  DEMO_ACTOR_NAME_COOKIE,
+  DEMO_COOKIE,
+  SHOWCASE_ROLE_COOKIE,
+} from "./session-constants";
 import type { MemberRole } from "./domain";
 
 /** Pase e invitación de la empresa de ejemplo. Sirven en cualquier teléfono. */
@@ -28,12 +33,24 @@ export function readDemoCookie() {
   return document.cookie.split(";").some((part) => part.trim() === `${DEMO_COOKIE}=1`);
 }
 
-export function writeDemoSession(role: Exclude<MemberRole, "superadmin">) {
+export function writeDemoSession(
+  role: Exclude<MemberRole, "superadmin">,
+  actor?: { id: string; name: string },
+) {
   document.cookie = `${DEMO_COOKIE}=1; path=/; max-age=86400; samesite=lax`;
   document.cookie = `${SHOWCASE_ROLE_COOKIE}=${role}; path=/; max-age=86400; samesite=lax`;
+  if (actor) {
+    document.cookie = `${DEMO_ACTOR_COOKIE}=${actor.id}; path=/; max-age=86400; samesite=lax`;
+    document.cookie = `${DEMO_ACTOR_NAME_COOKIE}=${encodeURIComponent(actor.name)}; path=/; max-age=86400; samesite=lax`;
+  } else {
+    document.cookie = `${DEMO_ACTOR_COOKIE}=; path=/; max-age=0; samesite=lax`;
+    document.cookie = `${DEMO_ACTOR_NAME_COOKIE}=; path=/; max-age=0; samesite=lax`;
+  }
 }
 
 export function clearDemoSession() {
   document.cookie = `${DEMO_COOKIE}=; path=/; max-age=0; samesite=lax`;
   document.cookie = `${SHOWCASE_ROLE_COOKIE}=; path=/; max-age=0; samesite=lax`;
+  document.cookie = `${DEMO_ACTOR_COOKIE}=; path=/; max-age=0; samesite=lax`;
+  document.cookie = `${DEMO_ACTOR_NAME_COOKIE}=; path=/; max-age=0; samesite=lax`;
 }

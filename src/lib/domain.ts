@@ -166,6 +166,10 @@ export type TeamMember = {
   id: string;
   name: string;
   email: string;
+  /** Entra con un código de tableta. No tiene correo. */
+  usesAccessCode?: boolean;
+  /** Solo se muestra al crearlo, o en la demostración. */
+  accessCode?: string;
   role: MemberRole;
   active: boolean;
   status: MemberStatus;

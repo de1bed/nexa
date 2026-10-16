@@ -124,6 +124,8 @@ type WorkspaceValue = Omit<Directory, "viewer"> & {
    */
   stationId?: string;
   setStationId: (locationId: string) => void;
+  /** Usuario de tableta: la caseta no se cambia desde el guardia. */
+  lockedBoothId?: string;
   reload: (silent?: boolean) => Promise<void>;
   createInvitation: (
     draft: InvitationDraft,
@@ -228,12 +230,14 @@ export function WorkspaceProvider({
   viewer,
   organization: initialOrganization,
   sandbox = false,
+  lockedBoothId,
 }: {
   children: React.ReactNode;
   viewer: Viewer;
   organization: { id: string; name: string };
   /** Recorrido de demostración: datos de ejemplo, sin escribir en la base. */
   sandbox?: boolean;
+  lockedBoothId?: string;
 }) {
   const live = isLiveMode() && !sandbox;
 
@@ -299,6 +303,7 @@ export function WorkspaceProvider({
     [booths],
   );
   const boothId = useMemo(() => {
+    if (lockedBoothId) return lockedBoothId;
     if (activeBooths.length === 0) return undefined;
     const known = (id?: string | null) =>
       id && activeBooths.some((booth) => booth.id === id) ? id : undefined;
@@ -312,7 +317,7 @@ export function WorkspaceProvider({
       fromSite ??
       (activeBooths.length === 1 ? activeBooths[0].id : undefined)
     );
-  }, [activeBooths, boothChoice, directory.viewer]);
+  }, [activeBooths, boothChoice, directory.viewer, lockedBoothId]);
   const stationId = useMemo(() => {
     if (boothId) return booths.find((booth) => booth.id === boothId)?.locationId;
     const known = (id?: string | null) =>
@@ -716,6 +721,7 @@ export function WorkspaceProvider({
       setStationId,
       boothId,
       setBoothId,
+      lockedBoothId,
       reload,
       createInvitation,
       createManualVisit,
@@ -737,6 +743,7 @@ export function WorkspaceProvider({
       setStationId,
       boothId,
       setBoothId,
+      lockedBoothId,
       reload,
       createInvitation,
       createManualVisit,

@@ -15,9 +15,11 @@ import { Brand } from "./brand";
 import { AccessCodeStep, accessRequestError } from "./access-code";
 import { ChoosePasswordStep } from "./choose-password";
 import { LanguageSwitcher } from "./language-switcher";
+import { TabletLogin } from "./tablet-login";
+import { UpdatesBell } from "./updates-bell";
 import { useI18n } from "./i18n-provider";
 import { Button, Field, PasswordInput, fieldClass } from "./ui";
-import { clearDemoSession } from "@/lib/demo-public";
+import { clearDemoSession, writeDemoSession } from "@/lib/demo-public";
 import { createClient } from "@/lib/supabase/client";
 import { destinationAfterLogin, isLiveMode, roleHome } from "@/lib/config";
 import { accessEmailSchema, signInSchema } from "@/lib/schemas";
@@ -25,13 +27,12 @@ import { SHOWCASE_ROLE_COOKIE } from "@/lib/session-constants";
 import type { MemberRole } from "@/lib/domain";
 
 const showcaseProfiles: Array<{
-  role: Exclude<MemberRole, "superadmin">;
-  descKey: "login.adminDesc" | "login.hostDesc" | "login.guardDesc";
+  role: Exclude<MemberRole, "superadmin" | "guard">;
+  descKey: "login.adminDesc" | "login.hostDesc";
   icon: typeof Users;
 }> = [
   { role: "admin", descKey: "login.adminDesc", icon: Users },
   { role: "host", descKey: "login.hostDesc", icon: UserRound },
-  { role: "guard", descKey: "login.guardDesc", icon: ShieldCheck },
 ];
 
 /** Marca el perfil elegido en modo vitrina; no es un mecanismo de seguridad. */
@@ -64,8 +65,13 @@ export function LoginForm() {
   const [error, setError] = useState(
     params.get("error") === "invalid_link" ? t("login.expiredLink") : "",
   );
+  const requestedDoor = params.get("door");
+  const [door, setDoor] = useState<"staff" | "guard" | null>(
+    requestedDoor === "guard" || requestedDoor === "staff" ? requestedDoor : null,
+  );
 
-  function enterShowcase(role: Exclude<MemberRole, "superadmin">) {
+  function enterShowcase(role: Exclude<MemberRole, "superadmin" | "guard">) {
+    writeDemoSession(role);
     rememberShowcaseRole(role);
     router.push(roleHome[role]);
     router.refresh();
@@ -205,22 +211,87 @@ export function LoginForm() {
             <>
               <div className="flex items-start justify-between gap-3">
                 <Brand />
-                <LanguageSwitcher compact />
+                <div className="flex items-center gap-1">
+                  <UpdatesBell />
+                  <LanguageSwitcher compact />
+                </div>
               </div>
 
-              <header className="mt-10">
+              {door && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDoor(null);
+                    setError("");
+                  }}
+                  className="mt-8 text-sm font-semibold text-slate-500"
+                >
+                  {t("login.doorBack")}
+                </button>
+              )}
+
+              <header className={door ? "mt-4" : "mt-10"}>
                 <p className="text-sm font-semibold text-[#0d9d99]">
                   {live ? t("login.welcomeBack") : t("login.demoMode")}
                 </p>
                 <h1 className="mt-2 text-[32px] font-semibold leading-tight tracking-[-.035em]">
-                  {live ? t("login.accessSpace") : t("login.chooseProfile")}
+                  {door === "guard"
+                    ? t("login.doorGuard")
+                    : door === "staff"
+                      ? t("login.doorStaff")
+                      : t("login.doorTitle")}
                 </h1>
                 <p className="mt-3 text-[15px] leading-6 text-slate-500">
-                  {live ? t("login.liveHint") : t("login.showcaseExplore")}
+                  {door === "guard"
+                    ? t("login.tabletHint")
+                    : door === "staff"
+                      ? live
+                        ? t("login.liveHint")
+                        : t("login.staffDemoHint")
+                      : live
+                        ? t("login.doorLead")
+                        : t("login.showcaseExplore")}
                 </p>
               </header>
 
-              {!live ? (
+              {door === null ? (
+                <div className="mt-8 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setDoor("staff")}
+                    className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition active:scale-[.99] active:bg-slate-50"
+                  >
+                    <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
+                      <Users size={22} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">{t("login.doorStaff")}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                        {t("login.doorStaffHint")}
+                      </span>
+                    </span>
+                    <ArrowRight size={19} className="shrink-0 text-slate-300" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDoor("guard")}
+                    className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left transition active:scale-[.99] active:bg-slate-50"
+                  >
+                    <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#071426] text-white">
+                      <ShieldCheck size={22} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">{t("login.doorGuard")}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                        {t("login.doorGuardHint")}
+                      </span>
+                    </span>
+                    <ArrowRight size={19} className="shrink-0 text-slate-300" />
+                  </button>
+                </div>
+              ) : door === "guard" ? (
+                <TabletLogin mode="login" demo={!live} plain />
+              ) : !live ? (
                 <div className="mt-8 space-y-3">
                   {showcaseProfiles.map((profile) => (
                     <button
@@ -303,9 +374,6 @@ export function LoginForm() {
                     </button>
                   </form>
 
-                  <p className="mt-6 text-center text-sm leading-6 text-slate-500">
-                    {t("login.companyKeyHint")}
-                  </p>
                 </>
               )}
             </>

@@ -18,6 +18,11 @@ export function SessionExit({
   const { t } = useI18n();
 
   async function exit() {
+    try {
+      await fetch("/api/auth/station", { method: "DELETE" });
+    } catch {
+      // Si la tableta no estaba abierta, el cierre de sesión sigue.
+    }
     if (readDemoCookie()) {
       clearDemoSession();
       router.replace("/demo");

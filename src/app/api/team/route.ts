@@ -7,6 +7,7 @@ import { issueTeamInvite } from "@/lib/server/team-invite";
 import { teamInviteSchema } from "@/lib/schemas";
 import { maskEmail } from "@/lib/security";
 import type { MemberRole, MemberStatus } from "@/lib/domain";
+import { isGuardAccessEmail } from "@/lib/guard-code";
 import { selectWithBoothFallback } from "@/lib/server/visit-mapper";
 
 export const dynamic = "force-dynamic";
@@ -39,9 +40,7 @@ export async function GET() {
       { status: 500 },
     );
 
-  return NextResponse.json(
-    {
-      members: (data ?? []).map((row) => {
+  const members = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
         const profile = row.profile as unknown as {
           full_name?: string;
           email?: string;
@@ -54,11 +53,15 @@ export async function GET() {
           name?: string;
         } | null;
         const status = (row.status as MemberStatus) ?? (row.active ? "active" : "suspended");
+        const email = profile?.email ?? "";
+        const usesAccessCode = isGuardAccessEmail(email);
         return {
           id: row.profile_id as string,
           role: row.role as MemberRole,
           active: row.active as boolean,
           status,
+          usesAccessCode,
+          accessCode: undefined as string | undefined,
           departmentId: (row.department_id as string | null) ?? undefined,
           department: department?.name ?? undefined,
           defaultLocationId:
@@ -67,7 +70,7 @@ export async function GET() {
           defaultBoothId: (row.default_booth_id as string | null) ?? undefined,
           defaultBooth: defaultBooth?.name ?? undefined,
           name: profile?.full_name ?? "Usuario",
-          email: profile?.email ?? "",
+          email: usesAccessCode ? "" : email,
           joinedAt: (row.joined_at as string | null) ?? undefined,
           invitedAt: row.created_at as string,
           inviteDelivery: row.invite_delivery as
@@ -76,8 +79,28 @@ export async function GET() {
             | "development"
             | undefined,
         };
-      }),
-    },
+      });
+
+  const admin = createAdminClient();
+  const { data: codeRows } = await admin
+    .from("guard_access_codes")
+    .select("profile_id, code_display")
+    .eq("organization_id", organizationId)
+    .eq("active", true);
+  const codes = new Map<string, string>();
+  for (const row of codeRows ?? []) {
+    const plain = row.code_display as string | null;
+    if (plain) codes.set(row.profile_id as string, plain);
+  }
+  for (const member of members) {
+    const code = codes.get(member.id);
+    if (!code) continue;
+    member.usesAccessCode = true;
+    member.accessCode = code;
+  }
+
+  return NextResponse.json(
+    { members },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

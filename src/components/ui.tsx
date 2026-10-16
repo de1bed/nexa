@@ -242,6 +242,7 @@ export function Field({
   optional,
   warning,
   dark,
+  info,
   children,
 }: {
   label: string;
@@ -250,18 +251,23 @@ export function Field({
   optional?: boolean;
   warning?: boolean;
   dark?: boolean;
+  /** Botón de ayuda. Va fuera de la etiqueta para que el toque no active el campo. */
+  info?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <label className={cn("block", warning && "rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200")}>
-      <span className="mb-2 flex items-baseline justify-between gap-2">
-        <span
-          className={cn(
-            "text-sm font-medium",
-            dark ? "text-slate-200" : "text-[#071426]",
-          )}
-        >
-          {label}
+      <span className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "text-sm font-medium",
+              dark ? "text-slate-200" : "text-[#071426]",
+            )}
+          >
+            {label}
+          </span>
+          {info}
         </span>
         {optional && (
           <span className="text-xs text-slate-400">

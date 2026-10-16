@@ -39,6 +39,10 @@ import {
   readDemoBooths,
   upsertDemoBooth,
 } from "@/lib/showcase-store";
+import { generateGuardCode } from "@/lib/guard-code";
+import { saveExtraGuardCode } from "@/lib/demo-guard-codes";
+import { TabletAccounts } from "./tablet-accounts";
+import { GuardRoster } from "./guard-roster";
 import {
   showcaseBooths,
   showcaseLocations,
@@ -112,7 +116,7 @@ function formatTimeSince(dateString: string): string {
 /* ========================================================================== */
 
 export function TeamPage() {
-  const { live, viewer, reload, locations, booths } = useWorkspace();
+  const { live, viewer, reload } = useWorkspace();
   const { t } = useI18n();
   const [members, setMembers] = useState<TeamMember[]>(live ? [] : showcaseTeam);
   const [joinCodes, setJoinCodes] = useState<JoinCode[]>([]);
@@ -124,7 +128,8 @@ export function TeamPage() {
   const [result, setResult] = useState<{
     member: TeamMember;
     delivery: "sent" | "development" | "failed";
-    inviteUrl: string;
+    inviteUrl?: string;
+    accessCode?: string;
   } | null>(null);
   const [departments, setDepartments] = useState<AreaOption[]>(
     live
@@ -141,6 +146,7 @@ export function TeamPage() {
     email: "",
     role: "host" as MemberRole,
     departmentId: "",
+    codeOnly: false,
   });
   const [codeForm, setCodeForm] = useState({
     role: "host" as MemberRole,
@@ -187,6 +193,51 @@ export function TeamPage() {
     event.preventDefault();
     setBusy(true);
     try {
+      if (form.role === "guard") {
+        if (live) {
+          const response = await fetch("/api/team/guard-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fullName: form.fullName,
+              departmentId: form.departmentId || null,
+            }),
+          });
+          if (!response.ok)
+            throw new Error(await readError(response, "No fue posible crear al guardia"));
+          const payload = (await response.json()) as {
+            member: TeamMember;
+            accessCode: string;
+          };
+          setMembers((current) => [...current, payload.member]);
+          setResult({
+            member: { ...payload.member, accessCode: payload.accessCode },
+            delivery: "development",
+            accessCode: payload.accessCode,
+          });
+        } else {
+          const accessCode = generateGuardCode();
+          const member: TeamMember = {
+            id: crypto.randomUUID(),
+            name: form.fullName,
+            email: "",
+            role: "guard",
+            departmentId: form.departmentId || undefined,
+            department: departments.find((area) => area.id === form.departmentId)?.name,
+            active: true,
+            status: "active",
+            usesAccessCode: true,
+            accessCode,
+            joinedAt: new Date().toISOString(),
+          };
+          saveExtraGuardCode({ id: member.id, name: member.name, code: accessCode });
+          setMembers((current) => [...current, member]);
+          setResult({ member, delivery: "development", accessCode });
+        }
+        setForm({ fullName: "", email: "", role: "host", departmentId: "", codeOnly: false });
+        if (live) void reload();
+        return;
+      }
       if (live) {
         const response = await fetch("/api/team", {
           method: "POST",
@@ -233,7 +284,7 @@ export function TeamPage() {
           inviteUrl: `${window.location.origin}/invite/demo`,
         });
       }
-      setForm({ fullName: "", email: "", role: "host", departmentId: "" });
+      setForm({ fullName: "", email: "", role: "host", departmentId: "", codeOnly: false });
       if (live) void reload();
     } catch (reason) {
       toast.error(
@@ -458,6 +509,13 @@ export function TeamPage() {
             <Button
               onClick={() => {
                 setResult(null);
+                setForm({
+                  fullName: "",
+                  email: "",
+                  role: "host",
+                  departmentId: "",
+                  codeOnly: false,
+                });
                 setOpen(true);
               }}
             >
@@ -473,6 +531,24 @@ export function TeamPage() {
         departments={departments}
         onDepartments={setDepartments}
       />
+
+      <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+        <GuardRoster
+          guards={members.filter((member) => member.role === "guard")}
+          onCreate={() => {
+            setResult(null);
+            setForm({
+              fullName: "",
+              email: "",
+              role: "guard",
+              departmentId: "",
+              codeOnly: true,
+            });
+            setOpen(true);
+          }}
+        />
+        <TabletAccounts />
+      </div>
 
       {loading ? (
         <Card>
@@ -500,7 +576,9 @@ export function TeamPage() {
         />
       ) : (
         <div className="space-y-2.5">
-          {members.map((member) => (
+          {members
+            .filter((member) => member.role !== "guard")
+            .map((member) => (
             <Card
               key={member.id}
               className={cn(
@@ -523,7 +601,13 @@ export function TeamPage() {
                 </p>
                 <p className="truncate text-sm text-slate-500">
                   {t(`roles.${member.role}`)}
-                  {member.department ? ` · ${member.department}` : ""} · {member.email}
+                  {member.department ? ` · ${member.department}` : ""}
+                  {" · "}
+                  {member.usesAccessCode
+                    ? member.accessCode
+                      ? `Código ${member.accessCode}`
+                      : "Código de tableta"
+                    : member.email}
                 </p>
               </div>
               <button
@@ -598,16 +682,52 @@ export function TeamPage() {
           setOpen(false);
           setResult(null);
         }}
-        title={result ? `${result.member.name} ya está en el equipo` : "Invitar al equipo"}
+        title={
+          result?.accessCode
+            ? `Código de ${result.member.name}`
+            : result
+              ? `${result.member.name} ya está en el equipo`
+              : form.role === "guard"
+                ? "Código de guardia"
+                : "Invitar al equipo"
+        }
         description={
-          result
-            ? result.delivery === "sent"
-              ? `Le enviamos a ${result.member.email} el enlace para crear su cuenta.`
-              : "La invitación quedó lista. Comparte el enlace para que cree su contraseña."
-            : "Recibirá un correo para crear su cuenta y unirse a esta organización."
+          result?.accessCode
+            ? "No tiene correo. En la tableta escribe este código para registrar entradas y salidas a su nombre."
+            : result
+              ? result.delivery === "sent"
+                ? `Le enviamos a ${result.member.email} el enlace para crear su cuenta.`
+                : "La invitación quedó lista. Comparte el enlace para que cree su contraseña."
+              : form.role === "guard"
+                ? "Escribe el nombre. No se pide correo. El código se muestra una sola vez."
+                : "Recibirá un correo para crear su cuenta y unirse a esta organización."
         }
       >
-        {result ? (
+        {result?.accessCode ? (
+          <div className="space-y-4">
+            <Callout tone="success">
+              Anótalo en la tableta de la caseta. Cada entrada y salida quedará
+              a nombre de {result.member.name}.
+            </Callout>
+            <CopyField value={result.accessCode} label="Código de acceso" />
+            <Button
+              variant="ghost"
+              block
+              onClick={() => {
+                setResult(null);
+                setForm({
+                  fullName: "",
+                  email: "",
+                  role: "guard",
+                  departmentId: "",
+                  codeOnly: true,
+                });
+              }}
+            >
+              Crear otro guardia
+            </Button>
+          </div>
+        ) : result ? (
           <div className="space-y-4">
             {result.delivery === "sent" ? (
               <Callout tone="success">
@@ -626,8 +746,11 @@ export function TeamPage() {
               </Callout>
             )}
 
+            {result.inviteUrl && (
             <CopyField value={result.inviteUrl} label="Enlace para crear cuenta" />
+            )}
 
+            {result.inviteUrl && (
             <ShareButton
               url={result.inviteUrl}
               title={`Únete a ${result.member.role === "guard" ? "caseta" : "NEXA VISIT"}`}
@@ -636,13 +759,14 @@ export function TeamPage() {
             >
               Compartir por WhatsApp o correo
             </ShareButton>
+            )}
 
             <Button
               variant="ghost"
               block
               onClick={() => {
                 setResult(null);
-                setForm({ fullName: "", email: "", role: "host", departmentId: "" });
+                setForm({ fullName: "", email: "", role: "host", departmentId: "", codeOnly: false });
               }}
             >
               Invitar a otra persona
@@ -660,17 +784,19 @@ export function TeamPage() {
               }
             />
           </Field>
-          <Field label="Correo">
-            <input
-              required
-              type="email"
-              className={fieldClass}
-              value={form.email}
-              onChange={(event) =>
-                setForm({ ...form, email: event.target.value })
-              }
-            />
-          </Field>
+          {form.role !== "guard" && (
+            <Field label="Correo">
+              <input
+                required
+                type="email"
+                className={fieldClass}
+                value={form.email}
+                onChange={(event) =>
+                  setForm({ ...form, email: event.target.value })
+                }
+              />
+            </Field>
+          )}
           {departments.length > 0 && (
             <Field label="Área">
               <select
@@ -689,26 +815,28 @@ export function TeamPage() {
               </select>
             </Field>
           )}
-          <Field label="Rol">
-            <select
-              className={fieldClass}
-              value={form.role}
-              onChange={(event) =>
-                setForm({ ...form, role: event.target.value as MemberRole })
-              }
-            >
-              <option value="host">Anfitrión — invita y recibe visitas</option>
-              <option value="guard">Guardia — valida accesos en caseta</option>
-              <option value="admin">Administración — control total</option>
-            </select>
-          </Field>
+          {form.role !== "guard" && (
+            <Field label="Rol">
+              <select
+                className={fieldClass}
+                value={form.role}
+                onChange={(event) =>
+                  setForm({ ...form, role: event.target.value as MemberRole })
+                }
+              >
+                <option value="host">Anfitrión — invita y recibe visitas</option>
+                <option value="admin">Administración — control total</option>
+              </select>
+            </Field>
+          )}
           <Button type="submit" variant="accent" size="lg" block disabled={busy}>
             {busy ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
-            Enviar invitación
+            {form.role === "guard" ? "Crear código de guardia" : "Enviar invitación"}
           </Button>
           <Callout tone="neutral">
-            Recibirá un enlace para crear su cuenta y elegir contraseña. Queda
-            unido a esta organización al terminar.
+            {form.role === "guard"
+              ? "No usa correo. Quien escribe este código en la tableta entra como ese guardia."
+              : "Recibirá un enlace para crear su cuenta y elegir contraseña. Queda unido a esta organización al terminar."}
           </Callout>
         </form>
         )}
@@ -889,72 +1017,8 @@ export function TeamPage() {
               </Field>
             )}
 
-            {editing.role === "guard" &&
-              (booths.filter((booth) => booth.active).length > 1 ||
-                locations.length > 1) && (
-              <Field
-                label={t("team.defaultStation")}
-                hint={t("team.defaultStationHint")}
-              >
-                {booths.some((booth) => booth.active) ? (
-                  <select
-                    className={fieldClass}
-                    value={editing.defaultBoothId ?? ""}
-                    disabled={busy}
-                    onChange={(event) => {
-                      const defaultBoothId = event.target.value;
-                      const booth = booths.find((item) => item.id === defaultBoothId);
-                      void updateMember(editing, {
-                        defaultBoothId: defaultBoothId || null,
-                        defaultBooth: booth?.name,
-                        defaultLocationId: booth?.locationId ?? null,
-                        defaultLocation: locations.find(
-                          (site) => site.id === booth?.locationId,
-                        )?.name,
-                      });
-                    }}
-                  >
-                    <option value="">{t("team.noStation")}</option>
-                    {locations.map((site) => {
-                      const siteBooths = booths.filter(
-                        (booth) => booth.locationId === site.id && booth.active,
-                      );
-                      if (siteBooths.length === 0) return null;
-                      return (
-                        <optgroup key={site.id} label={site.name}>
-                          {siteBooths.map((booth) => (
-                            <option key={booth.id} value={booth.id}>
-                              {booth.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <select
-                    className={fieldClass}
-                    value={editing.defaultLocationId ?? ""}
-                    disabled={busy}
-                    onChange={(event) => {
-                      const defaultLocationId = event.target.value;
-                      void updateMember(editing, {
-                        defaultLocationId: defaultLocationId || null,
-                        defaultLocation: locations.find(
-                          (site) => site.id === defaultLocationId,
-                        )?.name,
-                      });
-                    }}
-                  >
-                    <option value="">{t("team.noStation")}</option>
-                    {locations.map((site) => (
-                      <option key={site.id} value={site.id}>
-                        {site.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Field>
+            {editing.role === "guard" && (
+              <Callout tone="neutral">{t("team.guardsAboutBody")}</Callout>
             )}
 
             {editing.id !== viewer.id && (
