@@ -240,9 +240,13 @@ export const es = {
     tabletHint:
       "Primero la clave de la tableta y el usuario de la caseta. Después se abre el código del guardia.",
     tabletCompany: "Clave de la tableta",
+    tabletCompanyHint: "Está en Equipo > Casetas. Formato NEXA-XXXXXX.",
     tabletUser: "Usuario",
+    tabletUserHint: "Por ejemplo caseta.principal. No es tu correo ni el nombre de la caseta.",
     tabletContinue: "Continuar",
     tabletFail: "Esa clave de la tableta o ese usuario no coinciden.",
+    tabletCodeInvalid: "Esa clave de la tableta no es válida. Revísala en Equipo > Casetas.",
+    tabletUserNotFound: "Ese usuario de tableta no existe. Revísalo en Equipo > Casetas.",
     tabletClosed: "Primero abre la tableta con su clave y el usuario.",
     tabletDemo:
       "En la demostración, la clave es NOVA-2026 y los usuarios son norte y proveedores. Carlos usa 4821-9036 y Lucía usa 7352-6410.",
@@ -275,7 +279,7 @@ export const es = {
     switchBody:
       "En la caseta, ese botón vuelve a mostrar los tres datos, pero la clave y el usuario van censurados. Solo se escribe el código de quien entra. Para volver a ver la clave y el usuario hay que cerrar sesión por completo.",
     manage:
-      "Todo se administra en Equipo: la clave, los usuarios de cada caseta y el código de cada guardia.",
+      "Todo se administra en Equipo > Casetas: la clave de la tableta, los usuarios de cada caseta y el código de cada guardia.",
     demoNote:
       "En esta demostración la clave es NOVA-2026, los usuarios son norte y proveedores, Carlos usa 4821-9036 y Lucía usa 7352-6410.",
     openTeam: "Ir a Equipo",
@@ -640,12 +644,16 @@ export const es = {
     eyebrow: "Administración",
     description: "Quién puede invitar, recibir visitantes y operar la caseta.",
     joinCode: "Código para unirse",
+    joinCodeNote: "Para invitar al equipo, no para la tableta",
     joinCodeBody:
-      "Con este código alguien pide unirse a la empresa. La tableta no lo usa. La clave que abre la tableta está en Casetas.",
+      "Con este código alguien pide unirse como anfitrión o administración. No es para la tableta de la caseta. La clave de la tableta está abajo, en la tarjeta Casetas.",
     copyJoinCode: "Copiar código",
     joinCodeCopied: "Código copiado",
     stationUsersTitle: "Usuarios de las casetas",
     stationUserLabel: "Usuario",
+    tabletUserLabel: "Usuario para la tableta",
+    noStationUsers: "Todavía no hay usuarios de tableta. Crea uno para poder abrir la caseta.",
+    usernameCopied: "Usuario copiado",
     tabletsTitle: "Casetas",
     tabletsLead:
       "Elige una caseta que ya está en una sede. Con esa elección se crea el usuario para abrir esa tableta.",
@@ -683,7 +691,11 @@ export const es = {
       "El código identifica al guardia. No lo ata a una caseta: entra en la tableta que ya esté abierta, sea cual sea.",
     showCode: "Ver código",
     hideCode: "Ocultar código",
-    codeMissing: "Este código se creó antes y ya no se puede mostrar.",
+    codeMissing: "Código no visible",
+    regenerateCode: "Regenerar",
+    regenerateConfirm: "¿Regenerar el código de {name}? El código anterior dejará de funcionar.",
+    regenerateSuccess: "Código regenerado. Anota el nuevo.",
+    regenerateFail: "No fue posible regenerar el código.",
     anyBooth: "Entra en cualquier caseta",
     userWillBe: "El usuario será {name}",
     boothTaken: "Esa caseta ya tiene usuario.",
@@ -1513,9 +1525,13 @@ export const en: DeepStringify<typeof es> = {
     tabletHint:
       "First the tablet key and the booth user. Then the guard code unlocks.",
     tabletCompany: "Tablet key",
+    tabletCompanyHint: "Found in Team > Booths. Format NEXA-XXXXXX.",
     tabletUser: "User",
+    tabletUserHint: "For example caseta.principal. Not your email or the booth name.",
     tabletContinue: "Continue",
     tabletFail: "That tablet key or user does not match.",
+    tabletCodeInvalid: "That tablet key is not valid. Check it in Team > Booths.",
+    tabletUserNotFound: "That tablet user does not exist. Check it in Team > Booths.",
     tabletClosed: "Open the tablet with its key and the user first.",
     tabletDemo:
       "In the demo, the key is NOVA-2026 and the users are norte and proveedores. Carlos uses 4821-9036 and Lucía uses 7352-6410.",
@@ -1548,7 +1564,7 @@ export const en: DeepStringify<typeof es> = {
     switchBody:
       "On the booth, that button shows the three details again, but the key and the user stay masked. Only the incoming guard code is typed. Seeing the key and the user again requires a full sign-out.",
     manage:
-      "Everything is managed in Team: the key, the user for each booth, and each guard code.",
+      "Everything is managed in Team > Booths: the tablet key, the user for each booth, and each guard code.",
     demoNote:
       "In this demo the key is NOVA-2026, the users are norte and proveedores, Carlos uses 4821-9036 and Lucía uses 7352-6410.",
     openTeam: "Go to Team",
@@ -1911,12 +1927,16 @@ export const en: DeepStringify<typeof es> = {
     eyebrow: "Admin",
     description: "Who can invite, receive visitors, and run the booth.",
     joinCode: "Code to join",
+    joinCodeNote: "For inviting to the team, not for the tablet",
     joinCodeBody:
-      "Someone uses this code to ask to join the company. The tablet does not use it. The key that opens the tablet is in Booths.",
+      "Someone uses this code to ask to join as host or admin. Not for the booth tablet. The tablet key is below, in the Booths card.",
     copyJoinCode: "Copy code",
     joinCodeCopied: "Code copied",
     stationUsersTitle: "Booth users",
     stationUserLabel: "User",
+    tabletUserLabel: "User for the tablet",
+    noStationUsers: "No tablet users yet. Create one to be able to open the booth.",
+    usernameCopied: "User copied",
     tabletsTitle: "Booths",
     tabletsLead:
       "Pick a booth that already belongs to a site. That choice creates the user that opens that tablet.",
@@ -1954,7 +1974,11 @@ export const en: DeepStringify<typeof es> = {
       "The code identifies the guard. It does not tie them to one booth: they sign in on whichever tablet is already open.",
     showCode: "Show code",
     hideCode: "Hide code",
-    codeMissing: "This code was created earlier and can no longer be shown.",
+    codeMissing: "Code not visible",
+    regenerateCode: "Regenerate",
+    regenerateConfirm: "Regenerate {name}'s code? The old code will stop working.",
+    regenerateSuccess: "Code regenerated. Write down the new one.",
+    regenerateFail: "Could not regenerate the code.",
     anyBooth: "Signs in at any booth",
     userWillBe: "The user will be {name}",
     boothTaken: "That booth already has a user.",

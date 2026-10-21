@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Copy, Shield } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Card, Field, fieldClass } from "./ui";
+import { Button, Card, fieldClass } from "./ui";
 import { useI18n } from "./i18n-provider";
 
 export type AreaOption = { id: string; name: string };
@@ -108,10 +108,20 @@ export function OrgAccessPanel({
 
   return (
     <div className="mb-8 grid gap-4 lg:grid-cols-2">
-      <Card className="p-5">
-        <p className="text-sm font-semibold text-[#0d9d99]">{t("team.joinCode")}</p>
-        <p className="mt-2 font-mono text-lg tracking-wide">{accessKey || "—"}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{t("team.joinCodeBody")}</p>
+      <Card className="border-blue-100 bg-blue-50/50 p-5">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white">
+            <Shield size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-blue-700">{t("team.joinCode")}</p>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-blue-500">
+              {t("team.joinCodeNote")}
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 font-mono text-lg tracking-wide">{accessKey || "—"}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{t("team.joinCodeBody")}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             variant="outline"

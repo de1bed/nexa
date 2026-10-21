@@ -10,7 +10,8 @@ import { findDemoGuardByCode } from "@/lib/demo-guard-codes";
 import { findDemoStation } from "@/lib/demo-stations";
 import { clearDemoSession, writeDemoSession } from "@/lib/demo-public";
 import { isLiveMode, roleHome } from "@/lib/config";
-import { formatCompanyCode } from "@/lib/station-access";
+import { formatCompanyCode, normalizeCompanyCode } from "@/lib/station-access";
+import { normalizeGuardCode } from "@/lib/guard-code";
 
 const MASK = "••••••••";
 
@@ -44,21 +45,33 @@ export function TabletLogin({
     event.preventDefault();
     setBusy(true);
     setError("");
+    const normalizedCode = normalizeCompanyCode(companyCode);
+    const normalizedUser = username.trim().toLowerCase();
     try {
-      const station = live ? null : findDemoStation(companyCode, username);
+      const station = live ? null : findDemoStation(normalizedCode, normalizedUser);
       if (!live && !station) throw new Error(t("login.tabletFail"));
       const response = await fetch("/api/auth/station", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyCode,
-          username,
+          companyCode: normalizedCode,
+          username: normalizedUser,
           demoStationId: station?.id,
           demoBoothId: station?.boothId,
         }),
       });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) throw new Error(payload.error ?? t("login.tabletFail"));
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        errorType?: "invalid_code" | "user_not_found" | "generic";
+      };
+      if (!response.ok) {
+        if (payload.errorType === "invalid_code") {
+          throw new Error(t("login.tabletCodeInvalid"));
+        } else if (payload.errorType === "user_not_found") {
+          throw new Error(t("login.tabletUserNotFound"));
+        }
+        throw new Error(payload.error ?? t("login.tabletFail"));
+      }
       setCompanyCode("");
       setUsername("");
       setUnlocked(true);
@@ -73,6 +86,7 @@ export function TabletLogin({
     event.preventDefault();
     setBusy(true);
     setError("");
+    const normalizedGuardCode = normalizeGuardCode(guardCode);
     try {
       const station = await fetch("/api/auth/station", { cache: "no-store" });
       const stationPayload = (await station.json().catch(() => ({}))) as { open?: boolean };
@@ -80,14 +94,14 @@ export function TabletLogin({
 
       let redirect: Route = roleHome.guard;
       if (!live) {
-        const found = findDemoGuardByCode(guardCode);
+        const found = findDemoGuardByCode(normalizedGuardCode);
         if (!found) throw new Error(t("login.guardCodeFail"));
         writeDemoSession("guard", found);
       } else {
         const response = await fetch("/api/auth/guard-code", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: guardCode }),
+          body: JSON.stringify({ code: normalizedGuardCode }),
         });
         const payload = (await response.json().catch(() => ({}))) as {
           error?: string;
@@ -128,7 +142,11 @@ export function TabletLogin({
         </div>
       )}
 
-      <Field label={t("login.tabletCompany")} dark={switching}>
+      <Field
+        label={t("login.tabletCompany")}
+        dark={switching}
+        hint={unlocked ? undefined : t("login.tabletCompanyHint")}
+      >
         <input
           required={!unlocked}
           type="password"
@@ -136,12 +154,16 @@ export function TabletLogin({
           autoCapitalize="characters"
           disabled={unlocked || busy}
           className={fieldClass}
-          placeholder={unlocked || !demo ? undefined : "NOVA-2026"}
+          placeholder={unlocked ? undefined : demo ? "NOVA-2026" : "NEXA-QPGXZQ"}
           value={companyShown}
           onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
         />
       </Field>
-      <Field label={t("login.tabletUser")} dark={switching}>
+      <Field
+        label={t("login.tabletUser")}
+        dark={switching}
+        hint={unlocked ? undefined : t("login.tabletUserHint")}
+      >
         <input
           required={!unlocked}
           type="password"
@@ -149,7 +171,7 @@ export function TabletLogin({
           autoCapitalize="none"
           disabled={unlocked || busy}
           className={fieldClass}
-          placeholder={unlocked || !demo ? undefined : "norte"}
+          placeholder={unlocked ? undefined : demo ? "norte" : "caseta.principal"}
           value={userShown}
           onChange={(event) => setUsername(event.target.value.toLowerCase())}
         />

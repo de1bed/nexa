@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Tablet } from "lucide-react";
+import { Check, Copy, Tablet } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
 import { InfoTip } from "./info-tip";
-import { Button, Card, Field, fieldClass } from "./ui";
+import { Button, Callout, Card, Field, fieldClass } from "./ui";
 import { CopyField } from "./ui-client";
 import {
   DEMO_COMPANY_CODE,
@@ -158,29 +158,26 @@ export function TabletAccounts() {
         </div>
       )}
 
-      {stations.length > 0 && (
-        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {t("team.stationUsersTitle")}
-        </p>
+      {stations.length > 0 ? (
+        <>
+          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {t("team.stationUsersTitle")}
+          </p>
+          <ul className="space-y-2">
+            {stations.map((station) => (
+              <StationUserRow
+                key={station.id}
+                username={station.username}
+                location={placeOf(station.boothId, station.boothName)}
+              />
+            ))}
+          </ul>
+        </>
+      ) : (
+        <Callout tone="warning" className="mt-4">
+          {t("team.noStationUsers")}
+        </Callout>
       )}
-      <ul className={stations.length > 0 ? "space-y-2" : "mt-4 space-y-2"}>
-        {stations.map((station) => (
-          <li
-            key={station.id}
-            className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-sm"
-          >
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0d9d99]">
-                {t("team.stationUserLabel")}
-              </p>
-              <p className="font-semibold">{station.username}</p>
-            </div>
-            <span className="truncate text-right text-slate-500">
-              {placeOf(station.boothId, station.boothName)}
-            </span>
-          </li>
-        ))}
-      </ul>
 
       <form onSubmit={create} className="mt-4 space-y-3">
         <Field
@@ -218,5 +215,37 @@ export function TabletAccounts() {
         )}
       </form>
     </Card>
+  );
+}
+
+function StationUserRow({ username, location }: { username: string; location: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+
+  function copyUsername() {
+    navigator.clipboard.writeText(username);
+    setCopied(true);
+    toast.success(t("team.usernameCopied"));
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-sm">
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0d9d99]">
+          {t("team.tabletUserLabel")}
+        </p>
+        <p className="font-mono font-semibold">{username}</p>
+      </div>
+      <span className="truncate text-right text-xs text-slate-500">{location}</span>
+      <button
+        type="button"
+        onClick={copyUsername}
+        className="grid size-8 shrink-0 place-items-center rounded-xl text-slate-500 transition hover:bg-white hover:text-[#071426]"
+        aria-label={t("common.copy")}
+      >
+        {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+      </button>
+    </li>
   );
 }
