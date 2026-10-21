@@ -767,6 +767,25 @@ export function VisitorFlow({
           )}
 
           <div className="mt-7 space-y-4">
+            <p className="text-center text-xs leading-5 text-slate-500">
+              Al continuar, aceptas el{" "}
+              <Link
+                href="/privacidad"
+                target="_blank"
+                className="font-medium text-[#0d9d99] hover:underline"
+              >
+                aviso de privacidad
+              </Link>{" "}
+              y los{" "}
+              <Link
+                href="/terminos"
+                target="_blank"
+                className="font-medium text-[#0d9d99] hover:underline"
+              >
+                términos de uso
+              </Link>
+              .
+            </p>
             <Button
               variant="accent"
               size="lg"
@@ -1493,6 +1512,18 @@ export function VisitorFlow({
               {t("visitor.consent")}
             </span>
           </button>
+
+          <p className="mt-4 text-center text-xs text-slate-500">
+            Consulta el{" "}
+            <Link
+              href="/privacidad"
+              target="_blank"
+              className="font-medium text-[#0d9d99] hover:underline"
+            >
+              aviso de privacidad completo
+            </Link>{" "}
+            de Vortex Lab.
+          </p>
         </StepShell>
       )}
 

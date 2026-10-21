@@ -183,6 +183,21 @@ textarea {
   animation: nexa-pulse-ring 2s ease-out infinite;
 }
 
+@keyframes nexa-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-slide-up {
+  animation: nexa-slide-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .shimmer {
   background: linear-gradient(
     100deg,
