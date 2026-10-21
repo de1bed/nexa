@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { isLiveMode } from "@/lib/config";
@@ -33,7 +34,7 @@ function getSnapshot() {
   return snap.booted ? snap : serverSnap;
 }
 
-function boot() {
+function boot(autoOpen: boolean) {
   if (snap.booted) return;
   let seen = true;
   try {
@@ -41,7 +42,8 @@ function boot() {
   } catch {
     seen = true;
   }
-  emit({ open: !seen, unread: !seen, booted: true });
+  const shouldAutoOpen = autoOpen && !seen;
+  emit({ open: shouldAutoOpen, unread: !seen, booted: true });
 }
 
 function dismissUpdate() {
@@ -71,6 +73,7 @@ export function UpdatesBell({
 }) {
   const { t } = useI18n();
   const titleId = useId();
+  const pathname = usePathname();
   const demo = !isLiveMode();
   const [instanceId] = useState(() => titleId);
   const state = useSyncExternalStore(subscribe, getSnapshot, () => serverSnap);
@@ -81,7 +84,8 @@ export function UpdatesBell({
   );
 
   useEffect(() => {
-    boot();
+    const isLoginPage = pathname === "/login";
+    boot(!isLoginPage);
     if (dialogHostId) return;
     dialogHostId = instanceId;
     listeners.forEach((listener) => listener());
@@ -89,7 +93,7 @@ export function UpdatesBell({
       if (dialogHostId === instanceId) dialogHostId = null;
       listeners.forEach((listener) => listener());
     };
-  }, [instanceId]);
+  }, [instanceId, pathname]);
 
   useEffect(() => {
     if (!state.open || !isHost) return;

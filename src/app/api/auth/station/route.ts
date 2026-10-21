@@ -83,7 +83,10 @@ export async function POST(request: Request) {
     );
     if (!organization)
       return NextResponse.json(
-        { error: "Esa clave de la tableta o ese usuario no coinciden." },
+        {
+          error: "Esa clave de la tableta no es válida.",
+          errorType: "invalid_code",
+        },
         { status: 401 },
       );
 
@@ -96,7 +99,10 @@ export async function POST(request: Request) {
 
     if (!station?.active)
       return NextResponse.json(
-        { error: "Esa clave de la tableta o ese usuario no coinciden." },
+        {
+          error: "Ese usuario de tableta no existe. Revísalo en Equipo > Casetas.",
+          errorType: "user_not_found",
+        },
         { status: 401 },
       );
 

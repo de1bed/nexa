@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import { useI18n } from "./i18n-provider";
+import { useWorkspace } from "./workspace-provider";
 import { InfoTip } from "./info-tip";
 import { Button, Card } from "./ui";
 import type { TeamMember } from "@/lib/domain";
@@ -10,12 +12,42 @@ import type { TeamMember } from "@/lib/domain";
 export function GuardRoster({
   guards,
   onCreate,
+  onRegenerate,
 }: {
   guards: TeamMember[];
   onCreate: () => void;
+  onRegenerate?: (guardId: string, newCode: string) => void;
 }) {
   const { t } = useI18n();
+  const { live } = useWorkspace();
   const [shown, setShown] = useState<Record<string, boolean>>({});
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+
+  async function regenerateCode(guardId: string, guardName: string) {
+    const confirmed = window.confirm(
+      t("team.regenerateConfirm", { name: guardName }),
+    );
+    if (!confirmed) return;
+
+    setRegenerating(guardId);
+    try {
+      const response = await fetch(`/api/team/${guardId}/regenerate-code`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? t("team.regenerateFail"));
+      }
+      const payload = (await response.json()) as { accessCode: string };
+      onRegenerate?.(guardId, payload.accessCode);
+      setShown((current) => ({ ...current, [guardId]: true }));
+      toast.success(t("team.regenerateSuccess"));
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : t("team.regenerateFail"));
+    } finally {
+      setRegenerating(null);
+    }
+  }
 
   return (
     <Card className="h-full p-4 sm:p-5">
@@ -36,6 +68,7 @@ export function GuardRoster({
         {guards.map((guard) => {
           const open = Boolean(shown[guard.id]);
           const code = guard.accessCode ?? "";
+          const isRegenerating = regenerating === guard.id;
           return (
             <li
               key={guard.id}
@@ -63,8 +96,25 @@ export function GuardRoster({
                   </button>
                 </span>
               ) : (
-                <span className="max-w-40 text-right text-xs leading-5 text-slate-400">
-                  {t("team.codeMissing")}
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="text-right text-xs leading-5 text-slate-400">
+                    {t("team.codeMissing")}
+                  </span>
+                  {live && (
+                    <button
+                      type="button"
+                      disabled={isRegenerating}
+                      onClick={() => regenerateCode(guard.id, guard.name)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#071426] px-2 py-1.5 text-xs font-semibold text-white transition hover:bg-[#0d1e38] disabled:opacity-60"
+                    >
+                      {isRegenerating ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={14} />
+                      )}
+                      {t("team.regenerateCode")}
+                    </button>
+                  )}
                 </span>
               )}
             </li>

@@ -546,6 +546,15 @@ export function TeamPage() {
             });
             setOpen(true);
           }}
+          onRegenerate={(guardId, newCode) => {
+            setMembers((current) =>
+              current.map((member) =>
+                member.id === guardId
+                  ? { ...member, accessCode: newCode }
+                  : member,
+              ),
+            );
+          }}
         />
         <TabletAccounts />
       </div>
