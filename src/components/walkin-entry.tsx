@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { KeyRound, Loader2, LockKeyhole, UserRoundCheck } from "lucide-react";
 import { Brand } from "./brand";
 import { LanguageSwitcher } from "./language-switcher";
@@ -335,6 +336,26 @@ export function WalkinEntry({ token }: { token: string }) {
                     {busy && <Loader2 size={18} className="animate-spin" />}
                     {busy ? t("walkin.starting") : t("walkin.start")}
                   </Button>
+
+                  <p className="mt-4 text-center text-xs leading-5 text-slate-500">
+                    Al continuar, aceptas el{" "}
+                    <Link
+                      href="/privacidad"
+                      target="_blank"
+                      className="font-medium text-[#0d9d99] hover:underline"
+                    >
+                      aviso de privacidad
+                    </Link>{" "}
+                    y los{" "}
+                    <Link
+                      href="/terminos"
+                      target="_blank"
+                      className="font-medium text-[#0d9d99] hover:underline"
+                    >
+                      términos de uso
+                    </Link>
+                    .
+                  </p>
                 </form>
               )}
             </>
