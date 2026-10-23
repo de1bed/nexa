@@ -31,6 +31,13 @@ import { useI18n } from "./i18n-provider";
 import { InvitationPreview } from "./invitation-preview";
 import { AddToCalendar } from "./add-to-calendar";
 import { visitCalendarEvent } from "@/lib/calendar";
+import {
+  APP_TIME_ZONE,
+  calendarDateInTimeZone,
+  formatDateTimeLabel,
+  resolveTimeZone,
+  zonedDateTime,
+} from "@/lib/timezone";
 
 /** Una vía de envío. Solo se muestra si la instalación la tiene configurada. */
 function ChannelOption({
@@ -82,10 +89,8 @@ function ChannelOption({
   );
 }
 
-function todayPlus(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+function todayPlus(days: number, timeZone = APP_TIME_ZONE) {
+  return calendarDateInTimeZone(timeZone, new Date(), days);
 }
 
 function formatDateLong(dateString: string, locale: string): string {
@@ -170,6 +175,9 @@ export function InvitationForm() {
     () => form.locationId || locations[0]?.id || "",
     [form.locationId, locations],
   );
+  const locationTimeZone = resolveTimeZone(
+    locations.find((location) => location.id === activeLocation)?.timezone,
+  );
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -197,8 +205,12 @@ export function InvitationForm() {
       return;
     }
 
-    const startsAt = new Date(`${payload.date}T${payload.startTime}`);
-    const endsAt = new Date(`${payload.date}T${payload.endTime}`);
+    const startsAt = zonedDateTime(
+      payload.date,
+      payload.startTime,
+      locationTimeZone,
+    );
+    const endsAt = zonedDateTime(payload.date, payload.endTime, locationTimeZone);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
       setErrors({ date: t("common.invalidDate") });
       return;
@@ -714,13 +726,18 @@ export function InvitationForm() {
             </div>
             <p className="text-sm text-slate-500">
               {t("invite.passUntil", {
-                date: new Date(
-                  new Date(`${form.date}T${form.startTime}`).getTime() +
-                    form.passValidDays * 24 * 60 * 60 * 1000,
-                ).toLocaleString(intl, {
-                  dateStyle: "full",
-                  timeStyle: "short",
-                }),
+                date: formatDateTimeLabel(
+                  new Date(
+                    zonedDateTime(
+                      form.date,
+                      form.startTime,
+                      locationTimeZone,
+                    ).getTime() +
+                      form.passValidDays * 24 * 60 * 60 * 1000,
+                  ),
+                  locationTimeZone,
+                  intl,
+                ),
               })}
             </p>
 

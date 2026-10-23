@@ -2,6 +2,7 @@ import "server-only";
 import { createSign } from "node:crypto";
 import { googleWalletConfig } from "./config";
 import { appUrl } from "@/lib/config";
+import { formatDateTimeMedium, resolveTimeZone } from "@/lib/timezone";
 
 /**
  * Pase para Google Wallet.
@@ -42,12 +43,8 @@ function sign(payload: object, privateKey: string) {
   return `${header}.${body}.${base64url(signer.sign(privateKey))}`;
 }
 
-const dateLabel = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(new Date(value));
+const dateLabel = (value: string, timeZone?: string) =>
+  formatDateTimeMedium(value, resolveTimeZone(timeZone));
 
 /**
  * Devuelve el enlace «Guardar en Google Wallet», o `null` si la instalación no

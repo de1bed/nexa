@@ -34,6 +34,8 @@ export type Visit = {
   locationId?: string;
   location: string;
   locationAddress?: string;
+  /** IANA de la sede; las horas se guardan y se muestran en esta zona. */
+  locationTimezone?: string;
   /** Sala, piso o centro de juntas dentro de la sede. */
   internalPlace?: string;
   /** Enlace de la junta en línea, si la visita también ocurre ahí. */
@@ -282,6 +284,7 @@ export function formatDuration(ms: number) {
 const dateTimeMx = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "America/Tijuana",
 });
 
 /** Fecha y hora locales para bitácoras, CSV y pases. */

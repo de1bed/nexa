@@ -22,6 +22,7 @@ import {
 } from "@/lib/visitor-flow";
 import { localeFromCookieHeader } from "@/lib/i18n/types";
 import { translate } from "@/lib/i18n/catalog";
+import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,12 @@ const attachmentMetaSchema = z
     }),
   )
   .max(40);
+
+function relationTimezone(value: unknown) {
+  if (Array.isArray(value))
+    return (value[0] as { timezone?: string } | undefined)?.timezone;
+  return (value as { timezone?: string } | null | undefined)?.timezone;
+}
 
 const MAX_PHOTOS_PER_ATTACHMENT = 5;
 const MAX_FREE_ATTACHMENTS = 10;
@@ -174,7 +181,9 @@ export async function POST(
 
     const { data: visit } = await db
       .from("visits")
-      .select("id,organization_id,visitor_id,starts_at,ends_at,pass_valid_days")
+      .select(
+        "id,organization_id,visitor_id,starts_at,ends_at,pass_valid_days,location:locations(timezone)",
+      )
       .eq("id", resolved.visit_id)
       .maybeSingle();
     if (!visit)
@@ -473,10 +482,14 @@ export async function POST(
         to: values.email,
         visitorName: fullName,
         organizationName: resolved.organization_name,
-        dateLabel: new Intl.DateTimeFormat("es-MX", {
-          dateStyle: "full",
-          timeStyle: "short",
-        }).format(new Date(visit.starts_at)),
+        dateLabel: formatDateTimeLabel(
+          String(visit.starts_at),
+          resolveTimeZone(
+            relationTimezone(
+              (visit as { location?: unknown }).location,
+            ),
+          ),
+        ),
         passUrl,
       }).catch(() => ({ status: "failed" as const }));
 

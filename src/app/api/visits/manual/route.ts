@@ -13,6 +13,7 @@ import {
   isAllowedIdentityUpload,
 } from "@/lib/identity-file";
 import { DEFAULT_RETENTION_DAYS, retentionExpiresAt } from "@/lib/retention";
+import { formatTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     const [{ data: location }, { data: host }] = await Promise.all([
       db
         .from("locations")
-        .select("id")
+        .select("id,timezone")
         .eq("id", input.locationId)
         .eq("organization_id", organizationId)
         .eq("active", true)
@@ -212,9 +213,7 @@ export async function POST(request: Request) {
         hostName: visit.hostName,
         visitorName: visit.visitorName,
         locationName: visit.location,
-        timeLabel: new Intl.DateTimeFormat("es-MX", {
-          timeStyle: "short",
-        }).format(now),
+        timeLabel: formatTimeLabel(now, resolveTimeZone(location.timezone)),
       }).catch(() => ({ status: "failed" as const }));
       await writeNotification({
         organizationId,

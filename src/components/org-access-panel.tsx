@@ -46,10 +46,9 @@ export function OrgAccessPanel({
     let active = true;
 
     async function load() {
-      const [accessRes, areaRes, platformRes] = await Promise.all([
+      const [accessRes, areaRes] = await Promise.all([
         fetch("/api/access/requests", { cache: "no-store" }),
         fetch("/api/departments", { cache: "no-store" }),
-        fetch("/api/platform?probe=1", { cache: "no-store" }),
       ]);
       if (!active) return;
       if (accessRes.ok) {
@@ -70,8 +69,15 @@ export function OrgAccessPanel({
             .map((area) => ({ id: area.id, name: area.name })),
         );
       }
-      setPlatform(platformRes.ok);
     }
+
+    void fetch("/api/session", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const payload = (await response.json()) as { platformAdmin?: boolean };
+        if (active) setPlatform(Boolean(payload.platformAdmin));
+      })
+      .catch(() => undefined);
 
     void load();
     const timer = window.setInterval(() => void load(), 4000);

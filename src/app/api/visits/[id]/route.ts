@@ -10,6 +10,7 @@ import {
   visitSelectLegacy,
 } from "@/lib/server/visit-mapper";
 import { maskEmail } from "@/lib/security";
+import { formatTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -168,23 +169,27 @@ export async function PATCH(
     if (input.status === "checked_in" && visit?.hostEmail) {
       // El aviso dice por qué sede entró, que puede no ser la de la invitación.
       let entryLocation = visit.location;
-      if (input.locationId && input.locationId !== visit.locationId) {
+      let entryTimeZone = resolveTimeZone(visit.locationTimezone);
+      const placeId = input.locationId ?? visit.locationId;
+      if (placeId) {
         const { data: place } = await db
           .from("locations")
-          .select("name")
-          .eq("id", input.locationId)
+          .select("name,timezone")
+          .eq("id", placeId)
           .eq("organization_id", organizationId)
           .maybeSingle();
-        entryLocation = place?.name ?? entryLocation;
+        if (place) {
+          if (input.locationId && input.locationId !== visit.locationId)
+            entryLocation = place.name ?? entryLocation;
+          entryTimeZone = resolveTimeZone(place.timezone);
+        }
       }
       const delivery = await sendHostArrivalEmail({
         to: visit.hostEmail,
         hostName: visit.hostName,
         visitorName: visit.visitorName,
         locationName: entryLocation,
-        timeLabel: new Intl.DateTimeFormat("es-MX", {
-          timeStyle: "short",
-        }).format(new Date()),
+        timeLabel: formatTimeLabel(new Date(), entryTimeZone),
       }).catch(() => ({ status: "failed" as const }));
 
       await writeNotification({
