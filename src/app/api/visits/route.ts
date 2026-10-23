@@ -20,6 +20,7 @@ import { sendInvitationWhatsApp } from "@/lib/server/whatsapp";
 import { normalizeMeetingUrl } from "@/lib/schemas";
 import { clampPassDays, passExpiresAt } from "@/lib/pass-window";
 import { createAdminClient } from "@/lib/server/supabase-admin";
+import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
 
     const { data: location } = await db
       .from("locations")
-      .select("id,name,address")
+      .select("id,name,address,timezone")
       .eq("id", input.locationId)
       .eq("organization_id", organizationId)
       .eq("active", true)
@@ -319,10 +320,8 @@ export async function POST(request: Request) {
 
     const invitationUrl = `${appUrl()}/visit/${invitationToken}`;
     const hostName = hostProfile?.full_name ?? displayName;
-    const dateLabel = new Intl.DateTimeFormat("es-MX", {
-      dateStyle: "full",
-      timeStyle: "short",
-    }).format(new Date(input.startsAt));
+    const locationTimeZone = resolveTimeZone(location.timezone);
+    const dateLabel = formatDateTimeLabel(input.startsAt, locationTimeZone);
     const meetingUrl = normalizeMeetingUrl(input.meetingUrl);
     const calendar = visitCalendarEvent({
       id: visitId,
@@ -399,10 +398,7 @@ export async function POST(request: Request) {
         visitorName: input.visitorName,
         hostName,
         organizationName,
-        dateLabel: new Intl.DateTimeFormat("es-MX", {
-          dateStyle: "long",
-          timeStyle: "short",
-        }).format(new Date(input.startsAt)),
+        dateLabel: formatDateTimeLabel(input.startsAt, locationTimeZone),
         invitationPath: `visit/${invitationToken}`,
       }).catch(() => ({ status: "failed" as const }));
 
