@@ -6,6 +6,7 @@ import { isKnownDemoToken } from "@/lib/demo-public";
 import { Check, Download, ImageDown, Loader2, Share2 } from "lucide-react";
 import { Button } from "../ui";
 import { Sheet } from "../ui-client";
+import { formatDateTimeMedium } from "@/lib/timezone";
 
 /**
  * Genera una imagen del pase y la guarda (descarga / compartir a Fotos).
@@ -48,10 +49,7 @@ export function SavePassButton({
   }, [promptOnMount, token]);
 
   async function renderFile() {
-    const when = new Intl.DateTimeFormat("es-MX", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(startsAt));
+    const when = formatDateTimeMedium(startsAt);
     const payload =
       publicQr || isKnownDemoToken(token)
         ? `${window.location.origin}/pass/${encodeURIComponent(token)}`

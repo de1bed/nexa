@@ -688,6 +688,7 @@ export function TeamPage() {
       <Sheet
         open={open}
         onClose={() => {
+          if (busy) return;
           setOpen(false);
           setResult(null);
         }}
@@ -782,10 +783,11 @@ export function TeamPage() {
             </Button>
           </div>
         ) : (
-        <form onSubmit={invite} className="space-y-4">
+        <form onSubmit={invite} className="space-y-4" aria-busy={busy}>
           <Field label="Nombre completo">
             <input
               required
+              disabled={busy}
               className={fieldClass}
               value={form.fullName}
               onChange={(event) =>
@@ -797,6 +799,7 @@ export function TeamPage() {
             <Field label="Correo">
               <input
                 required
+                disabled={busy}
                 type="email"
                 className={fieldClass}
                 value={form.email}
@@ -809,6 +812,7 @@ export function TeamPage() {
           {departments.length > 0 && (
             <Field label="Área">
               <select
+                disabled={busy}
                 className={fieldClass}
                 value={form.departmentId}
                 onChange={(event) =>
@@ -827,6 +831,7 @@ export function TeamPage() {
           {form.role !== "guard" && (
             <Field label="Rol">
               <select
+                disabled={busy}
                 className={fieldClass}
                 value={form.role}
                 onChange={(event) =>
@@ -838,9 +843,23 @@ export function TeamPage() {
               </select>
             </Field>
           )}
+          {busy && (
+            <p className="flex items-center gap-2 text-sm font-medium text-[#0d9d99]">
+              <Loader2 size={16} className="animate-spin" />
+              {form.role === "guard"
+                ? "Creando el código…"
+                : "Enviando la invitación…"}
+            </p>
+          )}
           <Button type="submit" variant="accent" size="lg" block disabled={busy}>
             {busy ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
-            {form.role === "guard" ? "Crear código de guardia" : "Enviar invitación"}
+            {busy
+              ? form.role === "guard"
+                ? "Creando…"
+                : "Enviando…"
+              : form.role === "guard"
+                ? "Crear código de guardia"
+                : "Enviar invitación"}
           </Button>
           <Callout tone="neutral">
             {form.role === "guard"

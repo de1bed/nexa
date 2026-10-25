@@ -3,6 +3,7 @@ import { PKPass } from "passkit-generator";
 import { appleWalletConfig } from "./config";
 import type { WalletPassData } from "./google";
 import { appUrl } from "@/lib/config";
+import { formatDateTimeMedium, resolveTimeZone } from "@/lib/timezone";
 
 /**
  * Pase para Apple Wallet (.pkpass).
@@ -13,11 +14,8 @@ import { appUrl } from "@/lib/config";
  * visita: tiene lugar, horario y código de barras.
  */
 
-const timeLabel = (value: string) =>
-  new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+const timeLabel = (value: string, timeZone?: string) =>
+  formatDateTimeMedium(value, resolveTimeZone(timeZone));
 
 /**
  * Genera el archivo del pase, o `null` si la instalación no tiene configurados

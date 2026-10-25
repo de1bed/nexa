@@ -18,7 +18,7 @@ export const visitSelect =
   "check_in_booth_id,check_out_booth_id," +
   "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
   "host:profiles!visits_host_id_fkey(full_name,email)," +
-  "location:locations!visits_location_id_fkey(name,address)," +
+  "location:locations!visits_location_id_fkey(name,address,timezone)," +
   "check_in_booth:booths!visits_check_in_booth_id_fkey(name,location:locations!booths_location_id_fkey(name))," +
   "check_out_booth:booths!visits_check_out_booth_id_fkey(name,location:locations!booths_location_id_fkey(name))," +
   "documents:visitor_documents(id,deleted_at,document_type)," +
@@ -36,7 +36,7 @@ export const visitSelectLegacy =
   "internal_notes,visitor_notes,access_requirements,internal_place,meeting_url,consented_at," +
   "visitor:visitors(full_name,email,phone,company,document_type,document_number_masked)," +
   "host:profiles!visits_host_id_fkey(full_name,email)," +
-  "location:locations!visits_location_id_fkey(name,address)," +
+  "location:locations!visits_location_id_fkey(name,address,timezone)," +
   "documents:visitor_documents(id,deleted_at,document_type)," +
   "invitation:visit_invitations(invitee_name,invitee_email,invitee_phone,invitee_company,completed_at,revoked_at)," +
   "access:visit_access_locations(location_id,location:locations(name))," +
@@ -83,7 +83,9 @@ export function mapVisit(row: Row): Visit {
     document_number_masked?: string;
   }>(row.visitor);
   const host = pick<{ full_name?: string; email?: string }>(row.host);
-  const location = pick<{ name?: string; address?: string }>(row.location);
+  const location = pick<{ name?: string; address?: string; timezone?: string }>(
+    row.location,
+  );
   const checkInBooth = pick<{ name?: string; location?: unknown }>(row.check_in_booth);
   const checkOutBooth = pick<{ name?: string; location?: unknown }>(row.check_out_booth);
   const checkInSite = pick<{ name?: string }>(checkInBooth?.location);
@@ -140,6 +142,7 @@ export function mapVisit(row: Row): Visit {
     locationId: String(row.location_id ?? ""),
     location: location?.name ?? "Ubicación",
     locationAddress: location?.address ?? undefined,
+    locationTimezone: location?.timezone ?? undefined,
     startsAt: String(row.starts_at),
     endsAt: String(row.ends_at),
     passValidDays: Number(row.pass_valid_days ?? 1),

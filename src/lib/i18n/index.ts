@@ -1,15 +1,11 @@
+import { APP_TIME_ZONE } from "@/lib/timezone";
 import { getLocale } from "./store";
 import { localeIntl, type Locale } from "./types";
 import { translate } from "./catalog";
 
 type Vars = Record<string, string | number>;
 
-/**
- * Zona fija para pintar fechas en servidor y navegador con el mismo texto.
- * Sin ella, Node y el navegador pueden diferir una hora y React marca error
- * de hidratación. Tijuana es la sede principal de la operación.
- */
-const APP_TIME_ZONE = "America/Tijuana";
+export { APP_TIME_ZONE };
 
 export { translate } from "./catalog";
 

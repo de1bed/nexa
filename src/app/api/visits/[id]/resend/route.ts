@@ -11,6 +11,7 @@ import { getOrIssueStaffPass } from "@/lib/server/pass-issue";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { maskEmail } from "@/lib/security";
 import { passExpiresAt } from "@/lib/pass-window";
+import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +57,10 @@ export async function POST(
         { status: 409 },
       );
 
-    const dateLabel = new Intl.DateTimeFormat("es-MX", {
-      dateStyle: "full",
-      timeStyle: "short",
-    }).format(new Date(visit.startsAt));
+    const dateLabel = formatDateTimeLabel(
+      visit.startsAt,
+      resolveTimeZone(visit.locationTimezone),
+    );
     const recipient = visit.email || visit.inviteeEmail || "";
     let delivery: "sent" | "development" | "failed" | "skipped" = "skipped";
 

@@ -59,14 +59,24 @@ function slugify(value: string) {
 }
 
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  // Probe from the org panel: answer quietly so a 403 does not flood the console.
+  if (url.searchParams.get("probe") === "1") {
+    const context = await getSessionContext();
+    if (!context.user)
+      return NextResponse.json({ ok: false, platformAdmin: false });
+    const allowed = await isPlatformAdmin(
+      context.user.id,
+      context.profile?.email ?? context.user.email ?? "",
+    ).catch(() => false);
+    return NextResponse.json({ ok: allowed, platformAdmin: allowed });
+  }
+
   const guard = await guardPlatform();
   if (!guard.ok)
     return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const admin = createAdminClient();
-  const url = new URL(request.url);
-  if (url.searchParams.get("probe") === "1")
-    return NextResponse.json({ ok: true });
 
   const [
     { data: orgs },
