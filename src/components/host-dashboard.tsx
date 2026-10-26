@@ -187,7 +187,7 @@ export function HostDashboard() {
                   <p className="truncate text-xs text-slate-500">
                     {visit.company || t("common.noCompany")} · {visit.location}
                     {visit.checkedInAt
-                      ? t("host.since", { time: formatDateTime(visit.checkedInAt) })
+                      ? t("host.since", { time: formatDateTime(visit.checkedInAt, visit.locationTimezone) })
                       : ""}
                   </p>
                 </div>
@@ -272,7 +272,7 @@ export function HostDashboard() {
                         <StatusPill status={visit.status} />
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500">
-                        {formatDateTime(visit.startsAt)} · {visit.location}
+                        {formatDateTime(visit.startsAt, visit.locationTimezone)} · {visit.location}
                       </span>
                     </span>
                   </Link>

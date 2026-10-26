@@ -22,6 +22,7 @@ import {
 } from "@/lib/visitor-flow";
 import { localeFromCookieHeader } from "@/lib/i18n/types";
 import { translate } from "@/lib/i18n/catalog";
+import { invitationVisitSelect } from "@/lib/location-embed";
 import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -179,13 +180,18 @@ export async function POST(
         { status: 404 },
       );
 
-    const { data: visit } = await db
+    const { data: visit, error: visitError } = await db
       .from("visits")
-      .select(
-        "id,organization_id,visitor_id,starts_at,ends_at,pass_valid_days,location:locations(timezone)",
-      )
+      .select(invitationVisitSelect)
       .eq("id", resolved.visit_id)
       .maybeSingle();
+    if (visitError) {
+      console.error("Invitation visit lookup failed", visitError);
+      return NextResponse.json(
+        { error: translate("errors.register_failed", undefined, locale) },
+        { status: 500 },
+      );
+    }
     if (!visit)
       return NextResponse.json(
         { error: translate("errors.link_unavailable", undefined, locale) },

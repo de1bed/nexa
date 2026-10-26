@@ -23,6 +23,7 @@ export type WalletPassData = {
   purpose: string;
   startsAt: string;
   endsAt: string;
+  timeZone?: string;
   accessRequirements?: string;
 };
 
@@ -81,7 +82,7 @@ export function googleWalletSaveUrl(pass: WalletPassData): string | null {
     textModulesData: [
       { id: "host", header: "Anfitrión", body: pass.hostName },
       { id: "location", header: "Ubicación", body: pass.location },
-      { id: "schedule", header: "Horario", body: dateLabel(pass.startsAt) },
+      { id: "schedule", header: "Horario", body: dateLabel(pass.startsAt, pass.timeZone) },
       { id: "purpose", header: "Motivo", body: pass.purpose },
       ...(pass.accessRequirements
         ? [

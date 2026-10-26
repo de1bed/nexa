@@ -1,4 +1,4 @@
-import { APP_TIME_ZONE } from "@/lib/timezone";
+import { APP_TIME_ZONE, resolveTimeZone } from "@/lib/timezone";
 import { getLocale } from "./store";
 import { localeIntl, type Locale } from "./types";
 import { translate } from "./catalog";
@@ -20,6 +20,7 @@ export function intlLocale(locale: Locale = getLocale()) {
 export function formatDateTime(
   value: string | Date | null | undefined,
   locale: Locale = getLocale(),
+  timeZone?: string | null,
 ) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
@@ -27,50 +28,60 @@ export function formatDateTime(
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: APP_TIME_ZONE,
+    timeZone: resolveTimeZone(timeZone),
   }).format(date);
 }
 
 export function formatDate(
   value: string | Date | null | undefined,
   locale: Locale = getLocale(),
+  timeZone?: string | null,
 ) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "medium",
-    timeZone: APP_TIME_ZONE,
+    timeZone: resolveTimeZone(timeZone),
   }).format(date);
 }
 
 export function formatTime(
   value: string | Date | null | undefined,
   locale: Locale = getLocale(),
+  timeZone?: string | null,
 ) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     timeStyle: "short",
-    timeZone: APP_TIME_ZONE,
+    timeZone: resolveTimeZone(timeZone),
   }).format(date);
 }
 
-export function formatWeekday(value: Date, locale: Locale = getLocale()) {
+export function formatWeekday(
+  value: Date,
+  locale: Locale = getLocale(),
+  timeZone?: string | null,
+) {
   return new Intl.DateTimeFormat(intlLocale(locale), {
     weekday: "short",
-    timeZone: APP_TIME_ZONE,
+    timeZone: resolveTimeZone(timeZone),
   }).format(value);
 }
 
-export function formatFullDate(value: string | Date, locale: Locale = getLocale()) {
+export function formatFullDate(
+  value: string | Date,
+  locale: Locale = getLocale(),
+  timeZone?: string | null,
+) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "full",
     timeStyle: "short",
-    timeZone: APP_TIME_ZONE,
+    timeZone: resolveTimeZone(timeZone),
   }).format(date);
 }
 

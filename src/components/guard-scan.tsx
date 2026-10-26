@@ -41,7 +41,7 @@ function haptic(pattern: number | number[]) {
 }
 
 export function GuardScan() {
-  const { t, formatDateTime } = useI18n();
+  const { t, formatDateTime, formatTime } = useI18n();
   const {
     live,
     visits,
@@ -424,7 +424,11 @@ export function GuardScan() {
                   />
                   <Row
                     label={t("guard.schedule")}
-                    value={formatDateTime(visit.startsAt)}
+                    value={
+                      visit.endsAt
+                        ? `${formatDateTime(visit.startsAt, visit.locationTimezone)} — ${formatTime(visit.endsAt, visit.locationTimezone)}`
+                        : formatDateTime(visit.startsAt, visit.locationTimezone)
+                    }
                     icon={Clock3}
                   />
                   {visit.vehicleDeclined ? (
@@ -737,7 +741,7 @@ function ResultScreen({
         {current.title}
       </h1>
       <p className="mt-3 text-slate-400">
-        {visit?.visitorName} · {formatTime(new Date())}
+        {visit?.visitorName} · {formatTime(new Date(), visit?.locationTimezone)}
       </p>
       {decision === "checked_in" && (
         <p className="mt-1.5 text-sm text-slate-500">

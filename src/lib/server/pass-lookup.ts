@@ -21,6 +21,7 @@ export type ResolvedPass = {
   hostName: string;
   location: string;
   locationAddress: string;
+  timeZone?: string;
   startsAt: string;
   endsAt: string;
   checkedInAt: string | null;
@@ -57,7 +58,7 @@ type Row = {
     organization: { name?: string } | null;
     visitor: { full_name?: string } | null;
     host: { full_name?: string } | null;
-    location: { name?: string; address?: string } | null;
+    location: { name?: string; address?: string; timezone?: string } | null;
   } | null;
 };
 
@@ -71,7 +72,7 @@ export async function resolvePassByToken(
     .select(
       "valid_from,expires_at,revoked_at," +
         "visit:visits!qr_tokens_visit_id_fkey(id,status,starts_at,ends_at,pass_valid_days,purpose,checked_in_at,checked_out_at,access_requirements,internal_place,meeting_url,all_locations," +
-        "organization:organizations(name),visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name),location:locations!visits_location_id_fkey(name,address)," +
+        "organization:organizations(name),visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name),location:locations!visits_location_id_fkey(name,address,timezone)," +
         "access:visit_access_locations(location:locations(name)))",
     )
     .eq("token_hash", hash)
@@ -125,6 +126,7 @@ export async function resolvePassByToken(
     hostName: visit.host?.full_name ?? "Anfitrión",
     location: visit.location?.name ?? "Recepción",
     locationAddress: visit.location?.address ?? "",
+    timeZone: visit.location?.timezone ?? undefined,
     startsAt: visit.starts_at,
     endsAt: visit.ends_at,
     checkedInAt: visit.checked_in_at,

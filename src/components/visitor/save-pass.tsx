@@ -20,6 +20,7 @@ export function SavePassButton({
   hostName,
   location,
   startsAt,
+  timeZone,
   promptOnMount = false,
   publicQr = false,
 }: {
@@ -29,6 +30,7 @@ export function SavePassButton({
   hostName: string;
   location: string;
   startsAt: string;
+  timeZone?: string;
   promptOnMount?: boolean;
   publicQr?: boolean;
 }) {
@@ -49,7 +51,7 @@ export function SavePassButton({
   }, [promptOnMount, token]);
 
   async function renderFile() {
-    const when = formatDateTimeMedium(startsAt);
+    const when = formatDateTimeMedium(startsAt, timeZone);
     const payload =
       publicQr || isKnownDemoToken(token)
         ? `${window.location.origin}/pass/${encodeURIComponent(token)}`

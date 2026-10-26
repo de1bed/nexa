@@ -34,6 +34,7 @@ import {
 } from "./ui";
 import { Sheet, Toggle, CopyField, ShareButton } from "./ui-client";
 import { AddressField } from "./address-field";
+import { APP_TIME_ZONE } from "@/lib/timezone";
 import {
   appendDemoChange,
   readDemoBooths,
@@ -1124,7 +1125,7 @@ export function LocationsPage() {
   const [form, setForm] = useState({
     name: "",
     address: "",
-    timezone: "America/Mexico_City",
+    timezone: APP_TIME_ZONE,
   });
   const [boothForm, setBoothForm] = useState<{
     locationId: string;
@@ -1220,7 +1221,7 @@ export function LocationsPage() {
       }
       toast.success("Ubicación creada");
       setOpen(false);
-      setForm({ name: "", address: "", timezone: "America/Mexico_City" });
+      setForm({ name: "", address: "", timezone: APP_TIME_ZONE });
       if (live) void reload();
     } catch (reason) {
       toast.error(

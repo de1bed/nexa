@@ -63,6 +63,12 @@ export async function POST(request: Request) {
         { status: 404 },
       );
 
+    const { data: site } = await db
+      .from("locations")
+      .select("timezone")
+      .eq("id", row.location_id)
+      .maybeSingle();
+
     const visit: Visit = {
       id: row.visit_id,
       visitorName: row.visitor_name,
@@ -74,6 +80,7 @@ export async function POST(request: Request) {
       hostEmail: row.host_email || undefined,
       locationId: row.location_id,
       location: row.location_name,
+      locationTimezone: site?.timezone ?? undefined,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
       checkedInAt: row.checked_in_at ?? undefined,

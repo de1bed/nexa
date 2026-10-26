@@ -23,6 +23,7 @@ export function PassCard({
   locationAddress,
   startsAt,
   expiresAt,
+  timeZone,
   state = "valid",
   accessRequirements,
   internalPlace,
@@ -37,6 +38,7 @@ export function PassCard({
   locationAddress?: string;
   startsAt: string;
   expiresAt?: string;
+  timeZone?: string;
   state?: "valid" | "used" | "expired" | "revoked";
   accessRequirements?: string;
   internalPlace?: string;
@@ -68,7 +70,7 @@ export function PassCard({
     };
   }, [publicQr, token]);
 
-  const dateLabel = formatFullDate(startsAt);
+  const dateLabel = formatFullDate(startsAt, timeZone);
 
   const inactive = state !== "valid";
   const visitStart = new Date(startsAt).getTime();
@@ -157,7 +159,7 @@ export function PassCard({
                 {t("pass.validUntil")}
               </p>
               <p className="mt-0.5 text-sm font-medium leading-5 text-[#071426]">
-                {formatDateTime(expiresAt)}
+                {formatDateTime(expiresAt, timeZone)}
               </p>
               {!inactive && (
                 <p className="mt-0.5 text-xs font-semibold text-[#0d9d99]">

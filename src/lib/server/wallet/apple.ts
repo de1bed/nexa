@@ -76,7 +76,7 @@ export async function buildApplePass(
   instance.auxiliaryFields.push({
     key: "schedule",
     label: "HORARIO",
-    value: timeLabel(pass.startsAt),
+    value: timeLabel(pass.startsAt, pass.timeZone),
   });
 
   instance.backFields.push(

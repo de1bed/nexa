@@ -236,7 +236,7 @@ export function VisitDetail({ id }: { id: string }) {
             <Detail
               icon={CalendarClock}
               label={t("visits.schedule")}
-              value={`${formatDateTime(visit.startsAt)} — ${formatTime(visit.endsAt)}`}
+              value={`${formatDateTime(visit.startsAt, visit.locationTimezone)} — ${formatTime(visit.endsAt, visit.locationTimezone)}`}
             />
             <Detail
               icon={MapPin}

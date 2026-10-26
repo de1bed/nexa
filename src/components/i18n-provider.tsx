@@ -30,11 +30,20 @@ type I18nValue = {
   setLocale: (locale: Locale) => void;
   t: (path: string, vars?: Record<string, string | number>) => string;
   intl: string;
-  formatDateTime: (value: string | Date | null | undefined) => string;
-  formatDate: (value: string | Date | null | undefined) => string;
-  formatTime: (value: string | Date | null | undefined) => string;
-  formatWeekday: (value: Date) => string;
-  formatFullDate: (value: string | Date) => string;
+  formatDateTime: (
+    value: string | Date | null | undefined,
+    timeZone?: string | null,
+  ) => string;
+  formatDate: (
+    value: string | Date | null | undefined,
+    timeZone?: string | null,
+  ) => string;
+  formatTime: (
+    value: string | Date | null | undefined,
+    timeZone?: string | null,
+  ) => string;
+  formatWeekday: (value: Date, timeZone?: string | null) => string;
+  formatFullDate: (value: string | Date, timeZone?: string | null) => string;
   formatDuration: (ms: number) => string;
 };
 
@@ -78,11 +87,14 @@ export function I18nProvider({
       setLocale,
       t: (path, vars) => translate(path, vars, locale),
       intl: intlLocale(locale),
-      formatDateTime: (value) => formatDateTime(value, locale),
-      formatDate: (value) => formatDate(value, locale),
-      formatTime: (value) => formatTime(value, locale),
-      formatWeekday: (value) => formatWeekday(value, locale),
-      formatFullDate: (value) => formatFullDate(value, locale),
+      formatDateTime: (value, timeZone) =>
+        formatDateTime(value, locale, timeZone),
+      formatDate: (value, timeZone) => formatDate(value, locale, timeZone),
+      formatTime: (value, timeZone) => formatTime(value, locale, timeZone),
+      formatWeekday: (value, timeZone) =>
+        formatWeekday(value, locale, timeZone),
+      formatFullDate: (value, timeZone) =>
+        formatFullDate(value, locale, timeZone),
       formatDuration: (ms) => formatDurationI18n(ms, locale),
     }),
     [locale, setLocale],

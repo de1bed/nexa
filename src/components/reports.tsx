@@ -312,7 +312,7 @@ export function Reports() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTime(visit.checkedInAt),
+        formatDateTime(visit.checkedInAt, visit.locationTimezone),
         stayLabel(visit, formatDuration),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
         recordedBooth(visit),
@@ -351,10 +351,10 @@ export function Reports() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTime(visit.startsAt),
-        formatDateTime(visit.endsAt),
-        formatDateTime(visit.checkedInAt),
-        formatDateTime(visit.checkedOutAt),
+        formatDateTime(visit.startsAt, visit.locationTimezone),
+        formatDateTime(visit.endsAt, visit.locationTimezone),
+        formatDateTime(visit.checkedInAt, visit.locationTimezone),
+        formatDateTime(visit.checkedOutAt, visit.locationTimezone),
         stayLabel(visit, formatDuration),
         t(`status.${visit.status}`),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
@@ -915,15 +915,15 @@ function AuditTable({
                 </td>
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {formatDateTime(visit.startsAt)}
+                    {formatDateTime(visit.startsAt, visit.locationTimezone)}
                   </td>
                 )}
                 <td className="whitespace-nowrap px-4 py-3">
-                  {formatDateTime(visit.checkedInAt) || "—"}
+                  {formatDateTime(visit.checkedInAt, visit.locationTimezone) || "—"}
                 </td>
                 {mode === "log" && (
                   <td className="whitespace-nowrap px-4 py-3">
-                    {formatDateTime(visit.checkedOutAt) || "—"}
+                    {formatDateTime(visit.checkedOutAt, visit.locationTimezone) || "—"}
                   </td>
                 )}
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-800">

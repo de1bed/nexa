@@ -39,6 +39,7 @@ type Pass = {
   hostName: string;
   location: string;
   locationAddress: string;
+  timeZone?: string;
   startsAt: string;
   endsAt?: string;
   expiresAt?: string;
@@ -118,6 +119,7 @@ export function PublicPass({
       hostName: showcaseVisit.hostName,
       location: showcaseVisit.location,
       locationAddress: showcaseVisit.locationAddress ?? "",
+      timeZone: showcaseVisit.locationTimezone,
       startsAt: showcaseVisit.startsAt,
       endsAt: showcaseVisit.endsAt,
       expiresAt: passValidityWindow({
@@ -206,6 +208,7 @@ export function PublicPass({
         location={pass.location}
         locationAddress={pass.locationAddress || undefined}
         startsAt={pass.startsAt}
+        timeZone={pass.timeZone}
         expiresAt={pass.expiresAt}
         accessRequirements={pass.accessRequirements || undefined}
         internalPlace={pass.internalPlace || undefined}
@@ -221,6 +224,7 @@ export function PublicPass({
           hostName={pass.hostName}
           location={pass.location}
           startsAt={pass.startsAt}
+          timeZone={pass.timeZone}
           publicQr={!live}
           promptOnMount
         />

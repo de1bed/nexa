@@ -105,7 +105,7 @@ export function PeopleAdmin() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTime(visit.checkedInAt ?? ""),
+        formatDateTime(visit.checkedInAt ?? "", visit.locationTimezone),
         formatDuration(timeInsideMs(visit)),
         visit.documentMasked ||
           (visit.documentCaptured ? t("people.captured") : t("visits.notCaptured")),
@@ -240,7 +240,7 @@ export function PeopleAdmin() {
                           <td className="px-4 py-3">{visit.hostName}</td>
                         )}
                         <td className="whitespace-nowrap px-4 py-3">
-                          {formatDateTime(visit.checkedInAt ?? "") || "—"}
+                          {formatDateTime(visit.checkedInAt ?? "", visit.locationTimezone) || "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 font-semibold text-emerald-700">
                           <LiveDuration since={visit.checkedInAt} />
@@ -291,7 +291,7 @@ export function PeopleAdmin() {
                       <div className="flex justify-between gap-3">
                         <dt className="text-slate-500">{t("common.entry")}</dt>
                         <dd className="font-medium">
-                          {formatDateTime(visit.checkedInAt ?? "") || "—"}
+                          {formatDateTime(visit.checkedInAt ?? "", visit.locationTimezone) || "—"}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-3">

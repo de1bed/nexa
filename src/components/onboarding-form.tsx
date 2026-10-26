@@ -14,6 +14,7 @@ import { Brand } from "./brand";
 import { AddressField } from "./address-field";
 import { Button, Field, cn, fieldClass } from "./ui";
 import { onboardingSchema } from "@/lib/schemas";
+import { APP_TIME_ZONE } from "@/lib/timezone";
 
 const steps = [
   { title: "Tu empresa", icon: Building2 },
@@ -53,7 +54,7 @@ export function OnboardingForm({
     fullName: defaultName,
     locationName: "Recepción principal",
     locationAddress: "",
-    timezone: "America/Mexico_City",
+    timezone: APP_TIME_ZONE,
   });
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {

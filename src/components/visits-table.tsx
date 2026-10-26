@@ -197,7 +197,7 @@ export function VisitsTable() {
                       {visit.company || t("common.noCompany")} · {visit.hostName}
                     </p>
                     <p className="mt-1 truncate text-xs text-slate-400">
-                      {formatDateTime(visit.startsAt)}
+                      {formatDateTime(visit.startsAt, visit.locationTimezone)}
                       {visit.status === "checked_in" && (
                         <>
                           {" · "}
@@ -245,10 +245,10 @@ export function VisitsTable() {
                         <p className="text-xs text-slate-500">{visit.company}</p>
                       </td>
                       <td className="px-5 py-4">{visit.hostName}</td>
-                      <td className="px-5 py-4">{formatDateTime(visit.startsAt)}</td>
+                      <td className="px-5 py-4">{formatDateTime(visit.startsAt, visit.locationTimezone)}</td>
                       <td className="px-5 py-4 text-xs text-slate-600">
-                        {visit.checkedInAt ? formatDateTime(visit.checkedInAt) : "—"} /{" "}
-                        {visit.checkedOutAt ? formatDateTime(visit.checkedOutAt) : "—"}
+                        {visit.checkedInAt ? formatDateTime(visit.checkedInAt, visit.locationTimezone) : "—"} /{" "}
+                        {visit.checkedOutAt ? formatDateTime(visit.checkedOutAt, visit.locationTimezone) : "—"}
                       </td>
                       <td className="px-5 py-4">{visit.purpose}</td>
                       <td className="px-5 py-4">

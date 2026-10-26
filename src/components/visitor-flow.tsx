@@ -103,6 +103,7 @@ type Invitation = {
   hostName: string;
   startsAt: string;
   endsAt: string;
+  timeZone?: string;
   purpose: string;
   accessRequirements: string;
   privacyNotice: string;
@@ -224,6 +225,7 @@ export function VisitorFlow({
       hostName: showcaseVisit.hostName,
       startsAt: showcaseVisit.startsAt,
       endsAt: showcaseVisit.endsAt,
+      timeZone: showcaseVisit.locationTimezone,
       purpose: showcaseVisit.purpose,
       accessRequirements: showcaseVisit.accessRequirements ?? "",
       privacyNotice: showcaseSettings.privacyNotice,
@@ -302,6 +304,10 @@ export function VisitorFlow({
           hostName: String(row.host_name ?? ""),
           startsAt: String(row.starts_at ?? ""),
           endsAt: String(row.ends_at ?? ""),
+          timeZone:
+            typeof row.location_timezone === "string"
+              ? row.location_timezone
+              : undefined,
           purpose: String(row.purpose ?? ""),
           accessRequirements: String(row.access_requirements ?? ""),
           privacyNotice: String(row.privacy_notice ?? ""),
@@ -597,7 +603,10 @@ export function VisitorFlow({
       : (Math.max(1, stepIndex) / totalSteps) * 100;
 
   const dateLabel = useMemo(
-    () => (invitation?.startsAt ? formatFullDate(invitation.startsAt) : ""),
+    () =>
+      invitation?.startsAt
+        ? formatFullDate(invitation.startsAt, invitation.timeZone)
+        : "",
     [invitation, formatFullDate],
   );
 
@@ -1521,6 +1530,7 @@ export function VisitorFlow({
               location={invitation.locationName}
               locationAddress={invitation.locationAddress || undefined}
               startsAt={invitation.startsAt}
+              timeZone={invitation.timeZone}
               expiresAt={
                 passValidityWindow({
                   startsAt: invitation.startsAt,
@@ -1546,6 +1556,7 @@ export function VisitorFlow({
               hostName={invitation.hostName}
               location={invitation.locationName}
               startsAt={invitation.startsAt}
+              timeZone={invitation.timeZone}
               promptOnMount
               publicQr={!live}
             />

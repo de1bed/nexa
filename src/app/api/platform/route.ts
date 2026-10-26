@@ -6,6 +6,7 @@ import { isPlatformAdmin, platformAdminEmails } from "@/lib/server/platform-admi
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { issueTeamInvite } from "@/lib/server/team-invite";
 import { formatCompanyCode } from "@/lib/station-access";
+import { APP_TIME_ZONE } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -393,7 +394,7 @@ export async function POST(request: Request) {
           organization_id: org.id,
           name: site.name,
           address: site.address,
-          timezone: "America/Mexico_City",
+          timezone: APP_TIME_ZONE,
         })),
       )
       .select("id");
@@ -690,7 +691,7 @@ export async function PATCH(request: Request) {
           organization_id: input.organizationId,
           name: input.newLocation.name,
           address: input.newLocation.address,
-          timezone: "America/Mexico_City",
+          timezone: APP_TIME_ZONE,
         })
         .select("id,name,address")
         .single();

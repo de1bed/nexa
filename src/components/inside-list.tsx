@@ -163,7 +163,7 @@ export function InsideList() {
                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
                   <Clock3 size={14} />
                   <LiveDuration since={visit.checkedInAt} />
-                  {visit.checkedInAt && ` · ${t("dashboard.since", { time: formatTime(visit.checkedInAt) })}`}
+                  {visit.checkedInAt && ` · ${t("dashboard.since", { time: formatTime(visit.checkedInAt, visit.locationTimezone) })}`}
                 </span>
                 <Button size="sm" onClick={() => setConfirm(visit)}>
                   <LogOut size={16} />

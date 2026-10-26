@@ -242,7 +242,7 @@ export function Dashboard() {
                     <Clock3 size={14} />
                     <LiveDuration since={visit.checkedInAt} />
                   </span>
-                  <span>{t("dashboard.since", { time: visit.checkedInAt ? formatTime(visit.checkedInAt) : "—" })}</span>
+                  <span>{t("dashboard.since", { time: visit.checkedInAt ? formatTime(visit.checkedInAt, visit.locationTimezone) : "—" })}</span>
                 </div>
               </Card>
             ))}
@@ -347,7 +347,7 @@ export function Dashboard() {
                       {visit.visitorName}
                     </span>
                     <span className="block truncate text-xs text-slate-500">
-                      {visit.hostName} · {formatTime(visit.startsAt)}
+                      {visit.hostName} · {formatTime(visit.startsAt, visit.locationTimezone)}
                     </span>
                   </span>
                   <StatusPill status={visit.status} />

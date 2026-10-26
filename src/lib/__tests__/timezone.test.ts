@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatDateTime, formatTime } from "../i18n";
 import {
   APP_TIME_ZONE,
   calendarDateInTimeZone,
@@ -44,6 +45,30 @@ describe("zona horaria de la visita", () => {
     );
     expect(label.toLowerCase()).toMatch(/8:00/);
     expect(label).toMatch(/2026/);
+  });
+
+  it("muestra el horario en la zona de la sede y cae a Tijuana si no hay zona", () => {
+    // 17:30 UTC es 10:30 en Tijuana (PDT) y 11:30 en Ciudad de México.
+    const instant = "2026-10-26T17:30:00.000Z";
+    expect(formatDateTime(instant, "es", "America/Tijuana").toLowerCase()).toMatch(
+      /10:30/,
+    );
+    expect(
+      formatDateTime(instant, "es", "America/Mexico_City").toLowerCase(),
+    ).toMatch(/11:30/);
+    expect(formatTime(instant, "es").toLowerCase()).toMatch(/10:30/);
+    expect(formatTime(instant, "es").toLowerCase()).not.toMatch(/11:30/);
+  });
+
+  it("al guardar 11:30 de Tijuana el reloj de la sede vuelve a decir 11:30", () => {
+    const stored = zonedDateTimeToIso("2026-10-26", "11:30", "America/Tijuana");
+    expect(stored).toBe("2026-10-26T18:30:00.000Z");
+    expect(formatTime(stored, "es", "America/Tijuana").toLowerCase()).toMatch(
+      /11:30/,
+    );
+    expect(
+      formatTime(stored, "es", "America/Mexico_City").toLowerCase(),
+    ).toMatch(/12:30/);
   });
 
   it("rechaza una zona inventada y cae a Tijuana", () => {
