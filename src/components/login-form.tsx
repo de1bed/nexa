@@ -15,6 +15,7 @@ import { Brand } from "./brand";
 import { AccessCodeStep, accessRequestError } from "./access-code";
 import { ChoosePasswordStep } from "./choose-password";
 import { LanguageSwitcher } from "./language-switcher";
+import { LegalLinks } from "./legal-links";
 import { TabletLogin } from "./tablet-login";
 import { UpdatesBell } from "./updates-bell";
 import { useI18n } from "./i18n-provider";
@@ -378,6 +379,8 @@ export function LoginForm() {
               )}
             </>
           )}
+
+          <LegalLinks className="mt-8" />
         </div>
       </section>
 
