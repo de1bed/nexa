@@ -354,6 +354,9 @@ export const es = {
     idOptionalNote: "No es obligatorio. Si las subes, se guardan de forma privada.",
     review: "Confirma tus datos",
     reviewHint: "Escribe el folio si lo tienes a la mano. El guardia verá las fotos.",
+    confirmName: "Confirmo que mi nombre está bien escrito",
+    confirmNameHint:
+      "El lector puede cambiar una letra. Si el nombre no es el tuyo, corrígelo y márcalo.",
     idCaptured: "Identificación capturada",
     sidesReady: "Frente y reverso listos para caseta",
     repeat: "Repetir",
@@ -456,6 +459,7 @@ export const es = {
   },
   errors: {
     name_required: "Escribe tu nombre completo.",
+    name_confirm_required: "Confirma que tu nombre está bien escrito.",
     email_invalid: "Escribe un correo válido.",
     phone_required: "Escribe un teléfono de contacto.",
     company_required: "Escribe la empresa que representas.",
@@ -1638,6 +1642,9 @@ export const en: DeepStringify<typeof es> = {
     idOptionalNote: "Not required. If you upload them, they are stored privately.",
     review: "Confirm your details",
     reviewHint: "Add the ID number if you have it. The guard will see the photos.",
+    confirmName: "I confirm my name is spelled correctly",
+    confirmNameHint:
+      "The reader can change a letter. If this is not your name, correct it and check the box.",
     idCaptured: "ID captured",
     sidesReady: "Front and back ready for the booth",
     repeat: "Retake",
@@ -1740,6 +1747,7 @@ export const en: DeepStringify<typeof es> = {
   },
   errors: {
     name_required: "Enter your full name.",
+    name_confirm_required: "Confirm that your name is spelled correctly.",
     email_invalid: "Enter a valid email.",
     phone_required: "Enter a contact phone number.",
     company_required: "Enter the company you represent.",

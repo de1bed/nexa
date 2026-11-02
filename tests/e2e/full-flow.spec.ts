@@ -66,6 +66,9 @@ test("anfitrión → visitante → guardia → administración", async ({ page }
     page.getByRole("heading", { name: "Confirma tus datos" }),
   ).toBeVisible();
   await page.getByLabel("Nombre completo").fill(visitorName);
+  await page
+    .getByRole("button", { name: /Confirmo que mi nombre está bien escrito/ })
+    .click();
   await page.getByRole("button", { name: /^Continuar/ }).click();
 
   await expect(

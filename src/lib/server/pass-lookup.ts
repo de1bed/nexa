@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "./supabase-admin";
+import { displayVisitorName } from "@/lib/visitor-name";
 import { healQrWindow } from "./pass-issue";
 
 /**
@@ -58,6 +59,10 @@ type Row = {
     organization: { name?: string } | null;
     visitor: { full_name?: string } | null;
     host: { full_name?: string } | null;
+    invitation:
+      | { invitee_name?: string | null }
+      | Array<{ invitee_name?: string | null }>
+      | null;
     location: { name?: string; address?: string; timezone?: string } | null;
   } | null;
 };
@@ -72,7 +77,7 @@ export async function resolvePassByToken(
     .select(
       "valid_from,expires_at,revoked_at," +
         "visit:visits!qr_tokens_visit_id_fkey(id,status,starts_at,ends_at,pass_valid_days,purpose,checked_in_at,checked_out_at,access_requirements,internal_place,meeting_url,all_locations," +
-        "organization:organizations(name),visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name),location:locations!visits_location_id_fkey(name,address,timezone)," +
+        "organization:organizations(name),visitor:visitors(full_name),host:profiles!visits_host_id_fkey(full_name),invitation:visit_invitations(invitee_name),location:locations!visits_location_id_fkey(name,address,timezone)," +
         "access:visit_access_locations(location:locations(name)))",
     )
     .eq("token_hash", hash)
@@ -122,7 +127,14 @@ export async function resolvePassByToken(
     state,
     status: visit.status,
     organizationName: visit.organization?.name ?? "",
-    visitorName: visit.visitor?.full_name ?? "Visitante",
+    visitorName: displayVisitorName(
+      [
+        visit.visitor?.full_name,
+        (Array.isArray(visit.invitation) ? visit.invitation[0] : visit.invitation)
+          ?.invitee_name,
+      ],
+      "Visitante",
+    ),
     hostName: visit.host?.full_name ?? "Anfitrión",
     location: visit.location?.name ?? "Recepción",
     locationAddress: visit.location?.address ?? "",

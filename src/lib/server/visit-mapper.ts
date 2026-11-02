@@ -1,6 +1,7 @@
 import "server-only";
 import type { AccessEvent, AccessEventType, Visit } from "@/lib/domain";
 import { documentFlags } from "@/lib/visitor-flow";
+import { displayVisitorName } from "@/lib/visitor-name";
 import { missingBoothSchema } from "@/lib/server/booths";
 
 /**
@@ -128,7 +129,10 @@ export function mapVisit(row: Row): Visit {
 
   return {
     id: String(row.id),
-    visitorName: visitor?.full_name || invitation?.invitee_name || "Por confirmar",
+    visitorName: displayVisitorName(
+      [visitor?.full_name, invitation?.invitee_name],
+      "Por confirmar",
+    ),
     email: visitor?.email || invitation?.invitee_email || "",
     phone: visitor?.phone || invitation?.invitee_phone || undefined,
     company:
