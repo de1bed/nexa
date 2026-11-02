@@ -33,7 +33,6 @@ import { LiveDuration, Sheet, useNow } from "./ui-client";
 import {
   downloadWorkbook,
   formatReportDateTime,
-  reportFileDate,
 } from "@/lib/report-export";
 import {
   timeInsideMs,
@@ -48,7 +47,6 @@ import {
   localYearKey,
   parseLocalDay,
   reportRange,
-  shiftLocalDay,
   type ReportPreset,
 } from "@/lib/local-day";
 import { visitPurposeMessageKey } from "@/lib/i18n";
