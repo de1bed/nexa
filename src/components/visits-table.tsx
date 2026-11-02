@@ -14,8 +14,12 @@ import {
   fieldClass,
 } from "./ui";
 import { LiveDuration } from "./ui-client";
-import { safeCsvCell } from "@/lib/security";
 import { type VisitStatus } from "@/lib/domain";
+import {
+  downloadWorkbook,
+  formatReportDateTime,
+  reportFileDate,
+} from "@/lib/report-export";
 import { useI18n } from "./i18n-provider";
 
 const filterable: VisitStatus[] = [
@@ -48,45 +52,41 @@ export function VisitsTable() {
     });
   }, [allVisits, query, status]);
 
-  function exportCsv() {
-    const content = [
-      [
-        t("people.visitor"),
-        t("visitor.company"),
-        t("visits.host"),
-        t("visits.location"),
-        t("invite.start"),
-        t("guard.authorized"),
-        t("guard.checkedOut"),
-        t("visitor.purpose"),
-        t("reports.status"),
-        t("invite.create"),
-      ],
-      ...rows.map((visit) => [
-        visit.visitorName,
-        visit.company,
-        visit.hostName,
-        visit.location,
-        visit.startsAt,
-        visit.checkedInAt ?? "",
-        visit.checkedOutAt ?? "",
-        visit.purpose,
-        t(`status.${visit.status}`),
-        visit.origin === "guard_manual" ? t("visits.boothOrigin") : t("visits.invitation"),
-      ]),
-    ]
-      .map((row) => row.map(safeCsvCell).join(","))
-      .join("\r\n");
-
-    const blob = new Blob([`﻿${content}`], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `nexa-visitas-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  function exportWorkbook() {
+    const when = (value?: string) => formatReportDateTime(value);
+    void downloadWorkbook(`nexa-visitas-${reportFileDate()}.xlsx`, [
+      {
+        name: "Visitas",
+        rows: [
+          [
+            t("people.visitor"),
+            t("visitor.company"),
+            t("visits.host"),
+            t("visits.location"),
+            t("invite.start"),
+            t("guard.authorized"),
+            t("guard.checkedOut"),
+            t("visitor.purpose"),
+            t("reports.status"),
+            t("invite.create"),
+          ],
+          ...rows.map((visit) => [
+            visit.visitorName,
+            visit.company,
+            visit.hostName,
+            visit.location,
+            when(visit.startsAt),
+            when(visit.checkedInAt),
+            when(visit.checkedOutAt),
+            visit.purpose,
+            t(`status.${visit.status}`),
+            visit.origin === "guard_manual"
+              ? t("visits.boothOrigin")
+              : t("visits.invitation"),
+          ]),
+        ],
+      },
+    ]);
   }
 
   return (
@@ -147,11 +147,11 @@ export function VisitsTable() {
             );
           })}
           <button
-            onClick={exportCsv}
+            onClick={exportWorkbook}
             className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600"
           >
             <Download size={16} />
-            CSV
+            Excel
           </button>
         </div>
       </div>
