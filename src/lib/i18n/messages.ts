@@ -688,6 +688,8 @@ export const es = {
     guardCodeOnlyInfo:
       "Para el personal de caseta. No se crea una cuenta de correo. El código queda a su nombre y sirve en cualquier caseta.",
     guardsTitle: "Guardias",
+    editGuard: "Editar",
+    removeGuard: "Dar de baja",
     guardsLead:
       "Cada guardia tiene un código. Sirve en cualquier caseta. El ojo lo muestra o lo esconde.",
     guardsAbout: "De qué trata esta tarjeta",
@@ -1975,6 +1977,8 @@ export const en: DeepStringify<typeof es> = {
     guardCodeOnlyInfo:
       "For booth staff. No email account is created. The code stays under their name and works at any booth.",
     guardsTitle: "Guards",
+    editGuard: "Edit",
+    removeGuard: "Remove",
     guardsLead:
       "Each guard has a code. It works at any booth. The eye shows or hides it.",
     guardsAbout: "What this card is for",

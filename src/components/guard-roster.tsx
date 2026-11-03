@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, Pencil, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "./i18n-provider";
 import { useWorkspace } from "./workspace-provider";
@@ -12,10 +12,14 @@ import type { TeamMember } from "@/lib/domain";
 export function GuardRoster({
   guards,
   onCreate,
+  onEdit,
+  onRemove,
   onRegenerate,
 }: {
   guards: TeamMember[];
   onCreate: () => void;
+  onEdit: (guard: TeamMember) => void;
+  onRemove: (guard: TeamMember) => void;
   onRegenerate?: (guardId: string, newCode: string) => void;
 }) {
   const { t } = useI18n();
@@ -72,8 +76,9 @@ export function GuardRoster({
           return (
             <li
               key={guard.id}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-sm"
+              className="rounded-2xl bg-slate-50 px-3 py-2.5 text-sm"
             >
+              <div className="flex items-center justify-between gap-3">
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{guard.name}</span>
                 <span className="block text-xs text-slate-500">{t("team.anyBooth")}</span>
@@ -117,6 +122,25 @@ export function GuardRoster({
                   )}
                 </span>
               )}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onEdit(guard)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#071426]"
+                >
+                  <Pencil size={13} />
+                  {t("team.editGuard")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRemove(guard)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600"
+                >
+                  <UserMinus size={13} />
+                  {t("team.removeGuard")}
+                </button>
+              </div>
             </li>
           );
         })}

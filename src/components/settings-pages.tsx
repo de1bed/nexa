@@ -547,6 +547,8 @@ export function TeamPage() {
             });
             setOpen(true);
           }}
+          onEdit={(guardMember) => setEditing(guardMember)}
+          onRemove={(guardMember) => void removeMember(guardMember)}
           onRegenerate={(guardId, newCode) => {
             setMembers((current) =>
               current.map((member) =>
