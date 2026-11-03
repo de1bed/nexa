@@ -218,7 +218,11 @@ function StationPicker() {
                   <optgroup key={location.id} label={location.name}>
                     {siteBooths.map((booth) => (
                       <option key={booth.id} value={booth.id}>
-                        {booth.name}
+                        {booth.kind === "pedestrian"
+                          ? `${booth.name} · ${t("locations.boothKindPedestrian")}`
+                          : booth.kind === "vehicle"
+                            ? `${booth.name} · ${t("locations.boothKindVehicle")}`
+                            : booth.name}
                       </option>
                     ))}
                   </optgroup>

@@ -101,8 +101,10 @@ export type { Locale } from "./types";
 export { localeFromCookieHeader } from "./types";
 
 const documentTypeKeys: Record<string, string> = {
+  INE: "docs.ine",
+  Licencia: "docs.license",
+  Pasaporte: "docs.passport",
   "INE / IFE": "docs.ine",
-  "Pasaporte": "docs.passport",
   "Licencia de conducir": "docs.license",
   "Cédula profesional": "docs.professional",
   "Credencial laboral": "docs.work",
@@ -122,6 +124,7 @@ const purposeKeys: Record<string, string> = {
   Mantenimiento: "purpose.maintenance",
   Capacitación: "purpose.training",
   "Visita ejecutiva": "purpose.executive",
+  Otro: "purpose.other",
 };
 
 export function visitPurposeMessageKey(purpose: string) {

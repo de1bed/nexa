@@ -25,6 +25,8 @@ import { Button, Callout, Card, Field, cn, fieldClass } from "./ui";
 import { CopyField, ShareButton, Toggle } from "./ui-client";
 import { invitationSchema, normalizeMeetingUrl } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
+import { OTHER_PURPOSE, resolvedPurpose } from "@/lib/visit-purpose";
+import { visitStartsInPast } from "@/lib/visit-schedule";
 import { visitPurposeMessageKey } from "@/lib/i18n";
 import { parseVisitorFlow } from "@/lib/visitor-flow";
 import { useI18n } from "./i18n-provider";
@@ -162,6 +164,7 @@ export function InvitationForm() {
     endTime: "11:00",
     passValidDays: 1,
     purpose: visitPurposes[0] as string,
+    purposeOther: "",
     notes: "",
     accessRequirements: "",
     sendEmail: false,
@@ -191,7 +194,9 @@ export function InvitationForm() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    const payload = { ...form, locationId: activeLocation };
+    const { purposeOther, ...fields } = form;
+    const purpose = resolvedPurpose(fields.purpose, purposeOther);
+    const payload = { ...fields, locationId: activeLocation, purpose };
     const parsed = invitationSchema.safeParse(payload);
 
     if (!parsed.success) {
@@ -213,6 +218,11 @@ export function InvitationForm() {
     const endsAt = zonedDateTime(payload.date, payload.endTime, locationTimeZone);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
       setErrors({ date: t("common.invalidDate") });
+      return;
+    }
+    if (visitStartsInPast(startsAt)) {
+      setErrors({ date: t("invite.past") });
+      toast.error(t("invite.past"));
       return;
     }
 
@@ -752,8 +762,20 @@ export function InvitationForm() {
                     {t(visitPurposeMessageKey(purpose)) || purpose}
                   </option>
                 ))}
+                <option value={OTHER_PURPOSE}>{t("purpose.other")}</option>
               </select>
             </Field>
+            {form.purpose === OTHER_PURPOSE && (
+              <Field label={t("invite.purposeOther")} error={errors.purpose}>
+                <input
+                  className={fieldClass}
+                  maxLength={160}
+                  placeholder={t("invite.purposeOtherPlaceholder")}
+                  value={form.purposeOther}
+                  onChange={(event) => update("purposeOther", event.target.value)}
+                />
+              </Field>
+            )}
 
             <Field
               label={t("invite.access")}

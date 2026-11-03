@@ -50,6 +50,7 @@ import { isLiveMode } from "@/lib/config";
 import { getOCRProvider } from "@/lib/ocr";
 import { readPlateText, setOcrStatusSink } from "@/lib/ocr/tesseract";
 import { documentTypes } from "@/lib/domain";
+import type { SafetyDocument } from "@/lib/safety-documents";
 import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
 import {
@@ -120,6 +121,7 @@ type Invitation = {
   visitorCompany: string;
   /** Requisitos que la empresa pidió en esta invitación. */
   requested: RequestedItem[];
+  safetyDocuments?: SafetyDocument[];
 };
 
 type RequestedItem = {
@@ -205,6 +207,7 @@ export function VisitorFlow({
   const [readNote, setReadNote] = useState("");
   const [ocrHint, setOcrHint] = useState("");
   const [consent, setConsent] = useState(false);
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
   const [nameConfirmed, setNameConfirmed] = useState(false);
   const [passToken, setPassToken] = useState("");
   const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
@@ -331,6 +334,9 @@ export function VisitorFlow({
           visitorCompany: String(row.visitor_company ?? ""),
           requested: Array.isArray(row.requested_attachments)
             ? (row.requested_attachments as RequestedItem[])
+            : [],
+          safetyDocuments: Array.isArray(row.safety_documents)
+            ? (row.safety_documents as SafetyDocument[])
             : [],
         });
       } catch {
@@ -497,6 +503,12 @@ export function VisitorFlow({
       go("review");
       return;
     }
+    const safetyDocuments = invitation?.safetyDocuments ?? [];
+    if (safetyDocuments.length > 0 && !safetyAccepted) {
+      setError(t("visitor.safetyRequired"));
+      go("consent");
+      return;
+    }
     const problem = validateRegistration(
       {
         fullName: typedName,
@@ -555,6 +567,7 @@ export function VisitorFlow({
           if (fieldValue) form.set(key, fieldValue);
         });
         form.set("consent", consent ? "true" : "false");
+        form.set("safetyAccepted", safetyAccepted ? "true" : "false");
         form.set("nameConfirmed", confirmsName ? "true" : "false");
         form.set("vehicleDeclined", noVehicle ? "true" : "false");
         if (files.front) form.set("documentFront", files.front);
@@ -1543,7 +1556,11 @@ export function VisitorFlow({
           onBack={() => back("consent")}
           onNext={submit}
           nextLabel={submitting ? t("visitor.generating") : t("visitor.acceptPass")}
-          nextDisabled={(flow.consent === "required" && !consent) || submitting}
+          nextDisabled={
+            ((flow.consent === "required" && !consent) ||
+              ((invitation.safetyDocuments?.length ?? 0) > 0 && !safetyAccepted)) ||
+            submitting
+          }
           busy={submitting}
           error={error}
         >
@@ -1564,6 +1581,66 @@ export function VisitorFlow({
               <p className="mt-3">{t("visitor.noIdNotice")}</p>
             )}
           </div>
+
+          {(invitation.safetyDocuments?.length ?? 0) > 0 && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-[#071426]">
+                  {t("visitor.safetyTitle")}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  {t("visitor.safetyHint")}
+                </p>
+              </div>
+              {invitation.safetyDocuments?.map((document) => (
+                <article
+                  key={document.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4"
+                >
+                  <p className="font-semibold text-[#071426]">{document.title}</p>
+                  {document.body ? (
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">
+                      {document.body}
+                    </p>
+                  ) : null}
+                  {document.url ? (
+                    <a
+                      href={document.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-sm font-semibold text-[#0d9d99]"
+                    >
+                      {t("visitor.safetyOpen")}
+                    </a>
+                  ) : null}
+                </article>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSafetyAccepted(!safetyAccepted)}
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition",
+                  safetyAccepted
+                    ? "border-[#10cfc9] bg-[#10cfc9]/10"
+                    : "border-slate-200 bg-white",
+                )}
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg border-2 transition",
+                    safetyAccepted
+                      ? "border-[#0d9d99] bg-[#10cfc9] text-white"
+                      : "border-slate-300",
+                  )}
+                >
+                  {safetyAccepted && <Check size={15} strokeWidth={3} />}
+                </span>
+                <span className="text-sm leading-6 text-[#071426]">
+                  {t("visitor.safetyAccept")}
+                </span>
+              </button>
+            </div>
+          )}
 
           <button
             type="button"

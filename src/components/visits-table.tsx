@@ -32,7 +32,7 @@ const filterable: VisitStatus[] = [
 ];
 
 export function VisitsTable() {
-  const { viewer, loading } = useWorkspace();
+  const { viewer, loading, hosts } = useWorkspace();
   const allVisits = useMyVisits();
   const { t, formatDateTime } = useI18n();
   const [query, setQuery] = useState("");
@@ -62,6 +62,7 @@ export function VisitsTable() {
             t("people.visitor"),
             t("visitor.company"),
             t("visits.host"),
+            t("reports.hostDepartment"),
             t("visits.location"),
             t("invite.start"),
             t("guard.authorized"),
@@ -74,6 +75,7 @@ export function VisitsTable() {
             visit.visitorName,
             visit.company,
             visit.hostName,
+            hosts.find((host) => host.id === visit.hostId)?.department ?? "",
             visit.location,
             when(visit.startsAt),
             when(visit.checkedInAt),

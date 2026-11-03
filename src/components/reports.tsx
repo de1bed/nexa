@@ -98,7 +98,7 @@ function stayLabel(
 }
 
 export function Reports() {
-  const { organization, viewer, syncedAt, live, booths, locations, events } =
+  const { organization, viewer, syncedAt, live, booths, locations, events, hosts } =
     useWorkspace();
   const { t, formatDateTime, formatDuration, intl } = useI18n();
   const visits = useMyVisits();
@@ -288,6 +288,7 @@ export function Reports() {
         "Visitante",
         "Empresa",
         "Anfitrión",
+        t("reports.hostDepartment"),
         "Ubicación",
         "Motivo",
         "Entrada",
@@ -302,6 +303,7 @@ export function Reports() {
         visit.visitorName,
         visit.company || "Sin empresa",
         visit.hostName,
+        hosts.find((host) => host.id === visit.hostId)?.department ?? "",
         visit.location,
         visit.purpose,
         when(visit.checkedInAt),
@@ -318,6 +320,7 @@ export function Reports() {
         "Visitante",
         "Empresa",
         "Anfitrión",
+        t("reports.hostDepartment"),
         "Ubicación",
         "Motivo",
         "Programada inicio",
@@ -341,6 +344,7 @@ export function Reports() {
         visit.visitorName,
         visit.company || "Sin empresa",
         visit.hostName,
+        hosts.find((host) => host.id === visit.hostId)?.department ?? "",
         visit.location,
         visit.purpose,
         when(visit.startsAt),

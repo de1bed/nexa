@@ -199,6 +199,11 @@ export function TabletAccounts() {
                   {siteBooths.map((booth) => (
                     <option key={booth.id} value={booth.id}>
                       {site.name} · {booth.name}
+                      {booth.kind === "pedestrian"
+                        ? ` · ${t("locations.boothKindPedestrian")}`
+                        : booth.kind === "vehicle"
+                          ? ` · ${t("locations.boothKindVehicle")}`
+                          : ""}
                     </option>
                   ))}
                 </optgroup>

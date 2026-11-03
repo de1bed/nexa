@@ -27,16 +27,33 @@ export async function POST(request: Request) {
         { status: 404 },
       );
 
-    const { data, error } = await db
+    const inserted = {
+      organization_id: organizationId,
+      location_id: input.locationId,
+      name: input.name,
+      notes: input.notes ?? "",
+      kind: input.kind,
+    };
+    const withKind = await db
       .from("booths")
-      .insert({
-        organization_id: organizationId,
-        location_id: input.locationId,
-        name: input.name,
-        notes: input.notes ?? "",
-      })
-      .select("id,location_id,name,notes,active")
+      .insert(inserted)
+      .select("id,location_id,name,notes,active,kind")
       .single();
+    const saved =
+      withKind.error && /kind/i.test(withKind.error.message ?? "")
+        ? await db
+            .from("booths")
+            .insert({
+              organization_id: organizationId,
+              location_id: input.locationId,
+              name: input.name,
+              notes: input.notes ?? "",
+            })
+            .select("id,location_id,name,notes,active")
+            .single()
+        : withKind;
+    const data = saved.data;
+    const error = saved.error;
 
     if (error?.code === "23505")
       return NextResponse.json(

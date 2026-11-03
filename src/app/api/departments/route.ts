@@ -15,7 +15,7 @@ export async function GET() {
     .eq("organization_id", guard.context.organizationId)
     .order("name");
   if (error)
-    return NextResponse.json({ error: "No fue posible cargar las áreas" }, { status: 500 });
+    return NextResponse.json({ error: "No fue posible cargar los departamentos" }, { status: 500 });
   return NextResponse.json({ departments: data ?? [] });
 }
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ department: data }, { status: 201 });
   } catch {
     return NextResponse.json(
-      { error: "No fue posible crear el área. Revisa que no exista ya." },
+      { error: "No fue posible crear el departamento. Revisa que no exista ya." },
       { status: 400 },
     );
   }
@@ -74,6 +74,38 @@ export async function PATCH(request: Request) {
     if (error || !data) throw error ?? new Error("missing");
     return NextResponse.json({ department: data });
   } catch {
-    return NextResponse.json({ error: "No fue posible actualizar el área" }, { status: 400 });
+    return NextResponse.json({ error: "No fue posible actualizar el departamento" }, { status: 400 });
   }
+}
+
+export async function DELETE(request: Request) {
+  const guard = await requireApiContext(["superadmin", "admin"]);
+  if (!guard.ok)
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+
+  const id = new URL(request.url).searchParams.get("id") ?? "";
+  const parsed = z.uuid().safeParse(id);
+  if (!parsed.success)
+    return NextResponse.json({ error: "Departamento no disponible" }, { status: 400 });
+
+  const { error } = await guard.context.db
+    .from("departments")
+    .delete()
+    .eq("id", parsed.data)
+    .eq("organization_id", guard.context.organizationId);
+  if (!error) return NextResponse.json({ ok: true, removed: true });
+
+  if (error.code === "23503") {
+    const { error: hideError } = await guard.context.db
+      .from("departments")
+      .update({ active: false })
+      .eq("id", parsed.data)
+      .eq("organization_id", guard.context.organizationId);
+    if (!hideError) return NextResponse.json({ ok: true, removed: false });
+  }
+
+  return NextResponse.json(
+    { error: "No fue posible eliminar el departamento" },
+    { status: 400 },
+  );
 }

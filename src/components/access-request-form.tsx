@@ -163,7 +163,7 @@ export function AccessRequestForm() {
               ))}
             </fieldset>
             {areas.length > 0 && (
-              <Field label="Área">
+              <Field label="Departamento">
                 <select
                   required
                   className={fieldClass}

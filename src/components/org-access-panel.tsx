@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Shield } from "lucide-react";
+import { Copy, Pencil, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, fieldClass } from "./ui";
 import { useI18n } from "./i18n-provider";
@@ -40,6 +40,8 @@ export function OrgAccessPanel({
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [platform, setPlatform] = useState(false);
   const [areaName, setAreaName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   useEffect(() => {
     if (!live) return;
@@ -104,12 +106,54 @@ export function OrgAccessPanel({
       body: JSON.stringify({ name }),
     });
     if (!response.ok) {
-      toast.error("No fue posible crear el área");
+      toast.error(t("team.departmentFail"));
       return;
     }
     const payload = (await response.json()) as { department: AreaOption };
     onDepartments([...departments, payload.department]);
     setAreaName("");
+  }
+
+  async function saveDepartment(id: string) {
+    const name = editingName.trim();
+    if (name.length < 2) return;
+    if (!live) {
+      onDepartments(
+        departments.map((area) => (area.id === id ? { ...area, name } : area)),
+      );
+      setEditingId(null);
+      return;
+    }
+    const response = await fetch("/api/departments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name }),
+    });
+    if (!response.ok) {
+      toast.error(t("team.departmentFail"));
+      return;
+    }
+    onDepartments(
+      departments.map((area) => (area.id === id ? { ...area, name } : area)),
+    );
+    setEditingId(null);
+  }
+
+  async function removeDepartment(id: string) {
+    if (!window.confirm(t("team.departmentRemoveConfirm"))) return;
+    if (!live) {
+      onDepartments(departments.filter((area) => area.id !== id));
+      return;
+    }
+    const response = await fetch(
+      `/api/departments?id=${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      toast.error(t("team.departmentFail"));
+      return;
+    }
+    onDepartments(departments.filter((area) => area.id !== id));
   }
 
   return (
@@ -152,32 +196,71 @@ export function OrgAccessPanel({
       </Card>
 
       <Card className="p-5">
-        <p className="text-sm font-semibold">Áreas</p>
+        <p className="text-sm font-semibold">{t("team.departmentsTitle")}</p>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          El nombre y el área identifican a cada persona del equipo.
+          {t("team.departmentsHint")}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <ul className="mt-3 space-y-2">
           {departments.length === 0 && (
-            <span className="text-sm text-slate-400">Todavía no hay áreas.</span>
+            <li className="text-sm text-slate-400">{t("team.departmentEmpty")}</li>
           )}
           {departments.map((area) => (
-            <span
+            <li
               key={area.id}
-              className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium"
+              className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2"
             >
-              {area.name}
-            </span>
+              {editingId === area.id ? (
+                <input
+                  className={fieldClass}
+                  value={editingName}
+                  onChange={(event) => setEditingName(event.target.value)}
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {area.name}
+                </span>
+              )}
+              {editingId === area.id ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void saveDepartment(area.id)}
+                >
+                  {t("team.departmentSave")}
+                </Button>
+              ) : (
+                <button
+                  type="button"
+                  aria-label={t("team.departmentEdit")}
+                  onClick={() => {
+                    setEditingId(area.id);
+                    setEditingName(area.name);
+                  }}
+                  className="grid size-9 place-items-center rounded-xl text-slate-500 hover:bg-white"
+                >
+                  <Pencil size={15} />
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label={t("team.departmentRemove")}
+                onClick={() => void removeDepartment(area.id)}
+                className="grid size-9 place-items-center rounded-xl text-red-600 hover:bg-white"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
         <form onSubmit={addArea} className="mt-4 flex gap-2">
           <input
             className={fieldClass}
-            placeholder="Nueva área"
+            placeholder={t("team.departmentPlaceholder")}
             value={areaName}
             onChange={(event) => setAreaName(event.target.value)}
           />
           <Button type="submit" variant="outline">
-            Agregar
+            {t("team.departmentAdd")}
           </Button>
         </form>
       </Card>
