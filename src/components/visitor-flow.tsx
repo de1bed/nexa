@@ -373,7 +373,7 @@ export function VisitorFlow({
   }, []);
 
   const readIdentity = useCallback(
-    async (file: File) => {
+    async (images: File | File[]) => {
       if (!live) return;
       setReading("id");
       setReadNote("");
@@ -386,7 +386,12 @@ export function VisitorFlow({
         );
       });
       try {
-        const result = await (await getOCRProvider()).extractIdentityData(file);
+        const shots = (Array.isArray(images) ? images : [images]).filter(
+          (file) => file.size > 0,
+        );
+        const result = await (
+          await getOCRProvider()
+        ).extractIdentityData(shots.length > 1 ? shots : shots[0]);
         if (!result.fullName && !result.documentNumber) {
           setReadNote((current) =>
             current === "verified" || current === "partial" ? current : "miss",
@@ -938,10 +943,14 @@ export function VisitorFlow({
               onCancel={() => setCapturing(null)}
               onCaptured={(captured, url) => {
                 const side = capturing.side;
-                setFiles((current) => ({ ...current, [side]: captured }));
+                const nextFiles = { ...files, [side]: captured };
+                setFiles(nextFiles);
                 setPreviews((current) => ({ ...current, [side]: url }));
                 setCapturing(null);
-                void readIdentity(captured);
+                const shots = [nextFiles.front, nextFiles.back].filter(
+                  (file): file is File => Boolean(file),
+                );
+                void readIdentity(shots);
               }}
             />
           </div>
