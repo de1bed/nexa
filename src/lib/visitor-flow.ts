@@ -1,3 +1,5 @@
+import { isPlaceholderVisitorName } from "@/lib/visitor-name";
+
 /**
  * Política de pasos del registro del visitante.
  *
@@ -312,6 +314,9 @@ export function validateRegistration(
   input: RegistrationInput,
   flow: VisitorFlowConfig,
 ): RegistrationError | null {
+  if (input.fullName.trim() && isPlaceholderVisitorName(input.fullName))
+    return "name_required";
+
   if (flow.identity === "required") {
     if (input.fullName.trim().length < 2) return "name_required";
     if (!isEmail(input.email)) return "email_invalid";

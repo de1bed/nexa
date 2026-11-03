@@ -24,6 +24,12 @@ import { localeFromCookieHeader } from "@/lib/i18n/types";
 import { translate } from "@/lib/i18n/catalog";
 import { invitationVisitSelect } from "@/lib/location-embed";
 import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
+import {
+  escapeIlike,
+  isPlaceholderVisitorName,
+  matchVisitorId,
+  type VisitorMatch,
+} from "@/lib/visitor-name";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +44,8 @@ const schema = z.object({
   visitorNotes: z.string().trim().max(500).optional(),
   ocrConfidence: z.coerce.number().min(0).max(100).optional(),
   ocrVerified: z.enum(["true", "false"]).optional(),
+  /** El visitante marcó que el nombre escrito es el suyo. */
+  nameConfirmed: z.enum(["true", "false"]).optional(),
   documentExpiresAt: z.string().max(20).optional(),
   consent: z.enum(["true", "false"]).optional(),
   vehicleDeclined: z.enum(["true", "false"]).optional(),
@@ -73,6 +81,51 @@ const IDENTITY_SIDES = [
   { field: "documentFront", type: "identity_front" },
   { field: "documentBack", type: "identity_back" },
 ] as const;
+
+/**
+ * Si el correo o el teléfono ya existen en la empresa, se actualiza esa ficha
+ * en lugar de crear otra. Un resultado amplio se deja pasar: mejor un alta
+ * nueva que juntar a dos personas.
+ */
+async function findReusableVisitor(
+  db: ReturnType<typeof createAdminClient>,
+  input: { organizationId: string; email: string; phone: string },
+) {
+  const rows: VisitorMatch[] = [];
+  const email = input.email.trim();
+  const digits = input.phone.replace(/\D/g, "");
+
+  if (email.includes("@")) {
+    const { data } = await db
+      .from("visitors")
+      .select("id,email,phone")
+      .eq("organization_id", input.organizationId)
+      .is("deleted_at", null)
+      .ilike("email", escapeIlike(email))
+      .limit(5);
+    if ((data ?? []).length >= 5) return null;
+    rows.push(...((data ?? []) as VisitorMatch[]));
+  }
+
+  if (digits.length >= 7) {
+    // El teléfono puede estar guardado con espacios o guiones.
+    const pattern = digits
+      .slice(-10)
+      .split("")
+      .join("[^0-9]*");
+    const { data } = await db
+      .from("visitors")
+      .select("id,email,phone")
+      .eq("organization_id", input.organizationId)
+      .is("deleted_at", null)
+      .filter("phone", "match", pattern)
+      .limit(5);
+    if ((data ?? []).length < 5)
+      rows.push(...((data ?? []) as VisitorMatch[]));
+  }
+
+  return matchVisitorId(rows, email, input.phone);
+}
 
 function collectFiles(form: FormData, field: string) {
   return form
@@ -262,11 +315,34 @@ export async function POST(
         { status: 400 },
       );
 
-    const fullName = resolvedVisitorName(
-      values.fullName,
-      resolved.visitor_name,
-      flow.identity,
-    );
+    const writtenName = values.fullName.trim();
+    const nameConfirmed =
+      values.nameConfirmed === "true" &&
+      writtenName.length >= 2 &&
+      !isPlaceholderVisitorName(writtenName);
+    if (writtenName && isPlaceholderVisitorName(writtenName))
+      return NextResponse.json(
+        {
+          error: translate("errors.name_required", undefined, locale),
+          code: "name_required",
+        },
+        { status: 400 },
+      );
+    if (writtenName.length >= 2 && !nameConfirmed)
+      return NextResponse.json(
+        {
+          error: translate("errors.name_confirm_required", undefined, locale),
+          code: "name_confirm_required",
+        },
+        { status: 400 },
+      );
+
+    const invitedName = isPlaceholderVisitorName(resolved.visitor_name)
+      ? ""
+      : resolved.visitor_name;
+    const fullName = nameConfirmed
+      ? writtenName
+      : resolvedVisitorName(values.fullName, invitedName, flow.identity);
     const masked = values.documentNumber
       ? maskDocument(values.documentNumber)
       : null;
@@ -284,10 +360,24 @@ export async function POST(
     };
 
     let visitorId = visit.visitor_id as string | null;
+    if (!visitorId) {
+      const reusable = await findReusableVisitor(db, {
+        organizationId: visit.organization_id,
+        email: values.email,
+        phone: values.phone,
+      });
+      if (reusable) visitorId = reusable;
+    }
     if (visitorId) {
+      // Un registro sin nombre propio no debe borrar el nombre ya guardado.
+      const { full_name: confirmedName, ...rest } = visitorPayload;
       const { error } = await db
         .from("visitors")
-        .update(visitorPayload)
+        .update(
+          isPlaceholderVisitorName(confirmedName)
+            ? rest
+            : visitorPayload,
+        )
         .eq("id", visitorId)
         .eq("organization_id", visit.organization_id);
       if (error) throw error;
@@ -443,7 +533,10 @@ export async function POST(
 
     await db
       .from("visit_invitations")
-      .update({ completed_at: new Date().toISOString() })
+      .update({
+        completed_at: new Date().toISOString(),
+        ...(nameConfirmed ? { invitee_name: fullName } : {}),
+      })
       .eq("visit_id", visit.id);
 
     await db.from("audit_logs").insert([
@@ -470,6 +563,7 @@ export async function POST(
           document_captured: identityImages.length > 0,
           ocr_confidence: values.ocrConfidence ?? null,
           ocr_verified: values.ocrVerified === "true",
+          name_confirmed: nameConfirmed,
           document_expires_at: values.documentExpiresAt ?? null,
         },
       },

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mergeIdentityRead } from "../ocr/cloud";
 import { MockOCRProvider } from "../ocr/mock";
 import { ocrResultFromExtraction } from "../ocr/extraction";
 import { LOW_CONFIDENCE } from "../ocr/types";
@@ -12,6 +13,44 @@ import {
 import type { Visit } from "../domain";
 
 describe("OCR", () => {
+  it("completa el folio que el teléfono no alcanzó a leer", () => {
+    const merged = mergeIdentityRead(
+      {
+        fullName: "Sofía Rivera",
+        rawText: "NOMBRE",
+        confidence: 60,
+        fields: [],
+      },
+      {
+        documentNumber: "GRLPJN80010109H800",
+        rawText: "CLAVE",
+        confidence: 80,
+        fields: [],
+      },
+    );
+    expect(merged.fullName).toBe("Sofía Rivera");
+    expect(merged.documentNumber).toBe("GRLPJN80010109H800");
+  });
+
+  it("se queda con la lectura local si ya trae nombre y folio", () => {
+    const local = {
+      fullName: "Ana López",
+      documentNumber: "123456789",
+      rawText: "local",
+      confidence: 90,
+      fields: [],
+    };
+    expect(
+      mergeIdentityRead(local, {
+        fullName: "Otra",
+        documentNumber: "000",
+        rawText: "nube",
+        confidence: 70,
+        fields: [],
+      }),
+    ).toBe(local);
+  });
+
   it("entrega una banda MRZ bien formada y comprobada", async () => {
     const result = await new MockOCRProvider().extractIdentityData(
       new File(["imagen"], "id.jpg", { type: "image/jpeg" }),

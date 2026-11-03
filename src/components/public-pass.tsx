@@ -22,6 +22,7 @@ import { Callout, cn } from "./ui";
 import { LiveDuration } from "./ui-client";
 import { isLiveMode } from "@/lib/config";
 import { passValidityWindow } from "@/lib/pass-window";
+import { passIsReusable } from "@/lib/pass-reuse";
 import {
   getShowcaseServerSnapshot,
   getShowcaseSnapshot,
@@ -110,7 +111,12 @@ export function PublicPass({
       state:
         showcaseVisit.status === "cancelled" || showcaseVisit.status === "denied"
           ? "revoked"
-          : showcaseVisit.status === "checked_out"
+          : showcaseVisit.status === "checked_out" &&
+              !passIsReusable({
+                allLocations: showcaseVisit.allLocations === true,
+                passValidDays: showcaseVisit.passValidDays,
+                accessLocationCount: showcaseVisit.accessLocationIds?.length ?? 0,
+              })
             ? "used"
             : "valid",
       status: showcaseVisit.status,

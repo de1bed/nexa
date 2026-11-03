@@ -15,8 +15,12 @@ import {
   fieldClass,
 } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
-import { safeCsvCell } from "@/lib/security";
 import { timeInsideMs, type Visit } from "@/lib/domain";
+import {
+  downloadWorkbook,
+  formatReportDateTime,
+  reportFileDate,
+} from "@/lib/report-export";
 import { useI18n } from "./i18n-provider";
 
 /** Vista de quién está dentro, con búsqueda y salida manual. */
@@ -82,47 +86,48 @@ export function PeopleAdmin() {
   }
 
   function exportInside() {
-    const generated = formatDateTime(syncedAt ?? new Date().toISOString());
-    const content = [
-      [t("people.organization"), organization.name],
-      [t("people.document"), hostView ? t("people.hostInside") : t("people.allInside")],
-      [t("people.generated"), generated],
-      [t("people.present"), String(inside.length)],
-      [],
-      [
-        t("people.visitor"),
-        t("common.company"),
-        t("visits.host"),
-        t("visits.location"),
-        t("invite.purpose"),
-        t("common.entry"),
-        t("reports.timeInside"),
-        t("visits.identification"),
-      ],
-      ...inside.map((visit) => [
-        visit.visitorName,
-        visit.company || t("common.noCompany"),
-        visit.hostName,
-        visit.location,
-        visit.purpose,
-        formatDateTime(visit.checkedInAt ?? "", visit.locationTimezone),
-        formatDuration(timeInsideMs(visit)),
-        visit.documentMasked ||
-          (visit.documentCaptured ? t("people.captured") : t("visits.notCaptured")),
-      ]),
-    ]
-      .map((row) => row.map(safeCsvCell).join(","))
-      .join("\r\n");
-
-    const blob = new Blob([`\uFEFF${content}`], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `nexa-dentro-${organization.name.replace(/\s+/g, "-").toLowerCase()}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const generated = formatReportDateTime(
+      syncedAt ?? new Date().toISOString(),
+    );
+    const slug = organization.name.replace(/\s+/g, "-").toLowerCase();
+    void downloadWorkbook(`nexa-dentro-${slug}-${reportFileDate()}.xlsx`, [
+      {
+        name: "Dentro",
+        rows: [
+          [t("people.organization"), organization.name],
+          [
+            t("people.document"),
+            hostView ? t("people.hostInside") : t("people.allInside"),
+          ],
+          [t("people.generated"), generated],
+          [t("people.present"), String(inside.length)],
+          [],
+          [
+            t("people.visitor"),
+            t("common.company"),
+            t("visits.host"),
+            t("visits.location"),
+            t("invite.purpose"),
+            t("common.entry"),
+            t("reports.timeInside"),
+            t("visits.identification"),
+          ],
+          ...inside.map((visit) => [
+            visit.visitorName,
+            visit.company || t("common.noCompany"),
+            visit.hostName,
+            visit.location,
+            visit.purpose,
+            formatReportDateTime(visit.checkedInAt),
+            formatDuration(timeInsideMs(visit)),
+            visit.documentMasked ||
+              (visit.documentCaptured
+                ? t("people.captured")
+                : t("visits.notCaptured")),
+          ]),
+        ],
+      },
+    ]);
   }
 
   return (

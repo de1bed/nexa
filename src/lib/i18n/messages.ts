@@ -354,6 +354,9 @@ export const es = {
     idOptionalNote: "No es obligatorio. Si las subes, se guardan de forma privada.",
     review: "Confirma tus datos",
     reviewHint: "Escribe el folio si lo tienes a la mano. El guardia verá las fotos.",
+    confirmName: "Confirmo que mi nombre está bien escrito",
+    confirmNameHint:
+      "El lector puede cambiar una letra. Si el nombre no es el tuyo, corrígelo y márcalo.",
     idCaptured: "Identificación capturada",
     sidesReady: "Frente y reverso listos para caseta",
     repeat: "Repetir",
@@ -456,6 +459,7 @@ export const es = {
   },
   errors: {
     name_required: "Escribe tu nombre completo.",
+    name_confirm_required: "Confirma que tu nombre está bien escrito.",
     email_invalid: "Escribe un correo válido.",
     phone_required: "Escribe un teléfono de contacto.",
     company_required: "Escribe la empresa que representas.",
@@ -497,14 +501,14 @@ export const es = {
   },
   reports: {
     title: "Reportes",
-    export: "Exportar CSV",
+    export: "Exportar Excel",
     from: "Desde",
     to: "Hasta",
     status: "Estado",
     all: "Todos",
     visitor: "Visitante",
     empty: "No hay visitas en este periodo.",
-    download: "Descargar CSV",
+    download: "Descargar Excel",
     mine: "Mis reportes",
     audit: "Reportes de auditoría",
     hostLog: "Bitácora del anfitrión",
@@ -629,7 +633,7 @@ export const es = {
     recordCheckout: "Registrar salida",
     checkoutToast: "Salida de {name} registrada",
     updated: "Actualizado {time}",
-    export: "Exportar",
+    export: "Exportar Excel",
     liveEyebrow: "Estado en tiempo real",
     checkoutHint:
       "{name} dejará de contar en el aforo y su pase se desactivará.",
@@ -684,6 +688,8 @@ export const es = {
     guardCodeOnlyInfo:
       "Para el personal de caseta. No se crea una cuenta de correo. El código queda a su nombre y sirve en cualquier caseta.",
     guardsTitle: "Guardias",
+    editGuard: "Editar",
+    removeGuard: "Dar de baja",
     guardsLead:
       "Cada guardia tiene un código. Sirve en cualquier caseta. El ojo lo muestra o lo esconde.",
     guardsAbout: "De qué trata esta tarjeta",
@@ -1638,6 +1644,9 @@ export const en: DeepStringify<typeof es> = {
     idOptionalNote: "Not required. If you upload them, they are stored privately.",
     review: "Confirm your details",
     reviewHint: "Add the ID number if you have it. The guard will see the photos.",
+    confirmName: "I confirm my name is spelled correctly",
+    confirmNameHint:
+      "The reader can change a letter. If this is not your name, correct it and check the box.",
     idCaptured: "ID captured",
     sidesReady: "Front and back ready for the booth",
     repeat: "Retake",
@@ -1740,6 +1749,7 @@ export const en: DeepStringify<typeof es> = {
   },
   errors: {
     name_required: "Enter your full name.",
+    name_confirm_required: "Confirm that your name is spelled correctly.",
     email_invalid: "Enter a valid email.",
     phone_required: "Enter a contact phone number.",
     company_required: "Enter the company you represent.",
@@ -1781,14 +1791,14 @@ export const en: DeepStringify<typeof es> = {
   },
   reports: {
     title: "Reports",
-    export: "Export CSV",
+    export: "Export Excel",
     from: "From",
     to: "To",
     status: "Status",
     all: "All",
     visitor: "Visitor",
     empty: "No visits in this period.",
-    download: "Download CSV",
+    download: "Download Excel",
     mine: "My reports",
     audit: "Audit reports",
     hostLog: "Host log",
@@ -1912,7 +1922,7 @@ export const en: DeepStringify<typeof es> = {
     recordCheckout: "Record check-out",
     checkoutToast: "{name} checked out",
     updated: "Updated {time}",
-    export: "Export",
+    export: "Export Excel",
     liveEyebrow: "Live status",
     checkoutHint:
       "{name} will no longer count toward occupancy and their pass will be deactivated.",
@@ -1967,6 +1977,8 @@ export const en: DeepStringify<typeof es> = {
     guardCodeOnlyInfo:
       "For booth staff. No email account is created. The code stays under their name and works at any booth.",
     guardsTitle: "Guards",
+    editGuard: "Edit",
+    removeGuard: "Remove",
     guardsLead:
       "Each guard has a code. It works at any booth. The eye shows or hides it.",
     guardsAbout: "What this card is for",

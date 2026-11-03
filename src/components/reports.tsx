@@ -30,7 +30,10 @@ import { recordedBooth, recordedGuard } from "@/lib/booth-choice";
 import { useMyVisits, useWorkspace } from "./workspace-provider";
 import { Button, Card, EmptyState, Field, MetricTile, fieldClass } from "./ui";
 import { LiveDuration, Sheet, useNow } from "./ui-client";
-import { safeCsvCell } from "@/lib/security";
+import {
+  downloadWorkbook,
+  formatReportDateTime,
+} from "@/lib/report-export";
 import {
   timeInsideMs,
   type AccessEvent,
@@ -44,7 +47,6 @@ import {
   localYearKey,
   parseLocalDay,
   reportRange,
-  shiftLocalDay,
   type ReportPreset,
 } from "@/lib/local-day";
 import { visitPurposeMessageKey } from "@/lib/i18n";
@@ -73,17 +75,6 @@ function formatLocalMonth(key: string, locale: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(year, month - 1, 1));
-}
-
-function downloadCsv(filename: string, lines: string[][]) {
-  const content = lines.map((row) => row.map(safeCsvCell).join(",")).join("\r\n");
-  const blob = new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 function evidenceLabel(
@@ -282,11 +273,12 @@ export function Reports() {
   );
   const periodLabel = `${formatLocalDay(filters.from, intl, "medium")} a ${formatLocalDay(filters.to, intl, "medium")}`;
 
-  function exportCsv() {
+  function exportWorkbook() {
+    const when = (value?: string) => formatReportDateTime(value);
     const header = [
       ["Organización", organization.name],
       ["Tipo de reporte", hostView ? "Bitácora del anfitrión" : "Bitácora de control de visitas"],
-      ["Generado", generatedAt],
+      ["Generado", formatReportDateTime(syncedAt ?? (clock ? new Date(clock).toISOString() : new Date().toISOString()))],
       ["Periodo", periodLabel],
       ["Personas dentro ahora", String(insideNow.length)],
       ["Visitas en el periodo", String(rows.length)],
@@ -312,7 +304,7 @@ export function Reports() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTime(visit.checkedInAt, visit.locationTimezone),
+        when(visit.checkedInAt),
         stayLabel(visit, formatDuration),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
         recordedBooth(visit),
@@ -351,10 +343,10 @@ export function Reports() {
         visit.hostName,
         visit.location,
         visit.purpose,
-        formatDateTime(visit.startsAt, visit.locationTimezone),
-        formatDateTime(visit.endsAt, visit.locationTimezone),
-        formatDateTime(visit.checkedInAt, visit.locationTimezone),
-        formatDateTime(visit.checkedOutAt, visit.locationTimezone),
+        when(visit.startsAt),
+        when(visit.endsAt),
+        when(visit.checkedInAt),
+        when(visit.checkedOutAt),
         stayLabel(visit, formatDuration),
         t(`status.${visit.status}`),
         visit.documentMasked || (visit.documentCaptured ? "Capturada" : "No capturada"),
@@ -370,9 +362,10 @@ export function Reports() {
       ]),
     ];
 
-    downloadCsv(
-      `nexa-bitacora-${organization.name.replace(/\s+/g, "-").toLowerCase()}-${filters.from}-a-${filters.to}.csv`,
-      header,
+    const slug = organization.name.replace(/\s+/g, "-").toLowerCase();
+    void downloadWorkbook(
+      `nexa-bitacora-${slug}-${filters.from}-a-${filters.to}.xlsx`,
+      [{ name: "Bitácora", rows: header }],
     );
   }
 
@@ -422,7 +415,7 @@ export function Reports() {
             <Printer size={16} />
             {t("reports.print")}
           </Button>
-          <Button size="sm" onClick={exportCsv}>
+          <Button size="sm" onClick={exportWorkbook}>
             <Download size={16} />
             {t("reports.export")}
           </Button>

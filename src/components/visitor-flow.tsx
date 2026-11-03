@@ -52,6 +52,10 @@ import { readPlateText, setOcrStatusSink } from "@/lib/ocr/tesseract";
 import { documentTypes } from "@/lib/domain";
 import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
+import {
+  displayVisitorName,
+  isPlaceholderVisitorName,
+} from "@/lib/visitor-name";
 import { DEMO_PASS_TOKEN } from "@/lib/demo-public";
 import {
   showcaseOrganization,
@@ -72,7 +76,6 @@ import {
   parseVisitorFlow,
   registrationPath,
   requestedComplete,
-  resolvedVisitorName,
   stepAfter,
   stepBefore,
   validateRegistration,
@@ -149,6 +152,10 @@ type ExtraAttachment = {
 
 const MAX_EXTRA_ATTACHMENTS = 10;
 
+function subscribeBrowserOrigin() {
+  return () => {};
+}
+
 const invalidInvitation = {
   visitId: "",
   state: "invalid",
@@ -198,9 +205,14 @@ export function VisitorFlow({
   const [readNote, setReadNote] = useState("");
   const [ocrHint, setOcrHint] = useState("");
   const [consent, setConsent] = useState(false);
+  const [nameConfirmed, setNameConfirmed] = useState(false);
   const [passToken, setPassToken] = useState("");
-  const [invitationUrl, setInvitationUrl] = useState("");
   const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
+  const invitationUrl = useSyncExternalStore(
+    subscribeBrowserOrigin,
+    () => `${window.location.origin}/visit/${token}`,
+    () => "",
+  );
 
   const invitation: Invitation | null = useMemo(() => {
     if (live) return remoteInvitation;
@@ -271,10 +283,6 @@ export function VisitorFlow({
   const hasIdentityPhotos = Boolean(files.front || files.back);
   const path = registrationPath(flow, hasIdentityPhotos);
   const totalSteps = Math.max(1, path.length);
-
-  useEffect(() => {
-    setInvitationUrl(`${window.location.origin}/visit/${token}`);
-  }, [token]);
 
   useEffect(() => {
     if (!live) return;
@@ -361,10 +369,11 @@ export function VisitorFlow({
 
   const set = useCallback((name: FormField, next: string) => {
     setEdits((current) => ({ ...current, [name]: next }));
+    if (name === "fullName") setNameConfirmed(false);
   }, []);
 
   const readIdentity = useCallback(
-    async (file: File) => {
+    async (images: File | File[]) => {
       if (!live) return;
       setReading("id");
       setReadNote("");
@@ -377,7 +386,12 @@ export function VisitorFlow({
         );
       });
       try {
-        const result = await (await getOCRProvider()).extractIdentityData(file);
+        const shots = (Array.isArray(images) ? images : [images]).filter(
+          (file) => file.size > 0,
+        );
+        const result = await (
+          await getOCRProvider()
+        ).extractIdentityData(shots.length > 1 ? shots : shots[0]);
         if (!result.fullName && !result.documentNumber) {
           setReadNote((current) =>
             current === "verified" || current === "partial" ? current : "miss",
@@ -393,6 +407,7 @@ export function VisitorFlow({
             ? { documentNumber: result.documentNumber }
             : {}),
         }));
+        if (result.fullName) setNameConfirmed(false);
         setReadNote(result.mrz?.verified ? "verified" : "partial");
       } catch {
         setReadNote((current) =>
@@ -460,14 +475,31 @@ export function VisitorFlow({
   }
 
   async function submit() {
-    const fullName = resolvedVisitorName(
-      value("fullName"),
-      invitation?.visitorName,
-      flow.identity,
-    );
+    // Con los datos apagados, el nombre de la invitación no es algo que el
+    // visitante haya escrito. Solo cuenta si lo edita o si el paso existe.
+    const typedName = (
+      flow.identity === "off" && edits.fullName === undefined
+        ? ""
+        : value("fullName")
+    ).trim();
+    const sawReview = path.includes("review");
+    const nameIsReal =
+      typedName.length >= 2 && !isPlaceholderVisitorName(typedName);
+    // Sin paso de revisión, enviar el formulario confirma el nombre escrito.
+    const confirmsName = nameIsReal && (nameConfirmed || !sawReview);
+    if (typedName && isPlaceholderVisitorName(typedName)) {
+      setError(t("errors.name_required"));
+      go(sawReview ? "review" : "identity");
+      return;
+    }
+    if (sawReview && nameIsReal && !nameConfirmed) {
+      setError(t("errors.name_confirm_required"));
+      go("review");
+      return;
+    }
     const problem = validateRegistration(
       {
-        fullName: value("fullName"),
+        fullName: typedName,
         email: value("email"),
         phone: value("phone"),
         company: value("company"),
@@ -506,7 +538,7 @@ export function VisitorFlow({
       if (live) {
         const form = new FormData();
         const fields: Array<[string, string]> = [
-          ["fullName", fullName],
+          ["fullName", confirmsName ? typedName : ""],
           ["email", value("email")],
           ["phone", value("phone")],
           ["company", value("company")],
@@ -523,6 +555,7 @@ export function VisitorFlow({
           if (fieldValue) form.set(key, fieldValue);
         });
         form.set("consent", consent ? "true" : "false");
+        form.set("nameConfirmed", confirmsName ? "true" : "false");
         form.set("vehicleDeclined", noVehicle ? "true" : "false");
         if (files.front) form.set("documentFront", files.front);
         if (files.back) form.set("documentBack", files.back);
@@ -693,6 +726,14 @@ export function VisitorFlow({
             prefix: "anexo",
           }
         : null;
+
+  const shownVisitorName = displayVisitorName(
+    [value("fullName"), invitation.visitorName],
+    t("visitor.fallbackName"),
+  );
+  const passVisitorName = isPlaceholderVisitorName(shownVisitorName)
+    ? t("visitor.fallbackName")
+    : shownVisitorName;
 
   return (
     <Frame progress={progressValue}>
@@ -902,10 +943,14 @@ export function VisitorFlow({
               onCancel={() => setCapturing(null)}
               onCaptured={(captured, url) => {
                 const side = capturing.side;
-                setFiles((current) => ({ ...current, [side]: captured }));
+                const nextFiles = { ...files, [side]: captured };
+                setFiles(nextFiles);
                 setPreviews((current) => ({ ...current, [side]: url }));
                 setCapturing(null);
-                void readIdentity(captured);
+                const shots = [nextFiles.front, nextFiles.back].filter(
+                  (file): file is File => Boolean(file),
+                );
+                void readIdentity(shots);
               }}
             />
           </div>
@@ -1017,8 +1062,13 @@ export function VisitorFlow({
           }
           onBack={() => back("review")}
           onNext={() => {
-            if (flow.identity === "required" && !value("fullName").trim())
+            const name = value("fullName").trim();
+            if ((flow.identity === "required" || name.length > 0) && name.length < 2)
               return setError(t("errors.name_required"));
+            if (name && isPlaceholderVisitorName(name))
+              return setError(t("errors.name_required"));
+            if (name.length >= 2 && !nameConfirmed)
+              return setError(t("errors.name_confirm_required"));
             advance("review");
           }}
           error={error}
@@ -1059,6 +1109,43 @@ export function VisitorFlow({
                 onChange={(event) => set("fullName", event.target.value)}
               />
             </Field>
+            <button
+              type="button"
+              onClick={() => {
+                const name = value("fullName").trim();
+                if (name.length < 2 || isPlaceholderVisitorName(name)) {
+                  setError(t("errors.name_required"));
+                  return;
+                }
+                setNameConfirmed((current) => !current);
+                setError("");
+              }}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition",
+                nameConfirmed
+                  ? "border-[#10cfc9] bg-[#10cfc9]/10"
+                  : "border-slate-200 bg-white",
+              )}
+            >
+              <span
+                className={cn(
+                  "mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg border-2 transition",
+                  nameConfirmed
+                    ? "border-[#0d9d99] bg-[#10cfc9] text-white"
+                    : "border-slate-300",
+                )}
+              >
+                {nameConfirmed && <Check size={15} strokeWidth={3} />}
+              </span>
+              <span>
+                <span className="block text-sm font-medium leading-6 text-[#071426]">
+                  {t("visitor.confirmName")}
+                </span>
+                <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                  {t("visitor.confirmNameHint")}
+                </span>
+              </span>
+            </button>
             <Field
               label={t("visitor.folio")}
               optional
@@ -1520,11 +1607,7 @@ export function VisitorFlow({
           <div className="mt-7">
             <PassCard
               token={passToken}
-              visitorName={resolvedVisitorName(
-                value("fullName"),
-                invitation.visitorName,
-                flow.identity,
-              )}
+              visitorName={passVisitorName}
               organizationName={invitation.organizationName}
               hostName={invitation.hostName}
               location={invitation.locationName}
@@ -1547,11 +1630,7 @@ export function VisitorFlow({
           <div className="mt-6 space-y-4">
             <SavePassButton
               token={passToken}
-              visitorName={resolvedVisitorName(
-                value("fullName"),
-                invitation.visitorName,
-                flow.identity,
-              )}
+              visitorName={passVisitorName}
               organizationName={invitation.organizationName}
               hostName={invitation.hostName}
               location={invitation.locationName}

@@ -1,12 +1,40 @@
 import type { OCRProvider, OCRResult } from "./types";
 
+/**
+ * Si el teléfono ya leyó nombre y folio, no se llama a la nube.
+ * Si falta uno de los dos, la nube completa lo que el teléfono no alcanzó.
+ */
+export function mergeIdentityRead(
+  local: OCRResult | null,
+  remote: OCRResult | null,
+): OCRResult {
+  const empty: OCRResult = { rawText: "", confidence: 0, fields: [] };
+  if (!remote) return local ?? empty;
+  if (!local) return remote;
+  if (local.fullName && local.documentNumber) return local;
+  const fullName = remote.fullName || local.fullName;
+  const documentNumber = remote.documentNumber || local.documentNumber;
+  return {
+    ...remote,
+    fullName,
+    documentNumber,
+    birthDate: remote.birthDate || local.birthDate,
+    expiryDate: remote.expiryDate || local.expiryDate,
+    curp: remote.curp || local.curp,
+    address: remote.address || local.address,
+    rawText: [local.rawText, remote.rawText].filter(Boolean).join("\n"),
+    confidence: Math.max(local.confidence ?? 0, remote.confidence ?? 0),
+    mrz: remote.mrz ?? local.mrz,
+  };
+}
+
 function asList(image: File | Blob | Array<File | Blob>) {
   return Array.isArray(image) ? image : [image];
 }
 
 /**
- * Primero Tesseract (gratis, en el teléfono). Solo si la banda no cuadra
- * se llama a Gemini Flash Lite. Así la mayoría de INE recientes no cobran.
+ * Primero Tesseract (gratis, en el teléfono). Si falta el nombre o el folio
+ * se llama a Gemini Flash Lite y se completa lo que el teléfono no leyó.
  */
 export class CloudOCRProvider implements OCRProvider {
   readonly name = "gemini";
@@ -16,10 +44,10 @@ export class CloudOCRProvider implements OCRProvider {
   ): Promise<OCRResult> {
     const files = asList(image);
     const local = await this.readLocal(files.at(-1)!);
-    if (local?.mrz?.verified) return local;
+    if (local?.fullName && local.documentNumber) return local;
 
     const remote = await this.readRemote(files);
-    return remote ?? local ?? { rawText: "", confidence: 0, fields: [] };
+    return mergeIdentityRead(local, remote);
   }
 
   private async readLocal(image: File | Blob) {

@@ -3,14 +3,19 @@ import { MockOCRProvider } from "./mock";
 import { isLiveMode } from "@/lib/config";
 
 /**
- * La lectura corre en el teléfono con Tesseract. No llama a un modelo de pago.
+ * En vivo: Tesseract en el teléfono y, si falta el nombre o el folio, la nube.
+ * NEXT_PUBLIC_OCR_PROVIDER=tesseract deja solo el teléfono.
  * El mock solo existe en la vitrina, sin credenciales.
  */
 export async function getOCRProvider(): Promise<OCRProvider> {
   const forced = process.env.NEXT_PUBLIC_OCR_PROVIDER;
   if (forced === "mock" || !isLiveMode()) return new MockOCRProvider();
-  const { TesseractOCRProvider } = await import("./tesseract");
-  return new TesseractOCRProvider();
+  if (forced === "tesseract") {
+    const { TesseractOCRProvider } = await import("./tesseract");
+    return new TesseractOCRProvider();
+  }
+  const { CloudOCRProvider } = await import("./cloud");
+  return new CloudOCRProvider();
 }
 
 export { LOW_CONFIDENCE, OCR_DISCLAIMER } from "./types";
