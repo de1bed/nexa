@@ -1,5 +1,6 @@
 import type { Visit, VisitStatus, WorkspaceState } from "./domain";
 import { accessWindow } from "./domain";
+import { passIsReusable } from "./pass-reuse";
 
 /**
  * Reglas de acceso puras. Son la referencia de comportamiento del modo vitrina
@@ -22,6 +23,14 @@ const closedStatuses: VisitStatus[] = [
   "expired",
   "denied",
 ];
+
+function reusable(visit: Visit) {
+  return passIsReusable({
+    allLocations: visit.allLocations === true,
+    passValidDays: visit.passValidDays,
+    accessLocationCount: visit.accessLocationIds?.length ?? 0,
+  });
+}
 
 export function resolveInvitation(
   state: WorkspaceState,
@@ -61,13 +70,24 @@ export function checkIn(
 ): ServiceResult<Visit> {
   if (visit.status === "checked_in")
     return { ok: false, code: "duplicate_check_in" };
-  if (closedStatuses.includes(visit.status))
+  if (
+    closedStatuses.includes(visit.status) &&
+    !(visit.status === "checked_out" && reusable(visit))
+  )
     return { ok: false, code: "invalid_status" };
   if (accessWindow(visit, { ...options, now: at }) !== "valid" && !allowOutside)
     return { ok: false, code: "outside_window" };
   return {
     ok: true,
-    value: { ...visit, status: "checked_in", checkedInAt: at.toISOString() },
+    value: {
+      ...visit,
+      status: "checked_in",
+      checkedInAt: at.toISOString(),
+      checkedOutAt: undefined,
+      checkOutBoothId: undefined,
+      checkOutBooth: undefined,
+      checkOutSite: undefined,
+    },
   };
 }
 
@@ -82,7 +102,7 @@ export function checkOut(visit: Visit, at = new Date()): ServiceResult<Visit> {
       ...visit,
       status: "checked_out",
       checkedOutAt: at.toISOString(),
-      qrToken: undefined,
+      ...(reusable(visit) ? {} : { qrToken: undefined }),
     },
   };
 }
@@ -161,10 +181,14 @@ export function expiredDocumentIds(
 export function staleVisitIds(visits: Visit[], now = new Date()) {
   const cutoff = now.getTime() - 12 * 3600000;
   return visits
-    .filter(
-      (visit) =>
-        ["invited", "pre_registered", "approved"].includes(visit.status) &&
-        new Date(visit.endsAt).getTime() < cutoff,
-    )
+    .filter((visit) => {
+      if (!["invited", "pre_registered", "approved"].includes(visit.status))
+        return false;
+      const passDays = visit.passValidDays ?? 1;
+      const passClose =
+        new Date(visit.startsAt).getTime() + passDays * 24 * 60 * 60 * 1000;
+      const closes = Math.max(new Date(visit.endsAt).getTime(), passClose);
+      return closes < cutoff;
+    })
     .map((visit) => visit.id);
 }

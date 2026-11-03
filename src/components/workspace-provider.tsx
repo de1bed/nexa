@@ -21,6 +21,7 @@ import {
 import {
   getShowcaseServerSnapshot,
   getShowcaseSnapshot,
+  findShowcaseVisit,
   loadShowcaseState,
   patchShowcaseVisit,
   getDemoBoothServerSnapshot,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/showcase-store";
 import { DEMO_INVITE_TOKEN, DEMO_PASS_TOKEN } from "@/lib/demo-public";
 import { resolveRecordingBooth } from "@/lib/booth-choice";
+import { passIsReusable } from "@/lib/pass-reuse";
 import type {
   AccessEventType,
   Booth,
@@ -588,12 +590,23 @@ export function WorkspaceProvider({
       const site = directory.locations.find(
         (item) => item.id === (booth?.locationId ?? stationId),
       );
+      const current = findShowcaseVisit((visit) => visit.id === id);
+      const reusable = current
+        ? passIsReusable({
+            allLocations: current.allLocations === true,
+            passValidDays: current.passValidDays,
+            accessLocationCount: current.accessLocationIds?.length ?? 0,
+          })
+        : false;
       patchShowcaseVisit(
         id,
         status === "checked_in"
           ? {
               status,
               checkedInAt: now,
+              checkedOutAt: undefined,
+              checkOutBooth: undefined,
+              checkOutBoothId: undefined,
               checkInBoothId: booth?.id,
               checkInBooth: booth?.name,
               checkInSite: site?.name,
@@ -603,7 +616,7 @@ export function WorkspaceProvider({
             ? {
                 status,
                 checkedOutAt: now,
-                qrToken: undefined,
+                ...(reusable ? {} : { qrToken: undefined }),
                 ...(booth
                   ? {
                       checkOutBoothId: booth.id,

@@ -26,6 +26,7 @@ import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, EmptyState, StatusPill, cn } from "./ui";
 import { LiveDuration, Sheet } from "./ui-client";
 import { accessWindow, validAtLocation, type Visit } from "@/lib/domain";
+import { passIsReusable } from "@/lib/pass-reuse";
 import { visitPurposeMessageKey } from "@/lib/i18n";
 import { tokenFromScan } from "@/lib/demo-public";
 import { findShowcaseVisit } from "@/lib/showcase-store";
@@ -131,7 +132,12 @@ export function GuardScan() {
         setTokenState(
           found.status === "cancelled"
             ? "cancelled"
-            : found.status === "checked_out"
+            : found.status === "checked_out" &&
+                !passIsReusable({
+                  allLocations: found.allLocations === true,
+                  passValidDays: found.passValidDays,
+                  accessLocationCount: found.accessLocationIds?.length ?? 0,
+                })
               ? "used"
               : "valid",
         );

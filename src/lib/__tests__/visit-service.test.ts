@@ -111,6 +111,32 @@ describe("decisiones de acceso", () => {
     ).toMatchObject({ ok: true });
   });
 
+  it("deja abierto un pase de varias sedes después de salir", () => {
+    const pass = {
+      ...visit,
+      allLocations: true,
+      status: "checked_in" as const,
+      checkedInAt: "2026-08-27T10:10:00Z",
+    };
+    const left = checkOut(pass, new Date("2026-08-27T10:40:00Z"));
+    expect(left).toMatchObject({
+      ok: true,
+      value: { status: "checked_out", qrToken: "secret-pass" },
+    });
+    if (!left.ok) return;
+    const back = checkIn(left.value, new Date("2026-08-27T10:50:00Z"));
+    expect(back).toMatchObject({
+      ok: true,
+      value: { status: "checked_in", checkedOutAt: undefined, qrToken: "secret-pass" },
+    });
+    if (!back.ok) return;
+    const leftAgain = checkOut(back.value, new Date("2026-08-27T11:05:00Z"));
+    expect(leftAgain).toMatchObject({
+      ok: true,
+      value: { qrToken: "secret-pass" },
+    });
+  });
+
   it("registra la salida y revoca el pase", () => {
     const inside = {
       ...visit,
@@ -175,11 +201,21 @@ describe("mantenimiento", () => {
       ...visit,
       id: "stale",
       status: "invited",
-      endsAt: "2026-08-01T10:00:00.000Z",
+      startsAt: "2026-08-01T10:00:00.000Z",
+      endsAt: "2026-08-01T11:00:00.000Z",
+      passValidDays: 1,
+    };
+    const multiDay: Visit = {
+      ...stale,
+      id: "multi",
+      passValidDays: 40,
     };
     const fresh: Visit = { ...visit, id: "fresh", status: "invited" };
     expect(
-      staleVisitIds([stale, fresh], new Date("2026-08-27T10:00:00.000Z")),
+      staleVisitIds(
+        [stale, multiDay, fresh],
+        new Date("2026-08-27T10:00:00.000Z"),
+      ),
     ).toEqual(["stale"]);
   });
 });

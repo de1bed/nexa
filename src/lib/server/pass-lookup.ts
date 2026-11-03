@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "./supabase-admin";
+import { passIsReusable } from "@/lib/pass-reuse";
 import { displayVisitorName } from "@/lib/visitor-name";
 import { healQrWindow } from "./pass-issue";
 
@@ -91,11 +92,17 @@ export async function resolvePassByToken(
 
   let validFrom = row.valid_from;
   let expiresAt = row.expires_at;
+  const accessCount = Array.isArray(visit.access) ? visit.access.length : 0;
+  const reusable = passIsReusable({
+    allLocations: visit.all_locations === true,
+    passValidDays: visit.pass_valid_days,
+    accessLocationCount: accessCount,
+  });
   const open =
     !row.revoked_at &&
     visit.status !== "cancelled" &&
-    visit.status !== "checked_out" &&
-    visit.status !== "denied";
+    visit.status !== "denied" &&
+    (visit.status !== "checked_out" || reusable);
   if (open) {
     try {
       const healed = await healQrWindow({
@@ -116,7 +123,7 @@ export async function resolvePassByToken(
   const state: PassState =
     row.revoked_at || visit.status === "cancelled"
       ? "revoked"
-      : visit.status === "checked_out"
+      : visit.status === "checked_out" && !reusable
         ? "used"
         : new Date(expiresAt) < new Date()
           ? "expired"
