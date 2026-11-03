@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { locationSchema } from "@/lib/schemas";
 import { writeAudit } from "@/lib/server/audit";
-import { mapBooth, missingBoothSchema } from "@/lib/server/booths";
+import { listBooths, mapBooth, missingBoothSchema } from "@/lib/server/booths";
 import type { Booth } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +21,7 @@ export async function GET() {
         .select("id,name,address,timezone,active")
         .eq("organization_id", organizationId)
         .order("name"),
-      db
-        .from("booths")
-        .select("id,location_id,name,notes,active")
-        .eq("organization_id", organizationId)
-        .order("name"),
+      listBooths(db, organizationId),
     ]);
 
   if (error || (boothError && !missingBoothSchema(boothError)))

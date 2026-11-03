@@ -26,14 +26,29 @@ export async function PATCH(
     if (input.name !== undefined) payload.name = input.name;
     if (input.notes !== undefined) payload.notes = input.notes;
     if (input.active !== undefined) payload.active = input.active;
+    if (input.kind !== undefined) payload.kind = input.kind;
 
-    const { data, error } = await db
+    const withKind = await db
       .from("booths")
       .update(payload)
       .eq("id", id)
       .eq("organization_id", organizationId)
-      .select("id,location_id,name,notes,active")
+      .select("id,location_id,name,notes,active,kind")
       .maybeSingle();
+    const withoutKind = { ...payload };
+    delete withoutKind.kind;
+    const saved =
+      withKind.error && input.kind !== undefined && /kind/i.test(withKind.error.message ?? "")
+        ? await db
+            .from("booths")
+            .update(withoutKind)
+            .eq("id", id)
+            .eq("organization_id", organizationId)
+            .select("id,location_id,name,notes,active")
+            .maybeSingle()
+        : withKind;
+    const data = saved.data;
+    const error = saved.error;
 
     if (error?.code === "23505")
       return NextResponse.json(

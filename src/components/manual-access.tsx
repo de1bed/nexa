@@ -16,6 +16,7 @@ import { Button, Callout, Field, cn, fieldDarkClass } from "./ui";
 import { useI18n } from "./i18n-provider";
 import { manualVisitSchema } from "@/lib/schemas";
 import { visitPurposes, type Visit } from "@/lib/domain";
+import { OTHER_PURPOSE, resolvedPurpose } from "@/lib/visit-purpose";
 import { compressIdentityImage, validateImage, ACCEPTED_IMAGE_TYPES } from "@/lib/image";
 import { getOCRProvider } from "@/lib/ocr";
 
@@ -40,6 +41,7 @@ export function ManualAccess() {
     hostId: "",
     locationId: "",
     purpose: visitPurposes[0] as string,
+    purposeOther: "",
     consent: false,
   });
 
@@ -95,7 +97,9 @@ export function ManualAccess() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    const payload = { ...form, hostId, locationId };
+    const { purposeOther, ...fields } = form;
+    const purpose = resolvedPurpose(fields.purpose, purposeOther);
+    const payload = { ...fields, hostId, locationId, purpose };
     const parsed = manualVisitSchema.safeParse(payload);
 
     if (!parsed.success) {
@@ -276,12 +280,26 @@ export function ManualAccess() {
             onChange={(event) => update("purpose", event.target.value)}
           >
             {visitPurposes.map((purpose) => (
-              <option key={purpose} className="text-black">
+              <option key={purpose} className="text-black" value={purpose}>
                 {purpose}
               </option>
             ))}
+            <option className="text-black" value={OTHER_PURPOSE}>
+              {t("purpose.other")}
+            </option>
           </select>
         </Field>
+        {form.purpose === OTHER_PURPOSE && (
+          <Field label={t("invite.purposeOther")} dark error={errors.purpose}>
+            <input
+              className={fieldDarkClass}
+              maxLength={160}
+              placeholder={t("invite.purposeOtherPlaceholder")}
+              value={form.purposeOther}
+              onChange={(event) => update("purposeOther", event.target.value)}
+            />
+          </Field>
+        )}
 
         <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/15 bg-white/[.06] p-4">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/10">

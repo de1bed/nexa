@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/server/supabase-admin";
 import { invitationTimezoneSelect } from "@/lib/location-embed";
 import { rateLimit, requestOrigin } from "@/lib/server/rate-limit";
 import { resolveTimeZone } from "@/lib/timezone";
+import { loadSafetyDocuments } from "@/lib/server/safety-documents";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export async function GET(
 
     const { data: site } = await db
       .from("visits")
-      .select(invitationTimezoneSelect)
+      .select(`${invitationTimezoneSelect},organization_id`)
       .eq("id", visitId)
       .maybeSingle();
     const location = site?.location as
@@ -53,10 +54,17 @@ export async function GET(
       ? location[0]?.timezone
       : location?.timezone;
 
+    const organizationId = (site as { organization_id?: string } | null)
+      ?.organization_id;
+    const safetyDocuments = organizationId
+      ? await loadSafetyDocuments(db, organizationId)
+      : [];
+
     return NextResponse.json(
       {
         ...(data as Record<string, unknown>),
         location_timezone: resolveTimeZone(locationTimezone),
+        safety_documents: safetyDocuments,
         requested_attachments: (requested ?? []).map((item) => ({
           id: item.id,
           title: item.title,

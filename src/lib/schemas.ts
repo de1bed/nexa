@@ -133,16 +133,20 @@ export const locationSchema = z.object({
   timezone: z.string().trim().min(3).max(80),
 });
 
+export const boothKindSchema = z.enum(["general", "pedestrian", "vehicle"]);
+
 export const boothSchema = z.object({
   locationId: z.uuid(),
   name: z.string().trim().min(2, "Escribe el nombre de la caseta").max(80),
   notes: z.string().trim().max(400).optional(),
+  kind: boothKindSchema.default("general"),
 });
 
 export const boothUpdateSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   notes: z.string().trim().max(400).optional(),
   active: z.boolean().optional(),
+  kind: boothKindSchema.optional(),
 });
 
 export const requirementSchema = z

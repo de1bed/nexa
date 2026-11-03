@@ -23,6 +23,7 @@ import {
 import { localeFromCookieHeader } from "@/lib/i18n/types";
 import { translate } from "@/lib/i18n/catalog";
 import { invitationVisitSelect } from "@/lib/location-embed";
+import { loadSafetyDocuments } from "@/lib/server/safety-documents";
 import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
 import {
   escapeIlike,
@@ -48,6 +49,7 @@ const schema = z.object({
   nameConfirmed: z.enum(["true", "false"]).optional(),
   documentExpiresAt: z.string().max(20).optional(),
   consent: z.enum(["true", "false"]).optional(),
+  safetyAccepted: z.enum(["true", "false"]).optional(),
   vehicleDeclined: z.enum(["true", "false"]).optional(),
   attachments: z.string().max(40000).optional(),
 });
@@ -249,6 +251,17 @@ export async function POST(
       return NextResponse.json(
         { error: translate("errors.link_unavailable", undefined, locale) },
         { status: 404 },
+      );
+
+    const safetyDocuments = await loadSafetyDocuments(
+      db,
+      visit.organization_id,
+    );
+    const safetyAccepted = values.safetyAccepted === "true";
+    if (safetyDocuments.length > 0 && !safetyAccepted)
+      return NextResponse.json(
+        { error: translate("visitor.safetyRequired", undefined, locale) },
+        { status: 400 },
       );
 
     const { data: settings } = await db
@@ -531,6 +544,13 @@ export async function POST(
       })
       .eq("id", visit.id);
 
+    if (safetyAccepted) {
+      await db
+        .from("visits")
+        .update({ safety_accepted_at: new Date().toISOString() })
+        .eq("id", visit.id);
+    }
+
     await db
       .from("visit_invitations")
       .update({
@@ -565,6 +585,8 @@ export async function POST(
           ocr_verified: values.ocrVerified === "true",
           name_confirmed: nameConfirmed,
           document_expires_at: values.documentExpiresAt ?? null,
+          safety_accepted: safetyAccepted,
+          safety_document_ids: safetyDocuments.map((item) => item.id),
         },
       },
       {

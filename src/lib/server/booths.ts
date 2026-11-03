@@ -1,7 +1,14 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Booth } from "@/lib/domain";
+import type { Booth, BoothKind } from "@/lib/domain";
 import { resolveRecordingBooth } from "@/lib/booth-choice";
+
+const boothColumns = "id,location_id,name,notes,active,kind";
+const legacyBoothColumns = "id,location_id,name,notes,active";
+
+function isBoothKind(value: unknown): value is BoothKind {
+  return value === "general" || value === "pedestrian" || value === "vehicle";
+}
 
 /** La instalación todavía no tiene la migración de casetas. */
 export function missingBoothSchema(
@@ -18,6 +25,7 @@ export function mapBooth(row: {
   name: string;
   notes?: string | null;
   active: boolean;
+  kind?: string | null;
 }): Booth {
   return {
     id: row.id,
@@ -25,6 +33,42 @@ export function mapBooth(row: {
     name: row.name,
     notes: row.notes ?? "",
     active: row.active,
+    kind: isBoothKind(row.kind) ? row.kind : "general",
+  };
+}
+
+type BoothRow = {
+  id: string;
+  location_id: string;
+  name: string;
+  notes?: string | null;
+  active: boolean;
+  kind?: string | null;
+};
+
+/** Lee las casetas. Si la migración del tipo aún no está, omite kind. */
+export async function listBooths(
+  db: SupabaseClient,
+  organizationId: string,
+  activeOnly = false,
+): Promise<{ data: BoothRow[] | null; error: { message?: string } | null }> {
+  const run = async (columns: string) => {
+    let query = db
+      .from("booths")
+      .select(columns)
+      .eq("organization_id", organizationId);
+    if (activeOnly) query = query.eq("active", true);
+    return query.order("name");
+  };
+
+  const first = await run(boothColumns);
+  const chosen =
+    first.error && /kind/i.test(first.error.message ?? "")
+      ? await run(legacyBoothColumns)
+      : first;
+  return {
+    data: (chosen.data ?? null) as BoothRow[] | null,
+    error: chosen.error,
   };
 }
 
@@ -41,23 +85,11 @@ export async function resolveAccessBooth(
     decision: "check_in" | "check_out" | "deny";
   },
 ): Promise<{ id: string | null; name: string | null }> {
-  const { data, error } = await db
-    .from("booths")
-    .select("id,location_id,name,notes,active")
-    .eq("organization_id", input.organizationId)
-    .eq("active", true);
+  const { data, error } = await listBooths(db, input.organizationId, true);
   if (error) return { id: input.boothId ?? null, name: null };
 
   const booth = resolveRecordingBooth({
-    booths: (data ?? []).map((row) =>
-      mapBooth(row as {
-        id: string;
-        location_id: string;
-        name: string;
-        notes?: string | null;
-        active: boolean;
-      }),
-    ),
+    booths: (data ?? []).map((row) => mapBooth(row)),
     boothId: input.boothId ?? undefined,
     locationId: input.locationId,
     decision: input.decision,

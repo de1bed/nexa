@@ -21,6 +21,7 @@ import { normalizeMeetingUrl } from "@/lib/schemas";
 import { clampPassDays, passExpiresAt } from "@/lib/pass-window";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
+import { visitStartsInPast } from "@/lib/visit-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,10 @@ const createSchema = z
   .refine((value) => value.endsAt > value.startsAt, {
     path: ["endsAt"],
     message: "El horario es inválido",
+  })
+  .refine((value) => !visitStartsInPast(new Date(value.startsAt)), {
+    path: ["startsAt"],
+    message: "La fecha y la hora no pueden quedar en el pasado",
   })
   .refine((value) => !value.sendEmail || Boolean(value.email), {
     path: ["email"],

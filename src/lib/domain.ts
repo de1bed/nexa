@@ -125,12 +125,17 @@ export type Location = {
 };
 
 /** Punto físico de control dentro de una sede. Una sede puede tener varias. */
+export const boothKinds = ["general", "pedestrian", "vehicle"] as const;
+export type BoothKind = (typeof boothKinds)[number];
+
 export type Booth = {
   id: string;
   locationId: string;
   name: string;
   notes: string;
   active: boolean;
+  /** Peatonal, vehicular o general. Las sedes pueden tener varias. */
+  kind?: BoothKind;
 };
 
 /** Requisito que la empresa da de alta para pedírselo al visitante. */
@@ -253,14 +258,7 @@ export const visitPurposes = [
   "Visita ejecutiva",
 ] as const;
 
-export const documentTypes = [
-  "INE / IFE",
-  "Pasaporte",
-  "Licencia de conducir",
-  "Cédula profesional",
-  "Credencial laboral",
-  "Otra",
-] as const;
+export const documentTypes = ["INE", "Licencia", "Pasaporte"] as const;
 
 /** Milisegundos que una visita lleva dentro de las instalaciones. */
 export function timeInsideMs(visit: Visit, now = Date.now()) {

@@ -1145,9 +1145,9 @@ export function PlatformConsole({ demo = false }: { demo?: boolean }) {
                     </ul>
                   </div>
                   <div>
-                    <h3 className="font-semibold">Áreas</h3>
+                    <h3 className="font-semibold">Departamentos</h3>
                     <p className="mt-1 text-slate-600">
-                      {selected.departments.length ? selected.departments.join(", ") : "Sin áreas"}
+                      {selected.departments.length ? selected.departments.join(", ") : "Sin departamentos"}
                     </p>
                   </div>
                   <p className="text-slate-500">

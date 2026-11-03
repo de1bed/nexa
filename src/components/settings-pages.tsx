@@ -62,6 +62,7 @@ import { InvitationPreview } from "./invitation-preview";
 import { RequirementsCard } from "./requirements-card";
 import { WalkinCard } from "./walkin-card";
 import { OrgAccessPanel, type AreaOption } from "./org-access-panel";
+import { SafetyDocumentsCard } from "./safety-documents-card";
 import {
   defaultVisitorFlow,
   parseVisitorFlow,
@@ -813,7 +814,7 @@ export function TeamPage() {
             </Field>
           )}
           {departments.length > 0 && (
-            <Field label="Área">
+            <Field label={t("team.department")}>
               <select
                 disabled={busy}
                 className={fieldClass}
@@ -822,7 +823,7 @@ export function TeamPage() {
                   setForm({ ...form, departmentId: event.target.value })
                 }
               >
-                <option value="">Sin área</option>
+                <option value="">Sin departamento</option>
                 {departments.map((area) => (
                   <option key={area.id} value={area.id}>
                     {area.name}
@@ -1024,7 +1025,7 @@ export function TeamPage() {
             </div>
 
             {departments.length > 0 && (
-              <Field label="Área">
+              <Field label={t("team.department")}>
                 <select
                   className={fieldClass}
                   value={editing.departmentId ?? ""}
@@ -1038,7 +1039,7 @@ export function TeamPage() {
                     });
                   }}
                 >
-                  <option value="">Sin área</option>
+                  <option value="">Sin departamento</option>
                   {departments.map((area) => (
                     <option key={area.id} value={area.id}>
                       {area.name}
@@ -1134,6 +1135,7 @@ export function LocationsPage() {
     boothId?: string;
     name: string;
     notes: string;
+    kind: "general" | "pedestrian" | "vehicle";
   } | null>(null);
 
   useEffect(() => {
@@ -1248,11 +1250,12 @@ export function LocationsPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
               draft.boothId
-                ? { name: draft.name, notes: draft.notes }
+                ? { name: draft.name, notes: draft.notes, kind: draft.kind }
                 : {
                     locationId: draft.locationId,
                     name: draft.name,
                     notes: draft.notes,
+                    kind: draft.kind,
                   },
             ),
           },
@@ -1281,6 +1284,7 @@ export function LocationsPage() {
           locationId: draft.locationId,
           name: draft.name,
           notes: draft.notes,
+          kind: draft.kind,
           active: true,
         };
         const saved = locations
@@ -1453,6 +1457,7 @@ export function LocationsPage() {
                         locationId: location.id,
                         name: "",
                         notes: "",
+                        kind: "general",
                       })
                     }
                     className="inline-flex items-center gap-1 text-sm font-semibold text-[#0d9d99]"
@@ -1484,6 +1489,7 @@ export function LocationsPage() {
                               boothId: booth.id,
                               name: booth.name,
                               notes: booth.notes,
+                              kind: booth.kind ?? "general",
                             })
                           }
                         >
@@ -1491,7 +1497,12 @@ export function LocationsPage() {
                             {booth.name}
                           </span>
                           <span className="block text-xs leading-5 text-slate-500">
-                            {booth.notes || t("locations.boothNotesEmpty")}
+                            {booth.kind === "pedestrian"
+                              ? t("locations.boothKindPedestrian")
+                              : booth.kind === "vehicle"
+                                ? t("locations.boothKindVehicle")
+                                : t("locations.boothKindGeneral")}
+                            {booth.notes ? ` · ${booth.notes}` : ""}
                           </span>
                         </button>
                         <button
@@ -1584,6 +1595,22 @@ export function LocationsPage() {
                   setBoothForm({ ...boothForm, name: event.target.value })
                 }
               />
+            </Field>
+            <Field label={t("locations.boothKind")}>
+              <select
+                className={fieldClass}
+                value={boothForm.kind}
+                onChange={(event) =>
+                  setBoothForm({
+                    ...boothForm,
+                    kind: event.target.value as "general" | "pedestrian" | "vehicle",
+                  })
+                }
+              >
+                <option value="general">{t("locations.boothKindGeneral")}</option>
+                <option value="pedestrian">{t("locations.boothKindPedestrian")}</option>
+                <option value="vehicle">{t("locations.boothKindVehicle")}</option>
+              </select>
             </Field>
             <Field label={t("locations.boothNotes")} hint={t("locations.boothNotesHint")}>
               <textarea
@@ -1940,6 +1967,7 @@ export function SettingsPage() {
             <Callout tone="warning" className="mt-4">
               {t("settings.legal")}
             </Callout>
+            <SafetyDocumentsCard live={live} />
           </Card>
 
           <div className="sticky bottom-[calc(84px+env(safe-area-inset-bottom))] -mx-4 bg-gradient-to-t from-[#f4f7fb] via-[#f4f7fb] to-transparent px-4 pb-2 pt-4 lg:static lg:mx-0 lg:bg-none lg:p-0">

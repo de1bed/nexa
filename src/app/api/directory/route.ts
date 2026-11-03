@@ -3,6 +3,7 @@ import { requireApiContext } from "@/lib/server/session";
 import { whatsappConfigured } from "@/lib/server/whatsapp";
 import { serializeSettings, settingsColumns } from "@/lib/server/org-settings";
 import { mapRequirement, requirementColumns } from "@/lib/server/requirements";
+import { listBooths, mapBooth } from "@/lib/server/booths";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,7 @@ export async function GET() {
         .eq("organization_id", organizationId)
         .eq("active", true)
         .order("name"),
-      db
-        .from("booths")
-        .select("id,location_id,name,notes,active")
-        .eq("organization_id", organizationId)
-        .eq("active", true)
-        .order("name"),
+      listBooths(db, organizationId, true),
       db
         .from("organization_members")
         .select(
@@ -99,13 +95,7 @@ export async function GET() {
         whatsapp: whatsappConfigured(),
       },
       locations: locations ?? [],
-      booths: (boothRows ?? []).map((row) => ({
-        id: row.id as string,
-        locationId: row.location_id as string,
-        name: row.name as string,
-        notes: (row.notes as string | null) ?? "",
-        active: Boolean(row.active),
-      })),
+      booths: (boothRows ?? []).map((row) => mapBooth(row)),
       hosts,
       requirements: (requirements ?? []).map((row) =>
         mapRequirement(row as unknown as Record<string, unknown>),
