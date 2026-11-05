@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { OfflineBanner } from "@/components/offline-banner";
+import { CookieBanner } from "@/components/cookie-banner";
 import { I18nProvider } from "@/components/i18n-provider";
 import { isLocale } from "@/lib/i18n/types";
 import { LOCALE_COOKIE } from "@/lib/i18n/types";
@@ -44,6 +45,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <I18nProvider initialLocale={initialLocale}>
           <OfflineBanner />
           {children}
+          <CookieBanner />
           <Toaster
             position="top-center"
             richColors
