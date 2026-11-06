@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
+import { SecurityDocumentsCard } from "./security-documents-card";
 import {
   Avatar,
   Button,
@@ -34,7 +35,7 @@ import {
 } from "./ui";
 import { Sheet, Toggle, CopyField, ShareButton } from "./ui-client";
 import { AddressField } from "./address-field";
-import { APP_TIME_ZONE } from "@/lib/timezone";
+import { APP_TIME_ZONE, TIMEZONE_CHOICES } from "@/lib/timezone";
 import {
   appendDemoChange,
   readDemoBooths,
@@ -662,7 +663,7 @@ export function TeamPage() {
                       ? `${jc.uses_remaining} usos restantes`
                       : "Usos ilimitados"}
                     {jc.expires_at &&
-                      ` · Vence ${new Date(jc.expires_at).toLocaleDateString("es-MX")}`}
+                      ` · Vence ${new Date(jc.expires_at).toLocaleDateString("es-MX", { timeZone: APP_TIME_ZONE })}`}
                   </p>
                 </div>
                 <button
@@ -813,7 +814,7 @@ export function TeamPage() {
             </Field>
           )}
           {departments.length > 0 && (
-            <Field label="Área">
+            <Field label={t("departments.label")}>
               <select
                 disabled={busy}
                 className={fieldClass}
@@ -822,7 +823,7 @@ export function TeamPage() {
                   setForm({ ...form, departmentId: event.target.value })
                 }
               >
-                <option value="">Sin área</option>
+                <option value="">{t("departments.none")}</option>
                 {departments.map((area) => (
                   <option key={area.id} value={area.id}>
                     {area.name}
@@ -978,10 +979,11 @@ export function TeamPage() {
                     <div>
                       <p className="text-xs text-slate-400">Miembro desde</p>
                       <p className="text-sm font-medium">
-                        {new Date(editing.joinedAt).toLocaleDateString("es-MX", { 
-                          year: "numeric", 
-                          month: "short", 
-                          day: "numeric" 
+                        {new Date(editing.joinedAt).toLocaleDateString("es-MX", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          timeZone: APP_TIME_ZONE,
                         })}
                       </p>
                     </div>
@@ -1024,7 +1026,7 @@ export function TeamPage() {
             </div>
 
             {departments.length > 0 && (
-              <Field label="Área">
+              <Field label={t("departments.label")}>
                 <select
                   className={fieldClass}
                   value={editing.departmentId ?? ""}
@@ -1038,7 +1040,7 @@ export function TeamPage() {
                     });
                   }}
                 >
-                  <option value="">Sin área</option>
+                  <option value="">{t("departments.none")}</option>
                   {departments.map((area) => (
                     <option key={area.id} value={area.id}>
                       {area.name}
@@ -1356,6 +1358,32 @@ export function LocationsPage() {
     }
   }
 
+  async function changeTimezone(location: Location, timezone: string) {
+    if (timezone === location.timezone) return;
+    try {
+      if (live) {
+        const response = await fetch(`/api/locations/${location.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timezone }),
+        });
+        if (!response.ok)
+          throw new Error(await readError(response, "No fue posible actualizar"));
+      }
+      setLocations((current) =>
+        current.map((item) =>
+          item.id === location.id ? { ...item, timezone } : item,
+        ),
+      );
+      toast.success(t("locations.timezoneSaved"));
+      if (live) void reload();
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No fue posible actualizar",
+      );
+    }
+  }
+
   async function toggle(location: Location) {
     const active = !location.active;
     try {
@@ -1424,9 +1452,21 @@ export function LocationsPage() {
                   <p className="mt-1 text-sm leading-5 text-slate-500">
                     {location.address}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {location.timezone}
-                  </p>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                    <span className="shrink-0">{t("locations.timezone")}</span>
+                    <select
+                      className="h-8 min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                      value={location.timezone}
+                      aria-label={t("locations.timezone")}
+                      onChange={(event) => void changeTimezone(location, event.target.value)}
+                    >
+                      {[...new Set([location.timezone, ...TIMEZONE_CHOICES])].map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone === "America/Tijuana" ? `${zone} (Tijuana)` : zone}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 <button
                   onClick={() => toggle(location)}
@@ -1544,17 +1584,7 @@ export function LocationsPage() {
                 setForm({ ...form, timezone: event.target.value })
               }
             >
-              {[
-                "America/Mexico_City",
-                "America/Tijuana",
-                "America/Monterrey",
-                "America/Cancun",
-                "America/Bogota",
-                "America/Lima",
-                "America/Santiago",
-                "America/Buenos_Aires",
-                "Europe/Madrid",
-              ].map((zone) => (
+              {TIMEZONE_CHOICES.map((zone) => (
                 <option key={zone}>{zone}</option>
               ))}
             </select>
@@ -1941,6 +1971,8 @@ export function SettingsPage() {
               {t("settings.legal")}
             </Callout>
           </Card>
+
+          <SecurityDocumentsCard live={live} />
 
           <div className="sticky bottom-[calc(84px+env(safe-area-inset-bottom))] -mx-4 bg-gradient-to-t from-[#f4f7fb] via-[#f4f7fb] to-transparent px-4 pb-2 pt-4 lg:static lg:mx-0 lg:bg-none lg:p-0">
             <Button

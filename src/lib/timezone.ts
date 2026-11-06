@@ -5,6 +5,19 @@
 
 export const APP_TIME_ZONE = "America/Tijuana";
 
+/** Zonas que se ofrecen al dar de alta o editar una sede. Tijuana primero. */
+export const TIMEZONE_CHOICES = [
+  "America/Tijuana",
+  "America/Mexico_City",
+  "America/Monterrey",
+  "America/Cancun",
+  "America/Bogota",
+  "America/Lima",
+  "America/Santiago",
+  "America/Buenos_Aires",
+  "Europe/Madrid",
+] as const;
+
 function partNumber(
   parts: Intl.DateTimeFormatPart[],
   type: Intl.DateTimeFormatPartTypes,

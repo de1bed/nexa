@@ -28,6 +28,7 @@ import { Avatar, Button, Card, EmptyState, MetricTile, StatusPill, Skeleton } fr
 import { LiveDuration } from "./ui-client";
 import { timeInsideMs } from "@/lib/domain";
 import { localDayKey } from "@/lib/local-day";
+import { APP_TIME_ZONE } from "@/lib/timezone";
 import { useI18n } from "./i18n-provider";
 
 export function Dashboard() {
@@ -94,7 +95,14 @@ export function Dashboard() {
     [visits],
   );
 
-  const hour = new Date().getHours();
+  // La hora del saludo es la de la operación, no la de la computadora.
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hourCycle: "h23",
+      timeZone: APP_TIME_ZONE,
+    }).format(new Date()),
+  );
   const greeting =
     hour < 12
       ? t("dashboard.goodMorning")
@@ -124,6 +132,7 @@ export function Dashboard() {
               weekday: "long",
               day: "numeric",
               month: "long",
+              timeZone: APP_TIME_ZONE,
             }).format(new Date())}
           </p>
           <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-.03em] sm:text-3xl">

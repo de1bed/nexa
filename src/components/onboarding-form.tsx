@@ -14,24 +14,14 @@ import { Brand } from "./brand";
 import { AddressField } from "./address-field";
 import { Button, Field, cn, fieldClass } from "./ui";
 import { onboardingSchema } from "@/lib/schemas";
-import { APP_TIME_ZONE } from "@/lib/timezone";
+import { APP_TIME_ZONE, TIMEZONE_CHOICES } from "@/lib/timezone";
 
 const steps = [
   { title: "Tu empresa", icon: Building2 },
   { title: "Tu recepción", icon: MapPin },
 ];
 
-const timezones = [
-  "America/Mexico_City",
-  "America/Tijuana",
-  "America/Monterrey",
-  "America/Cancun",
-  "America/Bogota",
-  "America/Lima",
-  "America/Santiago",
-  "America/Buenos_Aires",
-  "Europe/Madrid",
-];
+const timezones = TIMEZONE_CHOICES;
 
 /**
  * Alta de la organización. Quien la crea queda como administrador, con

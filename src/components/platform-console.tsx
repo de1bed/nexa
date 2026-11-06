@@ -10,6 +10,7 @@ import { SUPPORT_VIEW_COOKIE } from "@/lib/session-constants";
 import { writeDemoSession } from "@/lib/demo-public";
 import { DEMO_COMPANY_CODE, listDemoStations } from "@/lib/demo-stations";
 import { DEMO_GUARD_CODES, readExtraGuardCodes } from "@/lib/demo-guard-codes";
+import { APP_TIME_ZONE } from "@/lib/timezone";
 import {
   showcaseBooths,
   showcaseLocations,
@@ -167,7 +168,7 @@ const visitStatusLabel: Record<string, string> = {
 
 function todayKey() {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Mexico_City",
+    timeZone: APP_TIME_ZONE,
   }).format(new Date());
 }
 
@@ -185,6 +186,7 @@ function stamp(value: string) {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: APP_TIME_ZONE,
   });
 }
 
@@ -1145,9 +1147,9 @@ export function PlatformConsole({ demo = false }: { demo?: boolean }) {
                     </ul>
                   </div>
                   <div>
-                    <h3 className="font-semibold">Áreas</h3>
+                    <h3 className="font-semibold">Departamentos</h3>
                     <p className="mt-1 text-slate-600">
-                      {selected.departments.length ? selected.departments.join(", ") : "Sin áreas"}
+                      {selected.departments.length ? selected.departments.join(", ") : "Sin departamentos"}
                     </p>
                   </div>
                   <p className="text-slate-500">

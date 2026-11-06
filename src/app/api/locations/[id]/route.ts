@@ -41,13 +41,37 @@ export async function PATCH(
         );
     }
 
-    const { data, error } = await db
-      .from("locations")
-      .update(input)
-      .eq("id", id)
-      .eq("organization_id", organizationId)
-      .select("id,name,address,timezone,active")
-      .maybeSingle();
+    const { timezone, ...rest } = input;
+    if (timezone !== undefined) {
+      // La zona pasa por la base: reinterpreta la hora escrita de las citas
+      // pendientes para que 9:00 siga siendo 9:00 en la zona nueva.
+      const { error: zoneError } = await db.rpc("set_location_timezone", {
+        p_location_id: id,
+        p_timezone: timezone,
+      });
+      if (zoneError)
+        return NextResponse.json(
+          { error: zoneError.message || "No fue posible cambiar la zona horaria" },
+          { status: 400 },
+        );
+    }
+
+    const columns = "id,name,address,timezone,active";
+    const { data, error } =
+      Object.keys(rest).length > 0
+        ? await db
+            .from("locations")
+            .update(rest)
+            .eq("id", id)
+            .eq("organization_id", organizationId)
+            .select(columns)
+            .maybeSingle()
+        : await db
+            .from("locations")
+            .select(columns)
+            .eq("id", id)
+            .eq("organization_id", organizationId)
+            .maybeSingle();
 
     if (error || !data)
       return NextResponse.json(

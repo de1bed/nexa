@@ -7,6 +7,7 @@ import { useNow } from "./ui-client";
 import { EmptyState, cn } from "./ui";
 import { type AccessEventType } from "@/lib/domain";
 import { useI18n } from "./i18n-provider";
+import { localDayKey } from "@/lib/local-day";
 
 const iconByType: Record<AccessEventType, typeof LogIn> = {
   check_in: LogIn,
@@ -39,8 +40,9 @@ export function GuardHistory() {
   // El agrupado y las etiquetas relativas se calculan juntos: así el reloj se
   // consulta una sola vez y el render queda libre de llamadas impuras.
   const groups = useMemo(() => {
-    const today = now ? new Date(now).toDateString() : "";
-    const yesterday = now ? new Date(now - 86400000).toDateString() : "";
+    // Días de Tijuana: la tableta puede traer otra zona configurada.
+    const today = now ? localDayKey(new Date(now)) : "";
+    const yesterday = now ? localDayKey(new Date(now - 86400000)) : "";
 
     const sorted = [...events]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
@@ -48,7 +50,7 @@ export function GuardHistory() {
 
     const buckets = new Map<string, typeof sorted>();
     sorted.forEach((event) => {
-      const key = new Date(event.at).toDateString();
+      const key = localDayKey(event.at);
       buckets.set(key, [...(buckets.get(key) ?? []), event]);
     });
 
@@ -64,7 +66,8 @@ export function GuardHistory() {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
-              }).format(new Date(day)),
+                timeZone: "UTC",
+              }).format(new Date(`${day}T12:00:00Z`)),
     }));
   }, [events, now]);
 
