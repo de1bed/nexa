@@ -510,6 +510,8 @@ export const es = {
     changeEmail: "Cambiar correo",
   },
   reports: {
+    otherPurposes: "Otros (motivos escritos)",
+    byDepartment: "Visitas por departamento",
     title: "Reportes",
     export: "Exportar Excel",
     from: "Desde",
@@ -1862,6 +1864,8 @@ export const en: DeepStringify<typeof es> = {
     changeEmail: "Change email",
   },
   reports: {
+    otherPurposes: "Other (custom reasons)",
+    byDepartment: "Visits by department",
     title: "Reports",
     export: "Export Excel",
     from: "From",

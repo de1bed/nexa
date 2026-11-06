@@ -96,3 +96,45 @@ describe("identificaciones aceptadas", () => {
     ).toBe("identity_photos_required");
   });
 });
+
+describe("reporte por departamento", () => {
+  const visit = (over: Partial<import("../domain").Visit>) =>
+    ({
+      id: Math.random().toString(36),
+      visitorName: "V",
+      email: "",
+      company: "",
+      hostId: "h",
+      hostName: "H",
+      locationId: "l",
+      location: "Planta",
+      startsAt: "2026-11-03T16:00:00Z",
+      endsAt: "2026-11-03T17:00:00Z",
+      purpose: "Entrevista",
+      status: "checked_out",
+      origin: "host_invitation",
+      ...over,
+    }) as import("../domain").Visit;
+
+  it("agrupa por el departamento del anfitrión y deja al final a los que no tienen", async () => {
+    const { departmentSummary, groupByDepartment, NO_DEPARTMENT } = await import(
+      "../report-departments"
+    );
+    const rows = [
+      visit({ hostDepartment: "Calidad", checkedInAt: "2026-11-03T16:05:00Z", checkedOutAt: "2026-11-03T17:05:00Z" }),
+      visit({ hostDepartment: "Calidad", status: "checked_in", checkedInAt: "2026-11-04T16:05:00Z" }),
+      visit({ hostDepartment: "Compras" }),
+      visit({}),
+    ];
+    const summary = departmentSummary(rows, "2026-11-01", "2026-11-06");
+    expect(summary.map((row) => row.name)).toEqual(["Calidad", "Compras", NO_DEPARTMENT]);
+    expect(summary[0]).toMatchObject({ visits: 2, entries: 2, insideNow: 1, averageMs: 3600000 });
+    expect(groupByDepartment(rows).map((group) => group.visits.length)).toEqual([2, 1, 1]);
+  });
+
+  it("reconoce los motivos escritos con «Otro»", async () => {
+    const { isCustomPurpose } = await import("../report-departments");
+    expect(isCustomPurpose("Instalación de antena")).toBe(true);
+    expect(isCustomPurpose("Entrevista")).toBe(false);
+  });
+});

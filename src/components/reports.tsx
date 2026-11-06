@@ -50,6 +50,13 @@ import {
   type ReportPreset,
 } from "@/lib/local-day";
 import { visitPurposeMessageKey } from "@/lib/i18n";
+import {
+  NO_DEPARTMENT,
+  OTHER_FILTER,
+  departmentSummary,
+  groupByDepartment,
+  isCustomPurpose,
+} from "@/lib/report-departments";
 import { useI18n } from "./i18n-provider";
 
 type Period = "daily" | "weekly" | "monthly" | "yearly";
@@ -114,6 +121,7 @@ export function Reports() {
     host: "all",
     company: "all",
     purpose: "all",
+    department: "all",
     status: "all" as VisitStatus | "all",
   });
   const [period, setPeriod] = useState<Period>("daily");
@@ -134,6 +142,11 @@ export function Reports() {
       hosts: [...new Set(visits.map((visit) => visit.hostName))].sort(),
       companies: [...new Set(visits.map((visit) => visit.company).filter(Boolean))].sort(),
       purposes: [...new Set(visits.map((visit) => visit.purpose))].sort(),
+      departments: [
+        ...new Set(visits.map((visit) => visit.hostDepartment || NO_DEPARTMENT)),
+      ].sort((a, b) =>
+        a === NO_DEPARTMENT ? 1 : b === NO_DEPARTMENT ? -1 : a.localeCompare(b, "es"),
+      ),
     }),
     [visits],
   );
@@ -148,10 +161,12 @@ export function Reports() {
             visit.checkOutBoothId === filters.booth ||
             visit.denialBoothId === filters.booth) &&
           (filters.host === "all" || visit.hostName === filters.host) &&
+          (filters.department === "all" ||
+            (visit.hostDepartment || NO_DEPARTMENT) === filters.department) &&
           (filters.company === "all" || visit.company === filters.company)
         );
       }),
-    [visits, filters.location, filters.booth, filters.host, filters.company],
+    [visits, filters.location, filters.booth, filters.host, filters.department, filters.company],
   );
 
   const insideNow = useMemo(
@@ -181,7 +196,9 @@ export function Reports() {
           inRange(visit.checkedOutAt);
         return (
           touchesRange &&
-          (filters.purpose === "all" || visit.purpose === filters.purpose) &&
+          (filters.purpose === "all" ||
+            visit.purpose === filters.purpose ||
+            (filters.purpose === OTHER_FILTER && isCustomPurpose(visit.purpose))) &&
           (filters.status === "all" || visit.status === filters.status)
         );
       }),
@@ -262,6 +279,7 @@ export function Reports() {
         (visit) => t(visitPurposeMessageKey(visit.purpose)) || visit.purpose,
       ).slice(0, 6),
       hosts: count((visit) => visit.hostName).slice(0, 6),
+      departments: departmentSummary(rows, filters.from, filters.to),
       companies: count((visit) => visit.company).slice(0, 6),
       timeline,
     };
@@ -283,6 +301,26 @@ export function Reports() {
       ["Personas dentro ahora", String(insideNow.length)],
       ["Visitas en el periodo", String(rows.length)],
       [],
+      ...(hostView
+        ? []
+        : [
+            ["RESUMEN POR DEPARTAMENTO"],
+            [
+              "Departamento",
+              "Visitas en el periodo",
+              "Entradas en el periodo",
+              "Dentro ahora",
+              "Estancia promedio",
+            ],
+            ...stats.departments.map((row) => [
+              row.name,
+              String(row.visits),
+              String(row.entries),
+              String(row.insideNow),
+              row.averageMs ? formatDuration(row.averageMs) : "",
+            ]),
+            [],
+          ]),
       ["PERSONAS DENTRO AHORA"],
       [
         "Visitante",
@@ -373,9 +411,39 @@ export function Reports() {
     ];
 
     const slug = organization.name.replace(/\s+/g, "-").toLowerCase();
+    // Segunda hoja: la misma bitácora agrupada por departamento del anfitrión.
+    const byDepartment: unknown[][] = [
+      ["Organización", organization.name],
+      ["Periodo", periodLabel],
+      [],
+    ];
+    for (const group of groupByDepartment(rows)) {
+      byDepartment.push(
+        [`${group.name.toUpperCase()} · ${group.visits.length} visita${group.visits.length === 1 ? "" : "s"}`],
+        ["Visitante", "Empresa", "Anfitrión", "Motivo", "Programada inicio", "Entrada", "Salida", "Estancia", "Estado"],
+        ...group.visits.map((visit) => [
+          visit.visitorName,
+          visit.company || "Sin empresa",
+          visit.hostName,
+          t(visitPurposeMessageKey(visit.purpose)) || visit.purpose,
+          when(visit.startsAt),
+          when(visit.checkedInAt),
+          when(visit.checkedOutAt),
+          stayLabel(visit, formatDuration),
+          t(`status.${visit.status}`),
+        ]),
+        [],
+      );
+    }
+
     void downloadWorkbook(
       `nexa-bitacora-${slug}-${filters.from}-a-${filters.to}.xlsx`,
-      [{ name: "Bitácora", rows: header }],
+      hostView
+        ? [{ name: "Bitácora", rows: header }]
+        : [
+            { name: "Bitácora", rows: header },
+            { name: "Por departamento", rows: byDepartment },
+          ],
     );
   }
 
@@ -383,6 +451,7 @@ export function Reports() {
     filters.location,
     filters.booth,
     filters.host,
+    filters.department,
     filters.company,
     filters.purpose,
     filters.status,
@@ -671,6 +740,24 @@ export function Reports() {
             </BarChart>
           </ChartCard>
 
+          {!hostView && stats.departments.length > 0 && (
+            <ChartCard title={t("reports.byDepartment")}>
+              <BarChart
+                data={stats.departments.slice(0, 8).map((row) => ({
+                  name: row.name,
+                  value: row.visits,
+                }))}
+                layout="vertical"
+              >
+                <CartesianGrid horizontal={false} stroke="#edf0f4" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="value" fill="#2563eb" radius={[0, 8, 8, 0]} />
+              </BarChart>
+            </ChartCard>
+          )}
+
           <ChartCard title={t("reports.byHost")}>
             <PieChart>
               <Pie
@@ -760,6 +847,14 @@ export function Reports() {
               onChange={(value) => setFilters({ ...filters, host: value })}
             />
           )}
+          {!hostView && (
+            <SelectFilter
+              label={t("departments.label")}
+              value={filters.department}
+              options={options.departments}
+              onChange={(value) => setFilters({ ...filters, department: value })}
+            />
+          )}
           <SelectFilter
             label="Empresa"
             value={filters.company}
@@ -770,6 +865,11 @@ export function Reports() {
             label="Motivo"
             value={filters.purpose}
             options={options.purposes}
+            extra={
+              options.purposes.some(isCustomPurpose)
+                ? [{ value: OTHER_FILTER, label: t("reports.otherPurposes") }]
+                : []
+            }
             onChange={(value) => setFilters({ ...filters, purpose: value })}
           />
 
@@ -817,6 +917,7 @@ export function Reports() {
                   host: "all",
                   company: "all",
                   purpose: "all",
+                  department: "all",
                   status: "all",
                 });
               }}
@@ -993,11 +1094,13 @@ function SelectFilter({
   label,
   value,
   options,
+  extra = [],
   onChange,
 }: {
   label: string;
   value: string;
   options: string[];
+  extra?: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
 }) {
   return (
@@ -1008,6 +1111,11 @@ function SelectFilter({
         onChange={(event) => onChange(event.target.value)}
       >
         <option value="all">Todos</option>
+        {extra.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
         {options.map((option) => (
           <option key={option} value={option}>
             {option}

@@ -6,6 +6,9 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
+    // Las pruebas que levantan Postgres en memoria (PGlite) pasan de 5 s
+    // cuando corren en paralelo.
+    testTimeout: 30000,
     coverage: { provider: "v8", reporter: ["text", "html"] },
   },
   resolve: {
