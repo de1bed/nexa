@@ -15,7 +15,12 @@ import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, Field, cn, fieldDarkClass } from "./ui";
 import { useI18n } from "./i18n-provider";
 import { manualVisitSchema } from "@/lib/schemas";
-import { visitPurposes, type Visit } from "@/lib/domain";
+import {
+  OTHER_PURPOSE,
+  resolvePurpose,
+  visitPurposes,
+  type Visit,
+} from "@/lib/domain";
 import { compressIdentityImage, validateImage, ACCEPTED_IMAGE_TYPES } from "@/lib/image";
 import { getOCRProvider } from "@/lib/ocr";
 
@@ -40,6 +45,7 @@ export function ManualAccess() {
     hostId: "",
     locationId: "",
     purpose: visitPurposes[0] as string,
+    purposeOther: "",
     consent: false,
   });
 
@@ -95,7 +101,17 @@ export function ManualAccess() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    const payload = { ...form, hostId, locationId };
+    if (form.purpose === OTHER_PURPOSE && form.purposeOther.trim().length < 2) {
+      setErrors({ purposeOther: "Escribe el motivo de la visita" });
+      toast.error("Revisa los datos capturados");
+      return;
+    }
+    const payload = {
+      ...form,
+      hostId,
+      locationId,
+      purpose: resolvePurpose(form.purpose, form.purposeOther),
+    };
     const parsed = manualVisitSchema.safeParse(payload);
 
     if (!parsed.success) {
@@ -275,13 +291,25 @@ export function ManualAccess() {
             value={form.purpose}
             onChange={(event) => update("purpose", event.target.value)}
           >
-            {visitPurposes.map((purpose) => (
+            {[...visitPurposes, OTHER_PURPOSE].map((purpose) => (
               <option key={purpose} className="text-black">
                 {purpose}
               </option>
             ))}
           </select>
         </Field>
+        {form.purpose === OTHER_PURPOSE && (
+          <Field label="¿Cuál es el motivo?" dark error={errors.purposeOther}>
+            <input
+              autoFocus
+              maxLength={160}
+              className={fieldDarkClass}
+              placeholder="Escribe el motivo de la visita"
+              value={form.purposeOther}
+              onChange={(event) => update("purposeOther", event.target.value)}
+            />
+          </Field>
+        )}
 
         <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/15 bg-white/[.06] p-4">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/10">

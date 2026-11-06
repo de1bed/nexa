@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Clock3,
   FileCheck2,
+  FileText,
   Loader2,
   LockKeyhole,
   MapPin,
@@ -49,7 +50,7 @@ import { WalletButtons } from "./visitor/wallet-buttons";
 import { isLiveMode } from "@/lib/config";
 import { getOCRProvider } from "@/lib/ocr";
 import { readPlateText, setOcrStatusSink } from "@/lib/ocr/tesseract";
-import { documentTypes } from "@/lib/domain";
+import { documentTypes, identityPhotosNeeded } from "@/lib/domain";
 import { mapsSearchUrl } from "@/lib/calendar";
 import { passValidityWindow } from "@/lib/pass-window";
 import {
@@ -120,7 +121,11 @@ type Invitation = {
   visitorCompany: string;
   /** Requisitos que la empresa pidió en esta invitación. */
   requested: RequestedItem[];
+  /** Documentos de seguridad que se leen y aceptan antes de llegar. */
+  securityDocuments: SecurityDocumentItem[];
 };
+
+type SecurityDocumentItem = { id: string; title: string; mimeType: string };
 
 type RequestedItem = {
   id: string;
@@ -205,6 +210,8 @@ export function VisitorFlow({
   const [readNote, setReadNote] = useState("");
   const [ocrHint, setOcrHint] = useState("");
   const [consent, setConsent] = useState(false);
+  const [securityAccepted, setSecurityAccepted] = useState(false);
+  const [securityOpened, setSecurityOpened] = useState<Record<string, boolean>>({});
   const [nameConfirmed, setNameConfirmed] = useState(false);
   const [passToken, setPassToken] = useState("");
   const [wallet, setWallet] = useState<{ apple?: boolean; google?: boolean }>();
@@ -250,6 +257,7 @@ export function VisitorFlow({
       visitorEmail: showcaseVisit.inviteeEmail ?? "",
       visitorPhone: showcaseVisit.inviteePhone ?? "",
       visitorCompany: showcaseVisit.inviteeCompany ?? "",
+      securityDocuments: [],
       // La demo muestra los requisitos de ejemplo que vienen marcados.
       requested: showcaseRequirements
         .filter((item) => item.applyByDefault)
@@ -265,6 +273,10 @@ export function VisitorFlow({
   }, [live, remoteInvitation, showcaseVisit]);
 
   const requested = useMemo(() => invitation?.requested ?? [], [invitation]);
+  const securityDocuments = useMemo(
+    () => invitation?.securityDocuments ?? [],
+    [invitation],
+  );
   // La política de anexos libres es la de la empresa; los requisitos pedidos
   // abren el paso aunque esté apagada.
   const baseFlow = invitation?.visitorFlow ?? parseVisitorFlow(undefined, true);
@@ -332,6 +344,9 @@ export function VisitorFlow({
           requested: Array.isArray(row.requested_attachments)
             ? (row.requested_attachments as RequestedItem[])
             : [],
+          securityDocuments: Array.isArray(row.security_documents)
+            ? (row.security_documents as SecurityDocumentItem[])
+            : [],
         });
       } catch {
         if (active) setRemoteInvitation(invalidInvitation);
@@ -366,6 +381,8 @@ export function VisitorFlow({
     },
     [edits, invitation],
   );
+  const documentType = value("documentType");
+  const onePhotoId = identityPhotosNeeded(documentType) === 1;
 
   const set = useCallback((name: FormField, next: string) => {
     setEdits((current) => ({ ...current, [name]: next }));
@@ -391,7 +408,9 @@ export function VisitorFlow({
         );
         const result = await (
           await getOCRProvider()
-        ).extractIdentityData(shots.length > 1 ? shots : shots[0]);
+        ).extractIdentityData(shots.length > 1 ? shots : shots[0], {
+          documentType,
+        });
         if (!result.fullName && !result.documentNumber) {
           setReadNote((current) =>
             current === "verified" || current === "partial" ? current : "miss",
@@ -418,7 +437,7 @@ export function VisitorFlow({
         setReading("");
       }
     },
-    [live, t],
+    [live, t, documentType],
   );
 
   const readPlate = useCallback(
@@ -508,6 +527,7 @@ export function VisitorFlow({
         visitorNotes: value("visitorNotes"),
         consent,
         identityPhotos: Number(Boolean(files.front)) + Number(Boolean(files.back)),
+        documentType: value("documentType"),
         vehiclePhotos: vehiclePhotos.length,
         attachmentItems: extrasWithContent.length,
         requirementsMissing,
@@ -555,6 +575,7 @@ export function VisitorFlow({
           if (fieldValue) form.set(key, fieldValue);
         });
         form.set("consent", consent ? "true" : "false");
+        form.set("securityAccepted", securityAccepted ? "true" : "false");
         form.set("nameConfirmed", confirmsName ? "true" : "false");
         form.set("vehicleDeclined", noVehicle ? "true" : "false");
         if (files.front) form.set("documentFront", files.front);
@@ -961,24 +982,28 @@ export function VisitorFlow({
             title={t("visitor.identification")}
             subtitle={
               flow.identification === "required"
-                ? t("visitor.idRequired")
+                ? onePhotoId
+                  ? t("visitor.idRequiredPassport")
+                  : t("visitor.idRequired")
                 : t("visitor.idOptional")
             }
             onBack={() => back("document")}
             onNext={() => {
               if (flow.identification === "required" && !files.front)
                 return setError(t("errors.identity_front_required"));
-              if (flow.identification === "required" && !files.back)
+              if (flow.identification === "required" && !onePhotoId && !files.back)
                 return setError(t("errors.identity_back_required"));
               advance("document");
             }}
             nextLabel={
-              flow.identification === "required" && (!files.front || !files.back)
+              flow.identification === "required" &&
+              (!files.front || (!onePhotoId && !files.back))
                 ? t("visitor.addPhotos")
                 : t("common.continue")
             }
             nextDisabled={
-              flow.identification === "required" && (!files.front || !files.back)
+              flow.identification === "required" &&
+              (!files.front || (!onePhotoId && !files.back))
             }
             error={error}
           >
@@ -1001,7 +1026,7 @@ export function VisitorFlow({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              {(["front", "back"] as DocumentSide[]).map((side) => (
+              {(onePhotoId ? (["front"] as DocumentSide[]) : (["front", "back"] as DocumentSide[])).map((side) => (
                 <SideSlot
                   key={side}
                   side={side}
@@ -1543,7 +1568,11 @@ export function VisitorFlow({
           onBack={() => back("consent")}
           onNext={submit}
           nextLabel={submitting ? t("visitor.generating") : t("visitor.acceptPass")}
-          nextDisabled={(flow.consent === "required" && !consent) || submitting}
+          nextDisabled={
+            (flow.consent === "required" && !consent) ||
+            (securityDocuments.length > 0 && !securityAccepted) ||
+            submitting
+          }
           busy={submitting}
           error={error}
         >
@@ -1589,6 +1618,71 @@ export function VisitorFlow({
               {t("visitor.consent")}
             </span>
           </button>
+
+          {securityDocuments.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-base font-semibold text-[#071426]">
+                {t("visitor.securityTitle")}
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                {t("visitor.securityHint")}
+              </p>
+              <ul className="mt-3 space-y-2">
+                {securityDocuments.map((item) => (
+                  <li key={item.id}>
+                    <a
+                      href={`/api/public/invitations/${encodeURIComponent(token)}/security-documents/${item.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() =>
+                        setSecurityOpened((current) => ({ ...current, [item.id]: true }))
+                      }
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <FileText size={18} className="shrink-0 text-[#0d9d99]" />
+                        <span className="truncate font-medium text-[#071426]">{item.title}</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 text-xs font-semibold",
+                          securityOpened[item.id] ? "text-emerald-600" : "text-[#0d9d99]",
+                        )}
+                      >
+                        {securityOpened[item.id]
+                          ? t("visitor.securityOpened")
+                          : t("visitor.securityOpen")}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setSecurityAccepted(!securityAccepted)}
+                className={cn(
+                  "mt-3 flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition",
+                  securityAccepted
+                    ? "border-[#10cfc9] bg-[#10cfc9]/10"
+                    : "border-slate-200 bg-white",
+                )}
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg border-2 transition",
+                    securityAccepted
+                      ? "border-[#0d9d99] bg-[#10cfc9] text-white"
+                      : "border-slate-300",
+                  )}
+                >
+                  {securityAccepted && <Check size={15} strokeWidth={3} />}
+                </span>
+                <span className="text-sm leading-6 text-[#071426]">
+                  {t("visitor.securityAccept")}
+                </span>
+              </button>
+            </section>
+          )}
         </StepShell>
       )}
 

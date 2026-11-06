@@ -122,6 +122,7 @@ const purposeKeys: Record<string, string> = {
   Mantenimiento: "purpose.maintenance",
   Capacitación: "purpose.training",
   "Visita ejecutiva": "purpose.executive",
+  Otro: "purpose.other",
 };
 
 export function visitPurposeMessageKey(purpose: string) {

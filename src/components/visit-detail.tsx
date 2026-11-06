@@ -273,6 +273,16 @@ export function VisitDetail({ id }: { id: string }) {
                   .join(" · ")}
               />
             )}
+            {visit.securityAcceptedAt && (
+              <Detail
+                icon={ShieldCheck}
+                label={t("visits.securityDocs")}
+                value={t("visits.securityAccepted", {
+                  date: formatDateTime(visit.securityAcceptedAt, visit.locationTimezone),
+                })}
+                hint={visit.securityDocuments?.join(" · ")}
+              />
+            )}
             <Detail
               icon={MapPin}
               label={t("guard.validAt")}

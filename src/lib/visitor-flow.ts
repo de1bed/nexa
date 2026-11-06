@@ -1,3 +1,4 @@
+import { identityPhotosNeeded } from "./domain";
 import { isPlaceholderVisitorName } from "@/lib/visitor-name";
 
 /**
@@ -287,6 +288,8 @@ export type RegistrationInput = {
   visitorNotes: string;
   consent: boolean;
   identityPhotos: number;
+  /** INE, licencia o pasaporte. El pasaporte basta con una foto. */
+  documentType?: string;
   vehiclePhotos: number;
   /** Anexos libres con contenido (título, texto o foto). */
   attachmentItems: number;
@@ -328,7 +331,10 @@ export function validateRegistration(
       return "phone_required";
   }
 
-  if (flow.identification === "required" && input.identityPhotos < 2)
+  if (
+    flow.identification === "required" &&
+    input.identityPhotos < identityPhotosNeeded(input.documentType)
+  )
     return "identity_photos_required";
 
   if (flow.vehicle === "required" && !input.vehicleDeclined) {

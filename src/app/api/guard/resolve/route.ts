@@ -63,11 +63,20 @@ export async function POST(request: Request) {
         { status: 404 },
       );
 
-    const { data: site } = await db
-      .from("locations")
-      .select("timezone")
-      .eq("id", row.location_id)
-      .maybeSingle();
+    const [{ data: site }, { data: accepted }] = await Promise.all([
+      db.from("locations").select("timezone").eq("id", row.location_id).maybeSingle(),
+      // Constancia de los documentos de seguridad. Si la tabla no existe, nada.
+      db
+        .from("visit_security_acceptances")
+        .select("document_title,accepted_at")
+        .eq("visit_id", row.visit_id)
+        .not("accepted_at", "is", null),
+    ]);
+    const acceptedRows = accepted ?? [];
+    const securityAcceptedAt = acceptedRows
+      .map((item) => item.accepted_at as string)
+      .sort()
+      .at(-1);
 
     const visit: Visit = {
       id: row.visit_id,
@@ -99,6 +108,8 @@ export async function POST(request: Request) {
       identityCaptured: Boolean(row.identity_captured),
       vehiclePhotosCaptured: Boolean(row.vehicle_photos_captured),
       attachmentsCaptured: Boolean(row.attachments_captured),
+      securityAcceptedAt,
+      securityDocuments: acceptedRows.map((item) => item.document_title as string),
     };
 
     return NextResponse.json(

@@ -31,6 +31,9 @@ import {
   type VisitorMatch,
 } from "@/lib/visitor-name";
 
+import { isDocumentType } from "@/lib/domain";
+import { listSecurityDocuments } from "@/lib/server/security-documents";
+
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
@@ -38,7 +41,13 @@ const schema = z.object({
   email: z.string().trim().max(254).optional().default(""),
   phone: z.string().trim().max(30).optional().default(""),
   company: z.string().trim().max(120).optional().default(""),
-  documentType: z.string().trim().max(40).optional(),
+  // Solo INE, licencia o pasaporte. Un valor viejo o vacío queda sin tipo.
+  documentType: z
+    .string()
+    .trim()
+    .max(40)
+    .optional()
+    .transform((value) => (isDocumentType(value) ? value : undefined)),
   documentNumber: z.string().trim().max(80).optional(),
   vehiclePlate: z.string().trim().max(20).optional(),
   visitorNotes: z.string().trim().max(500).optional(),
@@ -48,6 +57,8 @@ const schema = z.object({
   nameConfirmed: z.enum(["true", "false"]).optional(),
   documentExpiresAt: z.string().max(20).optional(),
   consent: z.enum(["true", "false"]).optional(),
+  /** Leyó y acepta los documentos de seguridad de la empresa. */
+  securityAccepted: z.enum(["true", "false"]).optional(),
   vehicleDeclined: z.enum(["true", "false"]).optional(),
   attachments: z.string().max(40000).optional(),
 });
@@ -291,6 +302,20 @@ export async function POST(
       )
       .slice(0, MAX_FREE_ATTACHMENTS);
 
+    // Documentos de seguridad: si la empresa los comparte, hay que aceptarlos.
+    const securityDocuments = await listSecurityDocuments(
+      db,
+      visit.organization_id as string,
+    );
+    if (securityDocuments.length > 0 && values.securityAccepted !== "true")
+      return NextResponse.json(
+        {
+          error: translate("errors.security_required", undefined, locale),
+          code: "security_required",
+        },
+        { status: 400 },
+      );
+
     const problem = validateRegistration(
       {
         fullName: values.fullName,
@@ -302,6 +327,7 @@ export async function POST(
         visitorNotes: values.visitorNotes ?? "",
         consent: values.consent === "true",
         identityPhotos: identityImages.length,
+        documentType: values.documentType,
         vehiclePhotos: vehicleImages.length,
         attachmentItems: freeEntries.length,
         requirementsMissing,
@@ -530,6 +556,33 @@ export async function POST(
         privacy_notice_version: settings?.privacy_notice_version ?? "mvp-1",
       })
       .eq("id", visit.id);
+
+    if (securityDocuments.length > 0) {
+      // Constancia por documento, con el título que tenía al aceptarlo.
+      const acceptedAt = new Date().toISOString();
+      const { error: acceptanceError } = await db
+        .from("visit_security_acceptances")
+        .upsert(
+          securityDocuments.map((item) => ({
+            organization_id: visit.organization_id,
+            visit_id: visit.id,
+            document_id: item.id,
+            document_title: item.title,
+            accepted_at: acceptedAt,
+          })),
+          { onConflict: "visit_id,document_id" },
+        );
+      if (acceptanceError)
+        console.error("Security acceptance failed", acceptanceError);
+      await db.from("audit_logs").insert({
+        organization_id: visit.organization_id,
+        visit_id: visit.id,
+        event_type: "security_documents_accepted",
+        metadata: {
+          documents: securityDocuments.map((item) => ({ id: item.id, title: item.title })),
+        },
+      });
+    }
 
     await db
       .from("visit_invitations")

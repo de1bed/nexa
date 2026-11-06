@@ -24,7 +24,13 @@ import { useWorkspace } from "./workspace-provider";
 import { Button, Callout, Card, Field, cn, fieldClass } from "./ui";
 import { CopyField, ShareButton, Toggle } from "./ui-client";
 import { invitationSchema, normalizeMeetingUrl } from "@/lib/schemas";
-import { visitPurposes, type Visit } from "@/lib/domain";
+import {
+  OTHER_PURPOSE,
+  resolvePurpose,
+  startsInThePast,
+  visitPurposes,
+  type Visit,
+} from "@/lib/domain";
 import { visitPurposeMessageKey } from "@/lib/i18n";
 import { parseVisitorFlow } from "@/lib/visitor-flow";
 import { useI18n } from "./i18n-provider";
@@ -162,6 +168,7 @@ export function InvitationForm() {
     endTime: "11:00",
     passValidDays: 1,
     purpose: visitPurposes[0] as string,
+    purposeOther: "",
     notes: "",
     accessRequirements: "",
     sendEmail: false,
@@ -191,7 +198,16 @@ export function InvitationForm() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    const payload = { ...form, locationId: activeLocation };
+    if (form.purpose === OTHER_PURPOSE && form.purposeOther.trim().length < 2) {
+      setErrors({ purposeOther: t("purpose.otherRequired") });
+      toast.error(t("common.formReview"));
+      return;
+    }
+    const payload = {
+      ...form,
+      locationId: activeLocation,
+      purpose: resolvePurpose(form.purpose, form.purposeOther),
+    };
     const parsed = invitationSchema.safeParse(payload);
 
     if (!parsed.success) {
@@ -213,6 +229,11 @@ export function InvitationForm() {
     const endsAt = zonedDateTime(payload.date, payload.endTime, locationTimeZone);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
       setErrors({ date: t("common.invalidDate") });
+      return;
+    }
+    if (startsInThePast(startsAt)) {
+      setErrors({ date: t("invite.pastStart") });
+      toast.error(t("invite.pastStart"));
       return;
     }
 
@@ -647,7 +668,7 @@ export function InvitationForm() {
                   type="date"
                   className={fieldClass}
                   value={form.date}
-                  min={todayPlus(0)}
+                  min={todayPlus(0, locationTimeZone)}
                   onChange={(event) => update("date", event.target.value)}
                 />
               </Field>
@@ -747,13 +768,25 @@ export function InvitationForm() {
                 value={form.purpose}
                 onChange={(event) => update("purpose", event.target.value)}
               >
-                {visitPurposes.map((purpose) => (
+                {[...visitPurposes, OTHER_PURPOSE].map((purpose) => (
                   <option key={purpose} value={purpose}>
                     {t(visitPurposeMessageKey(purpose)) || purpose}
                   </option>
                 ))}
               </select>
             </Field>
+            {form.purpose === OTHER_PURPOSE && (
+              <Field label={t("purpose.otherLabel")} error={errors.purposeOther}>
+                <input
+                  autoFocus
+                  maxLength={160}
+                  className={fieldClass}
+                  placeholder={t("purpose.otherPlaceholder")}
+                  value={form.purposeOther}
+                  onChange={(event) => update("purposeOther", event.target.value)}
+                />
+              </Field>
+            )}
 
             <Field
               label={t("invite.access")}

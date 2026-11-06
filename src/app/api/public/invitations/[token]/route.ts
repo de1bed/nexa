@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/server/supabase-admin";
 import { invitationTimezoneSelect } from "@/lib/location-embed";
 import { rateLimit, requestOrigin } from "@/lib/server/rate-limit";
 import { resolveTimeZone } from "@/lib/timezone";
+import { listSecurityDocuments } from "@/lib/server/security-documents";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,16 @@ export async function GET(
       .select(invitationTimezoneSelect)
       .eq("id", visitId)
       .maybeSingle();
+
+    // Documentos de seguridad que la empresa comparte antes de la llegada.
+    const { data: owner } = await db
+      .from("visits")
+      .select("organization_id")
+      .eq("id", visitId)
+      .maybeSingle();
+    const securityDocuments = owner?.organization_id
+      ? await listSecurityDocuments(db, owner.organization_id as string)
+      : [];
     const location = site?.location as
       | { timezone?: string }
       | { timezone?: string }[]
@@ -57,6 +68,11 @@ export async function GET(
       {
         ...(data as Record<string, unknown>),
         location_timezone: resolveTimeZone(locationTimezone),
+        security_documents: securityDocuments.map((item) => ({
+          id: item.id,
+          title: item.title,
+          mimeType: item.mimeType,
+        })),
         requested_attachments: (requested ?? []).map((item) => ({
           id: item.id,
           title: item.title,

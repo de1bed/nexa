@@ -22,6 +22,9 @@ import { clampPassDays, passExpiresAt } from "@/lib/pass-window";
 import { createAdminClient } from "@/lib/server/supabase-admin";
 import { formatDateTimeLabel, resolveTimeZone } from "@/lib/timezone";
 
+import { startsInThePast } from "@/lib/domain";
+import { securityAcceptancesByVisit } from "@/lib/server/security-documents";
+
 export const dynamic = "force-dynamic";
 
 const createSchema = z
@@ -64,6 +67,10 @@ const createSchema = z
     path: ["endsAt"],
     message: "El horario es inválido",
   })
+  .refine((value) => !startsInThePast(value.startsAt), {
+    path: ["startsAt"],
+    message: "La fecha y hora de inicio ya pasaron. Elige una hora futura.",
+  })
   .refine((value) => !value.sendEmail || Boolean(value.email), {
     path: ["email"],
     message: "El correo es necesario para enviar la invitación",
@@ -80,7 +87,7 @@ export async function GET() {
   const { db, organizationId } = guard.context;
 
   try {
-    const [{ data: visits, error }, { data: events }] = await Promise.all([
+    const [{ data: visits, error }, { data: events }, { data: members }] = await Promise.all([
       selectWithBoothFallback(
         (columns) =>
           db
@@ -103,14 +110,39 @@ export async function GET() {
         eventSelect,
         eventSelectLegacy,
       ),
+      // Departamento de cada anfitrión. Si no se puede leer, el reporte sigue.
+      db
+        .from("organization_members")
+        .select("profile_id,department:departments(name)")
+        .eq("organization_id", organizationId),
     ]);
     if (error) throw error;
 
+    const acceptances = await securityAcceptancesByVisit(db, organizationId);
+    const departmentByHost = new Map<string, string>();
+    for (const row of members ?? []) {
+      const department = row.department as unknown as { name?: string } | null;
+      if (department?.name)
+        departmentByHost.set(row.profile_id as string, department.name);
+    }
+
     return NextResponse.json(
       {
-        visits: (visits ?? []).map((row) =>
-          mapVisit(row as unknown as Record<string, unknown>),
-        ),
+        visits: (visits ?? []).map((row) => {
+          const visit = mapVisit(row as unknown as Record<string, unknown>);
+          const hostDepartment = departmentByHost.get(visit.hostId);
+          const security = acceptances.get(visit.id);
+          return {
+            ...visit,
+            ...(hostDepartment ? { hostDepartment } : {}),
+            ...(security?.acceptedAt
+              ? {
+                  securityAcceptedAt: security.acceptedAt,
+                  securityDocuments: security.titles,
+                }
+              : {}),
+          };
+        }),
         events: (events ?? []).map((row) =>
           mapEvent(row as unknown as Record<string, unknown>),
         ),
@@ -438,7 +470,13 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError)
       return NextResponse.json(
-        { error: "Datos inválidos", issues: error.issues },
+        {
+          // El primer motivo legible (p. ej. «la hora ya pasó») llega al formulario.
+          error:
+            error.issues.find((issue) => issue.code === "custom")?.message ??
+            "Datos inválidos",
+          issues: error.issues,
+        },
         { status: 400 },
       );
     console.error("Visits POST failed", error);

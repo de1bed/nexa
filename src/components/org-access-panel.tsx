@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Shield } from "lucide-react";
+import { Copy, Pencil, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, fieldClass } from "./ui";
 import { useI18n } from "./i18n-provider";
@@ -40,6 +40,7 @@ export function OrgAccessPanel({
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [platform, setPlatform] = useState(false);
   const [areaName, setAreaName] = useState("");
+  const [editing, setEditing] = useState<AreaOption | null>(null);
 
   useEffect(() => {
     if (!live) return;
@@ -104,12 +105,51 @@ export function OrgAccessPanel({
       body: JSON.stringify({ name }),
     });
     if (!response.ok) {
-      toast.error("No fue posible crear el área");
+      toast.error(t("departments.createFail"));
       return;
     }
     const payload = (await response.json()) as { department: AreaOption };
     onDepartments([...departments, payload.department]);
     setAreaName("");
+  }
+
+  async function renameArea(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+    const name = editing.name.trim();
+    if (name.length < 2) return;
+    if (live) {
+      const response = await fetch("/api/departments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editing.id, name }),
+      });
+      if (!response.ok) {
+        toast.error(t("departments.updateFail"));
+        return;
+      }
+    }
+    onDepartments(
+      departments.map((area) => (area.id === editing.id ? { ...area, name } : area)),
+    );
+    setEditing(null);
+    toast.success(t("departments.updated"));
+  }
+
+  async function removeArea(area: AreaOption) {
+    if (!window.confirm(t("departments.removeConfirm", { name: area.name }))) return;
+    if (live) {
+      const response = await fetch(`/api/departments?id=${encodeURIComponent(area.id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        toast.error(t("departments.removeFail"));
+        return;
+      }
+    }
+    onDepartments(departments.filter((item) => item.id !== area.id));
+    if (editing?.id === area.id) setEditing(null);
+    toast.success(t("departments.removed"));
   }
 
   return (
@@ -152,32 +192,71 @@ export function OrgAccessPanel({
       </Card>
 
       <Card className="p-5">
-        <p className="text-sm font-semibold">Áreas</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          El nombre y el área identifican a cada persona del equipo.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {departments.length === 0 && (
-            <span className="text-sm text-slate-400">Todavía no hay áreas.</span>
-          )}
-          {departments.map((area) => (
-            <span
-              key={area.id}
-              className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium"
-            >
-              {area.name}
-            </span>
-          ))}
-        </div>
+        <p className="text-sm font-semibold">{t("departments.title")}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{t("departments.lead")}</p>
+        {departments.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">{t("departments.empty")}</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {departments.map((area) =>
+              editing?.id === area.id ? (
+                <li key={area.id}>
+                  <form onSubmit={renameArea} className="flex gap-2">
+                    <input
+                      autoFocus
+                      className={fieldClass}
+                      aria-label={t("departments.name")}
+                      value={editing.name}
+                      onChange={(event) =>
+                        setEditing({ id: area.id, name: event.target.value })
+                      }
+                    />
+                    <Button type="submit" variant="outline">
+                      {t("common.save")}
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
+                      {t("common.cancel")}
+                    </Button>
+                  </form>
+                </li>
+              ) : (
+                <li
+                  key={area.id}
+                  className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-3 py-2"
+                >
+                  <span className="min-w-0 truncate text-sm font-medium">{area.name}</span>
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ id: area.id, name: area.name })}
+                      className="inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-semibold text-slate-600 hover:bg-white"
+                    >
+                      <Pencil size={14} />
+                      {t("departments.edit")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeArea(area)}
+                      className="inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-semibold text-red-600 hover:bg-white"
+                    >
+                      <Trash2 size={14} />
+                      {t("departments.remove")}
+                    </button>
+                  </span>
+                </li>
+              ),
+            )}
+          </ul>
+        )}
         <form onSubmit={addArea} className="mt-4 flex gap-2">
           <input
             className={fieldClass}
-            placeholder="Nueva área"
+            placeholder={t("departments.newPlaceholder")}
             value={areaName}
             onChange={(event) => setAreaName(event.target.value)}
           />
           <Button type="submit" variant="outline">
-            Agregar
+            {t("departments.add")}
           </Button>
         </form>
       </Card>

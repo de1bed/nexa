@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Brand } from "./brand";
 import { Button, Field, fieldClass } from "./ui";
+import { useI18n } from "./i18n-provider";
 import { roleHome } from "@/lib/config";
 import type { MemberRole } from "@/lib/domain";
 
@@ -19,6 +20,7 @@ const roles: Array<{ id: "host" | "guard" | "admin"; label: string; hint: string
 
 export function AccessRequestForm() {
   const router = useRouter();
+  const { t } = useI18n();
   const [key, setKey] = useState("");
   const [role, setRole] = useState<"host" | "guard" | "admin">("host");
   const [departmentId, setDepartmentId] = useState("");
@@ -163,7 +165,7 @@ export function AccessRequestForm() {
               ))}
             </fieldset>
             {areas.length > 0 && (
-              <Field label="Área">
+              <Field label={t("departments.label")}>
                 <select
                   required
                   className={fieldClass}

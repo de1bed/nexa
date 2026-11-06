@@ -288,6 +288,7 @@ export function Reports() {
         "Visitante",
         "Empresa",
         "Anfitrión",
+        "Departamento",
         "Ubicación",
         "Motivo",
         "Entrada",
@@ -302,6 +303,7 @@ export function Reports() {
         visit.visitorName,
         visit.company || "Sin empresa",
         visit.hostName,
+        visit.hostDepartment ?? "",
         visit.location,
         visit.purpose,
         when(visit.checkedInAt),
@@ -318,6 +320,7 @@ export function Reports() {
         "Visitante",
         "Empresa",
         "Anfitrión",
+        "Departamento",
         "Ubicación",
         "Motivo",
         "Programada inicio",
@@ -335,12 +338,14 @@ export function Reports() {
         t("reports.denialGuard"),
         t("reports.evidence"),
         t("visits.deniedLabel"),
+        t("visits.securityDocs"),
         t("reports.dossier"),
       ],
       ...rows.map((visit) => [
         visit.visitorName,
         visit.company || "Sin empresa",
         visit.hostName,
+        visit.hostDepartment ?? "",
         visit.location,
         visit.purpose,
         when(visit.startsAt),
@@ -358,6 +363,11 @@ export function Reports() {
         recordedGuard(visit, events, "deny"),
         evidenceLabel(visit, t),
         visit.denialReason || "",
+        visit.securityAcceptedAt
+          ? `${t("visits.securityAccepted", { date: when(visit.securityAcceptedAt) })}${
+              visit.securityDocuments?.length ? ` (${visit.securityDocuments.join(", ")})` : ""
+            }`
+          : "",
         `${window.location.origin}/app/visits/${visit.id}`,
       ]),
     ];

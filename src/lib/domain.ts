@@ -31,6 +31,11 @@ export type Visit = {
   hostId: string;
   hostName: string;
   hostEmail?: string;
+  /** Departamento del anfitrión, para reportes y Excel. */
+  hostDepartment?: string;
+  /** Cuándo aceptó los documentos de seguridad, y cuáles. */
+  securityAcceptedAt?: string;
+  securityDocuments?: string[];
   locationId?: string;
   location: string;
   locationAddress?: string;
@@ -253,14 +258,39 @@ export const visitPurposes = [
   "Visita ejecutiva",
 ] as const;
 
+/** Identificaciones aceptadas en la caseta. */
+/** Opción del menú que abre un texto libre. Se guarda lo que se escribe. */
+export const OTHER_PURPOSE = "Otro";
+
+/** Motivo final: el del menú, o el texto escrito si se eligió «Otro». */
+export function resolvePurpose(choice: string, other: string) {
+  return choice === OTHER_PURPOSE ? other.trim() : choice;
+}
+
+/** Margen para no rechazar una cita que se está creando en este minuto. */
+export const PAST_VISIT_GRACE_MS = 10 * 60 * 1000;
+
+export function startsInThePast(startsAt: Date | string, now = Date.now()) {
+  const start = new Date(startsAt).getTime();
+  return Number.isFinite(start) && start < now - PAST_VISIT_GRACE_MS;
+}
+
 export const documentTypes = [
   "INE / IFE",
-  "Pasaporte",
   "Licencia de conducir",
-  "Cédula profesional",
-  "Credencial laboral",
-  "Otra",
+  "Pasaporte",
 ] as const;
+
+export type DocumentTypeName = (typeof documentTypes)[number];
+
+export function isDocumentType(value: unknown): value is DocumentTypeName {
+  return (documentTypes as readonly string[]).includes(String(value));
+}
+
+/** El pasaporte se lee de una sola página; INE y licencia, frente y reverso. */
+export function identityPhotosNeeded(documentType?: string | null) {
+  return documentType === "Pasaporte" ? 1 : 2;
+}
 
 /** Milisegundos que una visita lleva dentro de las instalaciones. */
 export function timeInsideMs(visit: Visit, now = Date.now()) {

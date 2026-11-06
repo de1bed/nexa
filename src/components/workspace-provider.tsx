@@ -728,7 +728,17 @@ export function WorkspaceProvider({
       viewer,
       ...catalog,
       booths,
-      visits: state.visits,
+      // En vivo el servidor ya trae el departamento; en la vitrina se toma
+      // del directorio de anfitriones.
+      visits: live
+        ? state.visits
+        : state.visits.map((visit) => {
+            if (visit.hostDepartment) return visit;
+            const department = directory.hosts.find(
+              (host) => host.id === visit.hostId,
+            )?.department;
+            return department ? { ...visit, hostDepartment: department } : visit;
+          }),
       events: state.events,
       stationId,
       setStationId,
