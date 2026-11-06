@@ -54,7 +54,8 @@ export async function POST(request: Request) {
         { status: 400 },
       );
 
-    const result = await extractIdentityFromImages(images);
+    const documentType = String(form.get("documentType") ?? "").slice(0, 40);
+    const result = await extractIdentityFromImages(images, documentType);
     return NextResponse.json(result, {
       headers: { "Cache-Control": "no-store" },
     });

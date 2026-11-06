@@ -35,9 +35,12 @@ export type OCRResult = {
 
 export type OCRImageInput = File | Blob | Array<File | Blob>;
 
+/** Pista para el lector: qué identificación eligió el visitante. */
+export type OCRHint = { documentType?: string };
+
 export interface OCRProvider {
   readonly name: string;
-  extractIdentityData(image: OCRImageInput): Promise<OCRResult>;
+  extractIdentityData(image: OCRImageInput, hint?: OCRHint): Promise<OCRResult>;
 }
 
 export const LOW_CONFIDENCE = 70;

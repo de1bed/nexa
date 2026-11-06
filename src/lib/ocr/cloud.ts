@@ -1,4 +1,4 @@
-import type { OCRProvider, OCRResult } from "./types";
+import type { OCRHint, OCRProvider, OCRResult } from "./types";
 
 /**
  * Si el teléfono ya leyó nombre y folio, no se llama a la nube.
@@ -41,16 +41,17 @@ export class CloudOCRProvider implements OCRProvider {
 
   async extractIdentityData(
     image: File | Blob | Array<File | Blob>,
+    hint?: OCRHint,
   ): Promise<OCRResult> {
     const files = asList(image);
-    const local = await this.readLocal(files.at(-1)!);
+    const local = await this.readLocal(files);
     if (local?.fullName && local.documentNumber) return local;
 
-    const remote = await this.readRemote(files);
+    const remote = await this.readRemote(files, hint);
     return mergeIdentityRead(local, remote);
   }
 
-  private async readLocal(image: File | Blob) {
+  private async readLocal(image: Array<File | Blob>) {
     try {
       const { TesseractOCRProvider } = await import("./tesseract");
       return await new TesseractOCRProvider().extractIdentityData(image);
@@ -59,8 +60,9 @@ export class CloudOCRProvider implements OCRProvider {
     }
   }
 
-  private async readRemote(files: Array<File | Blob>) {
+  private async readRemote(files: Array<File | Blob>, hint?: OCRHint) {
     const form = new FormData();
+    if (hint?.documentType) form.set("documentType", hint.documentType);
     if (files[0]) form.set("front", files[0]);
     if (files[1]) form.set("back", files[1]);
     else if (files[0]) form.set("back", files[0]);

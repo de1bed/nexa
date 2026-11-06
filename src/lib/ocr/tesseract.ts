@@ -8,10 +8,6 @@ import {
   preparePlateCrops,
 } from "@/lib/image";
 
-function lastImage(image: OCRImageInput) {
-  return Array.isArray(image) ? image[image.length - 1] : image;
-}
-
 /**
  * Lectura en el teléfono, sin servicio de pago.
  *
@@ -184,8 +180,36 @@ export async function readPlateText(file: File) {
 export class TesseractOCRProvider implements OCRProvider {
   readonly name = "tesseract";
 
+  /**
+   * Lee primero la última foto (el reverso trae la banda MRZ de la INE) y, si
+   * todavía falta el nombre o el folio, la otra (el frente de la licencia o
+   * del pasaporte). Antes solo se leía la última y la licencia no salía.
+   */
   async extractIdentityData(image: OCRImageInput): Promise<OCRResult> {
-    const target = lastImage(image);
+    const shots = Array.isArray(image) ? [...image].reverse() : [image];
+    let merged: OCRResult = { rawText: "", confidence: 0, fields: [] };
+    for (const shot of shots) {
+      const read = await this.readOne(shot);
+      merged = {
+        ...read,
+        ...merged,
+        fullName: merged.fullName || read.fullName,
+        documentNumber: merged.documentNumber || read.documentNumber,
+        birthDate: merged.birthDate || read.birthDate,
+        expiryDate: merged.expiryDate || read.expiryDate,
+        curp: merged.curp || read.curp,
+        rawText: [merged.rawText, read.rawText].filter(Boolean).join("\n"),
+        confidence: Math.max(merged.confidence, read.confidence),
+        fields: merged.fields.length > 0 ? merged.fields : read.fields,
+        mrz: merged.mrz ?? read.mrz,
+        expired: merged.expired ?? read.expired,
+      };
+      if (merged.fullName && merged.documentNumber) break;
+    }
+    return merged;
+  }
+
+  private async readOne(target: File | Blob): Promise<OCRResult> {
     return enqueue(async () => {
       const { PSM } = await import("tesseract.js");
       const engine = await getEngine();

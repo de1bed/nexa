@@ -25,4 +25,12 @@ describe("placas mexicanas", () => {
   it("no inventa una placa si el texto no trae una", () => {
     expect(pickPlate("credencial para votar")).toBeNull();
   });
+
+  it("junta una placa escrita en tres bloques", () => {
+    expect(pickPlate("BAJA CALIFORNIA\nABC 12 3A")).toBe("ABC-12-3A");
+  });
+
+  it("no arma placas con palabras del rótulo", () => {
+    expect(pickPlate("FRONTERA NORTE\nBAJA CALIFORNIA")).toBeNull();
+  });
 });

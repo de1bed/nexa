@@ -74,46 +74,64 @@ function coerce(token: string, mask: string) {
   return { value, edits };
 }
 
-function windows(token: string) {
-  const sizes = [7, 6, 8];
-  const found = new Set<string>();
-  if (token.length >= 5 && token.length <= 8) found.add(token);
-  for (const size of sizes) {
-    for (let index = 0; index + size <= token.length; index += 1)
-      found.add(token.slice(index, index + size));
+/** Un candidato a placa trae al menos una letra y un número de verdad. */
+function looksLikePlate(token: string) {
+  return /[A-Z]/.test(token) && /\d/.test(token);
+}
+
+/**
+ * Candidatos exactos: cada palabra, y dos o tres palabras seguidas de la
+ * misma línea («ABC 1234», «ABC 12 3A»). Antes se pegaba todo el texto y se
+ * cortaba en ventanas, así que «frente 123ABC» salía como NTE-12-3A y
+ * «credencial para votar» como RAV-07-AR.
+ */
+function candidates(raw: string) {
+  const exact = new Set<string>();
+  const loose = new Set<string>();
+  for (const line of raw.toUpperCase().split(/\n+/)) {
+    const words = line
+      .split(/\s+/)
+      .map((word) => word.replace(/[^A-Z0-9]/g, ""))
+      .filter(Boolean);
+    for (let index = 0; index < words.length; index += 1) {
+      for (let span = 1; span <= 3 && index + span <= words.length; span += 1) {
+        const token = words.slice(index, index + span).join("");
+        if (token.length >= 5 && token.length <= 8 && looksLikePlate(token))
+          exact.add(token);
+      }
+      // Una palabra larga suele ser ruido pegado: se revisa por dentro, con castigo.
+      const word = words[index];
+      if (word.length > 8)
+        for (const size of [7, 6, 8])
+          for (let at = 0; at + size <= word.length; at += 1) {
+            const slice = word.slice(at, at + size);
+            if (looksLikePlate(slice)) loose.add(slice);
+          }
+    }
   }
-  return [...found];
+  return { exact, loose };
 }
 
 export function pickPlate(raw: string) {
-  const lines = raw
-    .toUpperCase()
-    .split(/\n+/)
-    .map((line) => line.replace(/[^A-Z0-9]/g, ""))
-    .filter((line) => line.length >= 5);
-
-  const tokens = new Set<string>();
-  for (const line of lines) {
-    for (const token of windows(line)) tokens.add(token);
-  }
-  const glued = lines.join("");
-  for (const token of windows(glued)) tokens.add(token);
+  const { exact, loose } = candidates(raw);
 
   let best: { value: string; score: number } | null = null;
-  for (const token of tokens) {
+  const consider = (token: string, penalty: number) => {
     for (const pattern of MASKS) {
       const fitted = coerce(token, pattern.mask);
       if (!fitted) continue;
-      const score = pattern.score - fitted.edits * 6;
+      const score = pattern.score - fitted.edits * 6 - penalty;
       if (!best || score > best.score) best = { value: fitted.value, score };
     }
-  }
+  };
+  for (const token of exact) consider(token, 0);
+  for (const token of loose) consider(token, 12);
 
-  if (best && best.score >= 16) return formatPlate(best.value);
+  const chosen = best as { value: string; score: number } | null;
+  if (chosen && chosen.score >= 16) return formatPlate(chosen.value);
 
-  for (const token of tokens) {
+  for (const token of exact) {
     if (token.length < 6 || token.length > 8) continue;
-    if (!/[A-Z]/.test(token) || !/\d/.test(token)) continue;
     return formatPlate(token);
   }
   return null;

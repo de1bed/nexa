@@ -289,8 +289,84 @@ export function parseTd1(
   };
 }
 
-/** Atajo: del texto crudo del OCR al resultado interpretado. */
+/* -------------------------------------------------------------------------- */
+/* Pasaporte (TD3): dos renglones de 44                                        */
+/* -------------------------------------------------------------------------- */
+
+export const TD3_LINE_LENGTH = 44;
+
+function normalizeTd3Line(raw: string) {
+  return raw
+    .toUpperCase()
+    .replace(/[«»＜]/g, "<")
+    .replace(/[\s\-_—–]/g, "<")
+    .replace(/[^A-Z0-9<]/g, "")
+    .slice(0, TD3_LINE_LENGTH)
+    .padEnd(TD3_LINE_LENGTH, "<");
+}
+
+/**
+ * Página de datos del pasaporte:
+ *   Renglón 1  [0:2] «P<»  [2:5] estado emisor  [5:44] APELLIDOS<<NOMBRES
+ *   Renglón 2  [0:9] número  [9] control  [10:13] nacionalidad
+ *              [13:19] nacimiento  [19] control  [20] sexo
+ *              [21:27] vigencia  [27] control  [28:42] dato personal
+ *              [42] control  [43] control compuesto
+ */
+export function findTd3Lines(rawText: string): [string, string] | null {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim().toUpperCase().replace(/\s+/g, ""))
+    .filter((line) => line.length >= 36);
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const first = lines[index];
+    if (!/^P[A-Z0-9<]/.test(first) || !first.includes("<<")) continue;
+    return [normalizeTd3Line(first), normalizeTd3Line(lines[index + 1])];
+  }
+  return null;
+}
+
+export function parseTd3(rawLines: [string, string], now = new Date()): MrzResult {
+  const [line1, line2] = rawLines.map(normalizeTd3Line) as [string, string];
+  const documentNumberRaw = line2.slice(0, 9);
+  const birthRaw = line2.slice(13, 19);
+  const expiryRaw = line2.slice(21, 27);
+  const personal = line2.slice(28, 42);
+  const checks = {
+    documentNumber: verify(documentNumberRaw, digitsOnly(line2.slice(9, 10))),
+    birthDate: verify(digitsOnly(birthRaw), digitsOnly(line2.slice(19, 20))),
+    expiryDate: verify(digitsOnly(expiryRaw), digitsOnly(line2.slice(27, 28))),
+    composite: verify(
+      line2.slice(0, 10) + line2.slice(13, 20) + line2.slice(21, 43),
+      digitsOnly(line2.slice(43, 44)),
+    ),
+  };
+  const evaluated = Object.values(checks).filter((value) => value !== "missing");
+  const passed = evaluated.filter((value) => value === "valid").length;
+  const sexRaw = line2.slice(20, 21);
+  const name = parseMrzName(line1.slice(5));
+  return {
+    documentCode: "P",
+    issuingState: lettersOnly(line1.slice(2, 5)).replace(/</g, ""),
+    documentNumber: documentNumberRaw.replace(/</g, ""),
+    nationality: lettersOnly(line2.slice(10, 13)).replace(/</g, ""),
+    sex: sexRaw === "M" ? "M" : sexRaw === "F" ? "F" : "X",
+    birthDate: parseMrzDate(birthRaw, "birth", now),
+    expiryDate: parseMrzDate(expiryRaw, "expiry", now),
+    ...name,
+    curp: personal.match(CURP_PATTERN)?.[0],
+    optionalData: personal.replace(/</g, ""),
+    checks,
+    confidence: evaluated.length ? Math.round((passed / evaluated.length) * 100) : 0,
+    verified: evaluated.length > 0 && passed === evaluated.length,
+    lines: [line1, line2, ""],
+  };
+}
+
+/** Atajo: del texto crudo del OCR al resultado interpretado (INE o pasaporte). */
 export function readMrz(rawText: string, now = new Date()) {
+  const passport = findTd3Lines(rawText);
+  if (passport) return parseTd3(passport, now);
   const lines = findMrzLines(rawText);
   return lines ? parseTd1(lines, now) : null;
 }

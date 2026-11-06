@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+
+const subscribeNothing = () => () => {};
 import QRCode from "qrcode";
 import { isKnownDemoToken } from "@/lib/demo-public";
 import { Check, Download, ImageDown, Loader2, Share2 } from "lucide-react";
@@ -38,9 +40,13 @@ export function SavePassButton({
   const [saved, setSaved] = useState(false);
   const [prompt, setPrompt] = useState(false);
 
-  const isMobile = typeof navigator !== "undefined" 
-    ? /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    : true;
+  // Se lee como store externo: el servidor pinta la versión de teléfono y el
+  // navegador la corrige sin error de hidratación.
+  const isMobile = useSyncExternalStore(
+    subscribeNothing,
+    () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+    () => true,
+  );
 
   useEffect(() => {
     if (!promptOnMount || typeof window === "undefined") return;

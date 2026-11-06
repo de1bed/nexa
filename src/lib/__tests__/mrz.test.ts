@@ -180,3 +180,26 @@ describe("datos opcionales", () => {
     expect(result!.optionalData).not.toContain("7");
   });
 });
+
+describe("pasaporte (TD3)", () => {
+  const sample = [
+    "PASAPORTE",
+    "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<",
+    "L898902C36UTO7408122F1204159ZE184226B<<<<<10",
+  ].join("\n");
+
+  it("lee nombre y número con dígitos de control", async () => {
+    const { readMrz } = await import("../ocr/mrz");
+    const result = readMrz(sample, new Date("2010-01-01"));
+    expect(result?.fullName).toBe("ANNA MARIA ERIKSSON");
+    expect(result?.documentNumber).toBe("L898902C3");
+    expect(result?.verified).toBe(true);
+  });
+
+  it("marca como no verificado un número mal leído", async () => {
+    const { readMrz } = await import("../ocr/mrz");
+    const result = readMrz(sample.replace("L898902C36", "L898902C46"));
+    expect(result?.checks.documentNumber).toBe("invalid");
+    expect(result?.verified).toBe(false);
+  });
+});
