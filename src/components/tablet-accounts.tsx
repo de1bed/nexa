@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, Tablet } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, MapPin, RefreshCw, Tablet, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "./workspace-provider";
 import { useI18n } from "./i18n-provider";
@@ -12,6 +13,7 @@ import {
   DEMO_COMPANY_CODE,
   DEMO_STATIONS,
   listDemoStations,
+  removeExtraStation,
   saveExtraStation,
 } from "@/lib/demo-stations";
 import { usernameFromBooth } from "@/lib/station-access";
@@ -59,10 +61,18 @@ export function TabletAccounts() {
     };
   }, [live]);
 
-  const taken = new Set(stations.map((station) => station.boothId));
+  const activeStations = stations.filter((station) => station.active !== false);
+  const taken = new Set(activeStations.map((station) => station.boothId));
+  const usedNames = stations.map((station) => station.username);
   const available = activeBooths.filter((booth) => !taken.has(booth.id));
   const selected = activeBooths.find((booth) => booth.id === boothId);
-  const nextUsername = selected ? usernameFromBooth(selected.name) : "";
+  const siteOf = (id?: string) => locations.find((item) => item.id === id)?.name ?? "";
+  const nextUsername = selected
+    ? usernameFromBooth(selected.name, {
+        site: siteOf(selected.locationId),
+        taken: usedNames,
+      })
+    : "";
 
   function placeOf(boothIdValue: string, fallback: string) {
     const booth = booths.find((item) => item.id === boothIdValue);
@@ -81,11 +91,8 @@ export function TabletAccounts() {
       toast.error(t("team.boothTaken"));
       return;
     }
-    const name = usernameFromBooth(selected.name);
-    if (stations.some((item) => item.username === name)) {
-      toast.error(t("team.tabletUserExists"));
-      return;
-    }
+    // Si dos sedes tienen una caseta con el mismo nombre, el usuario lleva la sede.
+    const name = nextUsername;
     setBusy(true);
     try {
       if (live) {
@@ -118,6 +125,52 @@ export function TabletAccounts() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function rotateKey() {
+    if (!window.confirm(t("team.rotateKeyConfirm"))) return;
+    if (!live) {
+      toast.info(t("team.rotateKeyDemo"));
+      return;
+    }
+    const response = await fetch("/api/team/stations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "rotate" }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      companyCode?: string;
+      error?: string;
+    };
+    if (!response.ok || !payload.companyCode) {
+      toast.error(payload.error ?? t("team.rotateKeyFail"));
+      return;
+    }
+    setCompanyCode(payload.companyCode);
+    toast.success(t("team.rotateKeyDone"));
+  }
+
+  async function removeStation(station: StationRow) {
+    if (!window.confirm(t("team.removeStationConfirm", { name: station.username })))
+      return;
+    if (live) {
+      const response = await fetch(
+        `/api/team/stations?id=${encodeURIComponent(station.id)}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) {
+        toast.error(t("team.removeStationFail"));
+        return;
+      }
+    } else {
+      removeExtraStation(station.id);
+    }
+    setStations((current) =>
+      current.map((item) =>
+        item.id === station.id ? { ...item, active: false } : item,
+      ),
+    );
+    toast.success(t("team.removeStationDone"));
   }
 
   const steps = ["tabletStep1", "tabletStep2", "tabletStep3"] as const;
@@ -155,20 +208,29 @@ export function TabletAccounts() {
             <InfoTip label={t("team.tabletKeyAbout")}>{t("team.tabletKeyInfo")}</InfoTip>
           </p>
           <CopyField value={companyCode} label={t("login.tabletCompany")} />
+          <button
+            type="button"
+            onClick={() => void rotateKey()}
+            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#071426]"
+          >
+            <RefreshCw size={13} />
+            {t("team.rotateKey")}
+          </button>
         </div>
       )}
 
-      {stations.length > 0 ? (
+      {activeStations.length > 0 ? (
         <>
           <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
             {t("team.stationUsersTitle")}
           </p>
           <ul className="space-y-2">
-            {stations.map((station) => (
+            {activeStations.map((station) => (
               <StationUserRow
                 key={station.id}
                 username={station.username}
                 location={placeOf(station.boothId, station.boothName)}
+                onRemove={() => void removeStation(station)}
               />
             ))}
           </ul>
@@ -214,11 +276,29 @@ export function TabletAccounts() {
           </Button>
         )}
       </form>
+
+      <p className="mt-4 flex items-start gap-2 rounded-2xl bg-slate-50 p-3 text-sm leading-5 text-slate-600">
+        <MapPin size={16} className="mt-0.5 shrink-0 text-[#0d9d99]" />
+        <span>
+          {t("team.moreBoothsHint")}{" "}
+          <Link href="/app/locations" className="font-semibold text-[#0d9d99] underline">
+            {t("team.moreBoothsLink")}
+          </Link>
+        </span>
+      </p>
     </Card>
   );
 }
 
-function StationUserRow({ username, location }: { username: string; location: string }) {
+function StationUserRow({
+  username,
+  location,
+  onRemove,
+}: {
+  username: string;
+  location: string;
+  onRemove: () => void;
+}) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
@@ -245,6 +325,15 @@ function StationUserRow({ username, location }: { username: string; location: st
         aria-label={t("common.copy")}
       >
         {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="grid size-8 shrink-0 place-items-center rounded-xl text-red-500 transition hover:bg-white hover:text-red-700"
+        aria-label={t("team.removeStation")}
+        title={t("team.removeStation")}
+      >
+        <UserMinus size={16} />
       </button>
     </li>
   );

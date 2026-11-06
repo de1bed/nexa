@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button, Field, fieldClass } from "./ui";
 import { useI18n } from "./i18n-provider";
 import { findDemoGuardByCode } from "@/lib/demo-guard-codes";
@@ -38,6 +38,7 @@ export function TabletLogin({
   const [username, setUsername] = useState("");
   const [guardCode, setGuardCode] = useState("");
   const [unlocked, setUnlocked] = useState(switching);
+  const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -147,31 +148,51 @@ export function TabletLogin({
         dark={switching}
         hint={unlocked ? undefined : t("login.tabletCompanyHint")}
       >
-        <input
-          required={!unlocked}
-          type="password"
-          autoComplete="off"
-          autoCapitalize="characters"
-          disabled={unlocked || busy}
-          className={fieldClass}
-          placeholder={unlocked ? undefined : demo ? "NOVA-2026" : "NEXA-QPGXZQ"}
-          value={companyShown}
-          onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
-        />
+        {/* La clave se puede mostrar con el ojo para revisar lo escrito.
+            El ejemplo nunca es una clave real. */}
+        <div className="relative">
+          <input
+            required={!unlocked}
+            type={unlocked || !showKey ? "password" : "text"}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            autoCapitalize="characters"
+            disabled={unlocked || busy}
+            className={`${fieldClass} pr-12`}
+            placeholder={unlocked ? undefined : demo ? "NOVA-2026" : "NEXA-XXXXXX"}
+            value={companyShown}
+            onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
+          />
+          {!unlocked && (
+            <button
+              type="button"
+              onClick={() => setShowKey((current) => !current)}
+              className="absolute inset-y-0 right-0 grid w-12 place-items-center text-slate-500"
+              aria-label={showKey ? t("login.hideKey") : t("login.showKey")}
+              aria-pressed={showKey}
+            >
+              {showKey ? <EyeOff size={19} /> : <Eye size={19} />}
+            </button>
+          )}
+        </div>
       </Field>
       <Field
         label={t("login.tabletUser")}
         dark={switching}
         hint={unlocked ? undefined : t("login.tabletUserHint")}
       >
+        {/* El usuario no es secreto: se ve al escribirlo. Tras abrir, se censura. */}
         <input
           required={!unlocked}
-          type="password"
+          type={unlocked ? "password" : "text"}
           autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           autoCapitalize="none"
           disabled={unlocked || busy}
           className={fieldClass}
-          placeholder={unlocked ? undefined : demo ? "norte" : "caseta.principal"}
+          placeholder={unlocked ? undefined : demo ? "norte" : "caseta.norte"}
           value={userShown}
           onChange={(event) => setUsername(event.target.value.toLowerCase())}
         />

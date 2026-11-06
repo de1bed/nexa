@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { STATION_BOOTH_COOKIE } from "@/lib/session-constants";
 import { z } from "zod";
 import { requireApiContext } from "@/lib/server/session";
 import { sendHostArrivalEmail } from "@/lib/server/email";
@@ -135,13 +137,19 @@ export async function PATCH(
           { status: 400 },
         );
 
+      // Una tableta abierta con usuario de caseta queda fija en esa caseta:
+      // el servidor usa la de la sesión aunque la pantalla mande otra.
+      const lockedBooth =
+        role === "guard"
+          ? (await cookies()).get(STATION_BOOTH_COOKIE)?.value || null
+          : null;
       const { error } = await db.rpc("record_access_decision", {
         p_visit_id: id,
         p_decision: decisionByStatus[input.status],
         p_reason: input.denialReason ?? null,
         p_allow_outside_window: input.allowOutsideWindow ?? false,
-        p_location_id: input.locationId ?? null,
-        p_booth_id: input.boothId ?? null,
+        p_location_id: lockedBooth ? null : (input.locationId ?? null),
+        p_booth_id: lockedBooth ?? input.boothId ?? null,
       });
       if (error)
         return NextResponse.json(

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/server/supabase-admin";
 import { createServerSupabase } from "@/lib/server/supabase";
 import { ORG_COOKIE } from "@/lib/server/session";
 import { STATION_COOKIE } from "@/lib/session-constants";
+import { rateLimit, requestOrigin } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,12 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limit = rateLimit(`guard-code:${requestOrigin(request)}`, 30, 5 * 60000);
+  if (!limit.allowed)
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
   try {
     const input = schema.parse(await request.json());
     if (normalizeGuardCode(input.code).length !== 8)

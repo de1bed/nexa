@@ -50,13 +50,32 @@ export function saveExtraStation(entry: DemoStation) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
 
+/** Da de baja un usuario de caseta de la demostración (solo en este navegador). */
+export function removeExtraStation(id: string) {
+  const removed = readRemovedStations();
+  window.localStorage.setItem(REMOVED_KEY, JSON.stringify([...new Set([...removed, id])]));
+}
+
+const REMOVED_KEY = "nexa-station-users-removed";
+
+function readRemovedStations(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(REMOVED_KEY) ?? "[]") as string[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function listDemoStations(): DemoStation[] {
   const extra = readExtraStations();
   const seededIds = new Set(DEMO_STATIONS.map((item) => item.username));
+  const removed = new Set(readRemovedStations());
   return [
     ...DEMO_STATIONS,
     ...extra.filter((item) => !seededIds.has(item.username)),
-  ];
+  ].filter((item) => !removed.has(item.id));
 }
 
 export function findDemoStation(companyCode: string, username: string) {

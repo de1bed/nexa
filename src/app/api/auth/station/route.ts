@@ -4,12 +4,14 @@ import { z } from "zod";
 import { isLiveMode } from "@/lib/config";
 import { DEMO_COMPANY_CODE, findSeededStation } from "@/lib/demo-stations";
 import {
+  formatCompanyCode,
   isStationUsername,
   normalizeCompanyCode,
   normalizeStationUsername,
 } from "@/lib/station-access";
 import { STATION_BOOTH_COOKIE, STATION_COOKIE } from "@/lib/session-constants";
 import { createAdminClient } from "@/lib/server/supabase-admin";
+import { rateLimit, requestOrigin } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,13 @@ async function openStation(stationId: string, boothId: string | null) {
 }
 
 export async function POST(request: Request) {
+  // Sin límite, la clave y el usuario se podían adivinar a fuerza de intentos.
+  const limit = rateLimit(`station:${requestOrigin(request)}`, 20, 5 * 60000);
+  if (!limit.allowed)
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos.", errorType: "generic" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
   try {
     const input = schema.parse(await request.json());
     if (!isStationUsername(input.username))
@@ -72,10 +81,13 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const code = normalizeCompanyCode(input.companyCode);
     const username = normalizeStationUsername(input.username);
+    // La clave se guarda con guion (NEXA-XXXXXX); se busca tal cual, sin
+    // descargar las claves de todas las empresas.
     const { data: organizations } = await admin
       .from("organizations")
       .select("id, tablet_company_code")
-      .not("tablet_company_code", "is", null);
+      .in("tablet_company_code", [...new Set([formatCompanyCode(code), code])])
+      .limit(2);
 
     const organization = (organizations ?? []).find(
       (item) =>
@@ -92,10 +104,21 @@ export async function POST(request: Request) {
 
     const { data: station } = await admin
       .from("station_users")
-      .select("id, booth_id, active")
+      .select("id, booth_id, active, booth:booths(active)")
       .eq("organization_id", organization.id)
       .eq("username", username)
       .maybeSingle();
+
+    // Una caseta desactivada en Ubicaciones ya no abre su tableta.
+    const booth = station?.booth as unknown as { active?: boolean } | null;
+    if (station?.active && station.booth_id && booth?.active === false)
+      return NextResponse.json(
+        {
+          error: "Esa caseta está desactivada. Actívala en Ubicaciones.",
+          errorType: "generic",
+        },
+        { status: 401 },
+      );
 
     if (!station?.active)
       return NextResponse.json(

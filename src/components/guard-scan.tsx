@@ -187,7 +187,8 @@ export function GuardScan() {
   // ya no aplica y avisar de ella solo confundiría al guardia.
   const insideNow = visit?.status === "checked_in";
   const outsideWindow = window_ !== "valid" && !insideNow;
-  const blocked = ["revoked", "cancelled", "expired", "invalid"].includes(
+  // "used": pase de un solo uso que ya salió. Uno reutilizable nunca llega así.
+  const blocked = ["revoked", "cancelled", "expired", "invalid", "used"].includes(
     tokenState,
   );
   // El pase no vale en la sede de esta caseta. La salida sí se registra en cualquiera.
@@ -453,6 +454,15 @@ export function GuardScan() {
                     }
                     icon={visit.identityCaptured ? BadgeCheck : FileWarning}
                   />
+                  {visit.securityAcceptedAt && (
+                    <Row
+                      label={t("visits.securityDocs")}
+                      value={t("visits.securityAccepted", {
+                        date: formatDateTime(visit.securityAcceptedAt, visit.locationTimezone),
+                      })}
+                      icon={BadgeCheck}
+                    />
+                  )}
                 </dl>
 
                 {visit.visitorNotes && (

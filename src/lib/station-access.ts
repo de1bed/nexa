@@ -21,15 +21,36 @@ export function isStationUsername(raw: string) {
   return /^[a-z0-9][a-z0-9._-]{2,31}$/.test(normalizeStationUsername(raw));
 }
 
-/** El usuario de la tableta sale del nombre de la caseta elegida. */
-export function usernameFromBooth(name: string) {
-  const slug = name
+function slugPart(name: string) {
+  return name
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ".")
-    .replace(/^\.+|\.+$/g, "")
-    .slice(0, 32);
-  const candidate = slug.length >= 3 ? slug : `caseta.${slug || "uno"}`;
-  return isStationUsername(candidate) ? candidate.slice(0, 32) : "caseta.nueva";
+    .replace(/^\.+|\.+$/g, "");
+}
+
+/**
+ * El usuario de la tableta sale del nombre de la caseta elegida.
+ * Si ya existe (la misma «Caseta principal» en dos sedes), se le antepone la
+ * sede, y si aun así choca, un número: nunca se bloquea el alta.
+ */
+export function usernameFromBooth(
+  name: string,
+  options: { site?: string; taken?: Iterable<string> } = {},
+) {
+  const taken = new Set(options.taken ?? []);
+  const base = slugPart(name).slice(0, 32);
+  const first = base.length >= 3 ? base : `caseta.${base || "uno"}`;
+  const candidates = [first];
+  const site = slugPart(options.site ?? "");
+  if (site) candidates.push(`${site}.${first}`.slice(0, 32).replace(/\.+$/g, ""));
+  for (const candidate of candidates)
+    if (isStationUsername(candidate) && !taken.has(candidate)) return candidate;
+  const stem = (candidates.at(-1) ?? "caseta").slice(0, 28).replace(/\.+$/g, "");
+  for (let index = 2; index < 100; index += 1) {
+    const candidate = `${stem}.${index}`;
+    if (isStationUsername(candidate) && !taken.has(candidate)) return candidate;
+  }
+  return isStationUsername(first) ? first : "caseta.nueva";
 }
